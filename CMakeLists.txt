@@ -26,6 +26,7 @@ IF(VECTORIZATION)
   ELSE()
     MESSAGE(STATUS "Vectorization only supported on x86_64 architecture. Using default flags.")
   ENDIF( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11" )
 ENDIF()
 #-std=c++11 -O3 -mavx2
 

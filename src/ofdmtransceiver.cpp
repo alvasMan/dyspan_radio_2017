@@ -1,7 +1,7 @@
 
 #include "ofdmtransceiver.h"
-
-static bool stop_signal_called;
+#include <boost/assign.hpp>
+#include <uhd/types/tune_request.hpp>
 
 // default constructor
 //  _M              :   OFDM: number of subcarriers
@@ -10,7 +10,7 @@ static bool stop_signal_called;
 //  _p              :   OFDM: subcarrier allocation
 //  _callback       :   frame synchronizer callback function
 //  _userdata       :   user-defined data structure
-OfdmTransceiver::OfdmTransceiver(const std::string args) :
+OfdmTransceiver::OfdmTransceiver(const std::string args, const double freq, const double rate, const float tx_gain_soft, const float tx_gain_uhd) :
     M(256),
     cp_len(16),
     taper_len(4),
@@ -37,11 +37,21 @@ OfdmTransceiver::OfdmTransceiver(const std::string args) :
     std::cout << boost::format("Using Device: %s") % usrp_tx->get_pp_string() << std::endl;
     //usrp_rx = uhd::usrp::multi_usrp::make(dev_addr);
 
+    // initialize channels
+    // std::string description, double f_center, double rf_freq, double dsp_freq, double bandwidth
+    //channels_.push_back({"Channel1", 2.445e9, 2e6, 0.0});
+    channels_.push_back({"Channel2", 2.445e9, 2.4475e9, 5e6, 2e6});
+    channels_.push_back({"Channel3", 2.450e9, 2.4475e9, -5e6, 2e6});
+
+    double rf_freq = 2.4475e9;
+
     // initialize default tx values
-    set_tx_freq(2400.0e6f);
-    set_tx_rate(1000e3);
-    set_tx_gain_soft(-12.0f);
-    set_tx_gain_uhd(40.0f);
+    set_tx_freq(rf_freq);
+    set_tx_rate(rate);
+    set_tx_gain_soft(tx_gain_soft);
+    set_tx_gain_uhd(tx_gain_uhd);
+
+    // TODO: check that all channels have the same center frequency for faster tuning
 }
 
 
@@ -54,35 +64,21 @@ OfdmTransceiver::~OfdmTransceiver()
 //
 // transmitter methods
 //
-
-//void sig_int_handler(int) {stop_signal_called = true; }
-
 void OfdmTransceiver::run(void)
 {
     //std::signal(SIGINT, &OfdmTransceiver::signal_handler);
-
     // start threads
     modulation_thread_.reset( new boost::thread( boost::bind( &OfdmTransceiver::modulation_function, this ) ) );
     tx_thread_.reset( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
-
-    modulation_thread_->join();
-    tx_thread_->interrupt();
-
-    tx_thread_->join();
-
-
 }
-
-
-
 
 
 void OfdmTransceiver::stop()
 {
+    // stopping threads
     modulation_thread_->interrupt();
     tx_thread_->interrupt();
 }
-
 
 
 
@@ -90,19 +86,18 @@ void OfdmTransceiver::stop()
 void OfdmTransceiver::modulation_function(void)
 {
     try {
-
-        while (not stop_signal_called)
+        while (true)
         {
             boost::this_thread::interruption_point();
 
             // data arrays
-            int payload_len = 100;
+            int payload_len = 1000;
             unsigned char header[8];
             unsigned char payload[payload_len];
 
             unsigned int pid;
             unsigned int i;
-            int num_frames = 8;
+            int num_frames = 10;
             for (pid=0; pid<num_frames; pid++) {
                 if (debug_)
                     printf("tx packet id: %6u\n", pid);
@@ -138,12 +133,7 @@ void OfdmTransceiver::modulation_function(void)
                         usrp_buffer[i] = fgbuffer[i] * tx_gain;
                 } // while loop
 
-
-
                 frame_buffer.pushBack(usrp_buffer);
-
-
-
             } // packet loop
         }
     }
@@ -158,15 +148,21 @@ void OfdmTransceiver::transmit_function(void)
 {
     try {
 
-        while (true)
-        {
+        while (true) {
             boost::this_thread::interruption_point();
 
             // check if channel needs to be reconfigured
-
-            // transmit frame
-            transmit_packet();
-
+            // send 50 packets on second channel once every 100 packets
+            static int counter = 1;
+            if (counter++ % 100 == 0) {
+                reconfigure_usrp(1);
+                for (int i = 0; i < 50; i++)
+                    transmit_packet();
+                reconfigure_usrp(0);
+            } else {
+                // transmit frame
+                transmit_packet();
+            }
         }
     }
     catch(boost::thread_interrupted)
@@ -176,9 +172,30 @@ void OfdmTransceiver::transmit_function(void)
 }
 
 
+void OfdmTransceiver::reconfigure_usrp(const int num)
+{
+    // get random channel
+    //num = rand() % channels_.size();
+    //double rf_lo = usrp_tx->get_tx_freq();
+
+    // construct tuning request
+    uhd::tune_request_t request;
+    // don't touch RF part
+    request.rf_freq_policy = uhd::tune_request_t::POLICY_NONE;
+    request.rf_freq = 0;
+    // only tune DSP frequency
+    request.dsp_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
+    request.dsp_freq = channels_.at(num).dsp_freq;
+    uhd::tune_result_t result = usrp_tx->set_tx_freq(request);
+
+    if (debug_) {
+        std::cout << result.to_pp_string() << std::endl;
+    }
+}
+
 void OfdmTransceiver::transmit_packet()
 {
-    // set up the metadta flags
+    // set up the metadata flags
     metadata_tx.start_of_burst = false; // never SOB when continuous
     metadata_tx.end_of_burst   = false; //
     metadata_tx.has_time_spec  = false; // set to false to send immediately
@@ -212,20 +229,18 @@ void OfdmTransceiver::transmit_packet()
     usrp_tx->get_device()->send("", 0, metadata_tx,
         uhd::io_type_t::COMPLEX_FLOAT32,
         uhd::device::SEND_MODE_FULL_BUFF);
-
-
 }
-
-
-
-
 
 
 // set transmitter frequency
 void OfdmTransceiver::set_tx_freq(float freq)
 {
     std::cout << boost::format("Setting TX Center Frequency: %f") % freq << std::endl;
-    usrp_tx->set_tx_freq(freq);
+    uhd::tune_request_t request(freq, 0.0);
+    uhd::tune_result_t result = usrp_tx->set_tx_freq(request);
+    if (debug_) {
+        std::cout << result.to_pp_string() << std::endl;
+    }
 }
 
 // set transmitter sample rate

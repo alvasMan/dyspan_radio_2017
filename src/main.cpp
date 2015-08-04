@@ -235,10 +235,10 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("pps", po::value<size_t>(&packets_per_second)->default_value(1), "How many packets to transmit per second")
         ("ampl", po::value<float>(&ampl)->default_value(float(0.9)), "amplitude of each sample")
         ("rate", po::value<double>(&rate)->default_value(2000e3), "rate of incoming samples")
-        ("freq",po::value<double>(&freq)->default_value(2400e6),"Sets Center Frequency")
+        ("freq",po::value<double>(&freq)->default_value(2450e6),"Sets Center Frequency")
         ("rxgain",po::value<double>(&rx_gain)->default_value(5),"Sets receive gain")
         ("txgain_soft",po::value<double>(&tx_gain_soft)->default_value(-12),"Sets software transmit gain")
-        ("txgain_uhd",po::value<double>(&tx_gain_uhd)->default_value(32),"Sets UHD transmit gain")
+        ("txgain_uhd",po::value<double>(&tx_gain_uhd)->default_value(10),"Sets UHD transmit gain")
         ("txbufsize",po::value<size_t>(&tx_buffer_size)->default_value(10),"How many frames in Tx buffer")
         ("threshold", po::value<std::string>(&threshold)->default_value("-75"), "RSSI threshold in dBm")
         ("wirefmt", po::value<std::string>(&wirefmt)->default_value("sc16"), "wire format (sc8 or sc16)")
@@ -260,11 +260,15 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     std::signal(SIGINT, signal_handler);
     std::cout << "Press Ctrl + C to stop radio ..." << std::endl;
     
-    static OfdmTransceiver trx(args);
+    boost::this_thread::sleep(boost::posix_time::seconds(1));
+    OfdmTransceiver trx(args, freq, rate, tx_gain_soft, tx_gain_uhd);
     trx.run();
 
-    //finished
-    boost::this_thread::sleep(boost::posix_time::seconds(1));
+    // sleep until end ..
+    while (not stop_signal_called) {
+        boost::this_thread::sleep(boost::posix_time::seconds(1));
+    }
+    trx.stop();
     std::cout << std::endl << "Done!" << std::endl << std::endl;
 
     return 0;

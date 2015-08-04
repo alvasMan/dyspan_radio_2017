@@ -2,12 +2,24 @@
 #define CHANNELS_H
 
 
+#include <iostream>
+
+
 typedef enum {
-    CH_1 = 0,
-    CH_2,
-    CH_3,
+    CH1 = 0,
+    CH2,
+    CH3,
     CH4
-} Channel;
+} ChannelNum;
+
+
+typedef struct {
+    std::string desc;
+    double f_center;
+    double rf_freq;
+    double dsp_freq;
+    double bandwidth;
+} ChannelConfig;
 
 
 

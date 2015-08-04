@@ -8,6 +8,7 @@
 #include <liquid/liquid.h>
 #include <uhd/usrp/multi_usrp.hpp>
 #include "Buffer.h"
+#include "channels.h"
 
 typedef std::vector<std::complex<float> > CplxFVec;
 
@@ -15,7 +16,11 @@ class OfdmTransceiver
 {
 public:
     // default constructor
-    OfdmTransceiver(const std::string args);
+    OfdmTransceiver(const std::string args,
+                    const double freq,
+                    const double rate,
+                    const float tx_gain_soft,
+                    const float tx_gain_uhd);
 
     // destructor
     ~OfdmTransceiver();
@@ -94,11 +99,14 @@ private:
     // receiver objects
     //ofdmflexframesync fs;           // frame synchronizer object
 
+    std::vector< ChannelConfig > channels_;
+
 
     boost::scoped_ptr< boost::thread > tx_thread_, modulation_thread_;
 
     void transmit_function();
     void modulation_function();
+    void reconfigure_usrp(const int num);
     //pthread_t rx_process;           // receive thread
     //pthread_mutex_t rx_mutex;       // receive mutex
     //pthread_cond_t  rx_cond;        // receive condition
