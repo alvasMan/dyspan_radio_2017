@@ -9,6 +9,7 @@
 #include <uhd/usrp/multi_usrp.hpp>
 #include "Buffer.h"
 #include "channels.h"
+#include "EnergyDetector.h"
 
 typedef std::vector<std::complex<float> > CplxFVec;
 
@@ -94,6 +95,7 @@ private:
     pthread_mutex_t tx_mutex;       // transmit mutex
 #endif
     Buffer<CplxFVec> frame_buffer;
+    EnergyDetector e_detec;
 
 
     // receiver objects

@@ -35,7 +35,7 @@ OfdmTransceiver::OfdmTransceiver(const std::string args, const double freq, cons
     std::cout << boost::format("Creating the usrp device with: %s...") % args << std::endl;
     usrp_tx = uhd::usrp::multi_usrp::make(args);
     std::cout << boost::format("Using Device: %s") % usrp_tx->get_pp_string() << std::endl;
-    //usrp_rx = uhd::usrp::multi_usrp::make(dev_addr);
+    usrp_rx = uhd::usrp::multi_usrp::make(args);
 
     // initialize channels
     // std::string description, double f_center, double rf_freq, double dsp_freq, double bandwidth
@@ -52,6 +52,9 @@ OfdmTransceiver::OfdmTransceiver(const std::string args, const double freq, cons
     set_tx_gain_uhd(tx_gain_uhd);
 
     // TODO: check that all channels have the same center frequency for faster tuning
+
+    // setting up the energy detector,
+    e_detec.set_parameters(10, 4, 1024);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
 }
 
 

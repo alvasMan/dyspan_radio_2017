@@ -4,10 +4,12 @@
 
 file(GLOB sources
     main.cpp
-    ofdmtransceiver.cpp)
+    ofdmtransceiver.cpp
+    EnergyDetector.cpp)
 
 file(GLOB headers
     ofdmtransceiver.h
+    EnergyDetector.h
     channels.h
     Buffer.h)
 
