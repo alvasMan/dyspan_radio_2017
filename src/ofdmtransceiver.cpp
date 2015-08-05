@@ -72,7 +72,8 @@ void OfdmTransceiver::run(void)
     //std::signal(SIGINT, &OfdmTransceiver::signal_handler);
     // start threads
     modulation_thread_.reset( new boost::thread( boost::bind( &OfdmTransceiver::modulation_function, this ) ) );
-    tx_thread_.reset( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
+    transmit_thread_.reset( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
+    receive_thread_.reset( new boost::thread( boost::bind( &OfdmTransceiver::receive_function, this ) ) );
 }
 
 
@@ -80,7 +81,7 @@ void OfdmTransceiver::stop()
 {
     // stopping threads
     modulation_thread_->interrupt();
-    tx_thread_->interrupt();
+    transmit_thread_->interrupt();
 }
 
 
@@ -162,10 +163,13 @@ void OfdmTransceiver::transmit_function(void)
                 for (int i = 0; i < 50; i++)
                     transmit_packet();
                 reconfigure_usrp(0);
+                boost::this_thread::sleep(boost::posix_time::seconds(1));
             } else {
                 // transmit frame
                 transmit_packet();
             }
+
+
         }
     }
     catch(boost::thread_interrupted)
@@ -184,8 +188,8 @@ void OfdmTransceiver::reconfigure_usrp(const int num)
     // construct tuning request
     uhd::tune_request_t request;
     // don't touch RF part
-    request.rf_freq_policy = uhd::tune_request_t::POLICY_NONE;
-    request.rf_freq = 0;
+    request.rf_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
+    request.rf_freq = channels_.at(num).f_center;
     // only tune DSP frequency
     request.dsp_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
     request.dsp_freq = channels_.at(num).dsp_freq;
@@ -205,7 +209,7 @@ void OfdmTransceiver::transmit_packet()
 
     CplxFVec buffer;
     frame_buffer.popFront(buffer);
-    std::cout << boost::format("Size is: %d") % buffer.size() << std::endl;
+    //std::cout << boost::format("Size is: %d") % buffer.size() << std::endl;
 
     // send samples to the device
     usrp_tx->get_device()->send(
@@ -233,6 +237,171 @@ void OfdmTransceiver::transmit_packet()
         uhd::io_type_t::COMPLEX_FLOAT32,
         uhd::device::SEND_MODE_FULL_BUFF);
 }
+
+
+/*
+
+void OfdmTransceiver::receive_function(
+    uhd::usrp::multi_usrp::sptr usrp,
+    const std::string &cpu_format,
+    const std::string &wire_format,
+    size_t samps_per_buff,
+    size_t samps_per_packet,
+    size_t num_total_packets,
+    size_t packets_per_second,
+    float ampl,
+    std::string threshold)
+*/
+void OfdmTransceiver::receive_function(void)
+{
+    //create a receive streamer
+    std::string wire_format("sc16");
+    std::string cpu_format("fc32");
+    uhd::stream_args_t stream_args(cpu_format, wire_format);
+    uhd::rx_streamer::sptr rx_stream = usrp_tx->get_rx_stream(stream_args);
+
+    //setup streaming
+    std::cout << std::endl;
+    std::cout << boost::format("Begin streaming now ..") << std::endl;
+    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+    stream_cmd.num_samps = 0; // continuous
+    stream_cmd.stream_now = true;
+    stream_cmd.time_spec = uhd::time_spec_t();
+    usrp_tx->issue_stream_cmd(stream_cmd);
+
+    //meta-data will be filled in by recv()
+    uhd::rx_metadata_t metadata;
+    //txMd.start_of_burst = true;
+    //txMd.end_of_burst   = true;
+    //txMd.has_time_spec  = false;
+    bool overflow_message = true;
+
+    //allocate buffer to receive with samples
+    size_t samps_per_buff = rx_stream->get_max_num_samps();
+    CplxFVec rxBuff(samps_per_buff);
+
+    //allocate data to send
+    //std::vector<samp_type> txBuff(samps_per_packet, samp_type(ampl, ampl));
+    //boost::system_time next_refresh = boost::get_system_time();
+
+    if (debug_) std::cout << boost::format("BUSY") << std::endl;
+
+
+    try {
+
+        while (true) {
+            boost::this_thread::interruption_point();
+
+            size_t num_rx_samps = rx_stream->recv(&rxBuff.front(), rxBuff.size(), metadata, 3.0);
+
+            //handle the error code
+            if (metadata.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) {
+                std::cout << boost::format("Timeout while streaming") << std::endl;
+                break;
+            }
+            if (metadata.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW){
+                if (overflow_message){
+                    overflow_message = false;
+                    std::cerr << boost::format("Got an overflow indication, please reduce sample rate.");
+                }
+                continue;
+            }
+            if (metadata.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE){
+                throw std::runtime_error(str(boost::format(
+                    "Unexpected error code 0x%x"
+                ) % metadata.error_code));
+            }
+
+        }
+    }
+    catch(boost::thread_interrupted)
+    {
+        std::cout << "Receive thread interrupted." << std::endl;
+    }
+
+#if 0
+
+
+    while(not stop_signal_called)
+    {
+        size_t num_rx_samps = rx_stream->recv(&rxBuff.front(), rxBuff.size(), rxMd, 3.0);
+
+        //handle the error code
+        if (rxMd.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) {
+            std::cout << boost::format("Timeout while streaming") << std::endl;
+            break;
+        }
+        if (rxMd.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW){
+            if (overflow_message){
+                overflow_message = false;
+                std::cerr << boost::format("Got an overflow indication, please reduce sample rate.");
+            }
+            continue;
+        }
+        if (rxMd.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE){
+            throw std::runtime_error(str(boost::format(
+                "Unexpected error code 0x%x"
+            ) % rxMd.error_code));
+        }
+
+        // perform simply energy detection
+        typename samp_type::value_type rssi;
+        calc<samp_type>(rxBuff, rssi);
+
+        // compare against threshold
+        if (rssi < thresh) {
+            //send a single packet
+            if (verbose) std::cout << boost::format("FREE") << std::endl;
+    #if 1
+            double timeout = 0;
+            size_t num_tx_samps = tx_stream->send(
+                &txBuff.front(), samps_per_packet, txMd, timeout
+            );
+
+            uhd::async_metadata_t async_md;
+            if (not usrp->get_device()->recv_async_msg(async_md)){
+                std::cout << boost::format(
+                    "failed:\n"
+                    "    Async message recv timed out.\n"
+                ) << std::endl;
+            }
+
+            if (async_md.event_code == uhd::async_metadata_t::EVENT_CODE_BURST_ACK) {
+                std::cout << std::endl << boost::format("Success, sent %d samples") % num_tx_samps << std::endl;
+            } else {
+                std::cout << std::endl << boost::format("Failed, coundn't send samples or didn't get burst ack.") << std::endl;
+            }
+
+            // terminate thread or continue if still packets to transmit
+            if (not num_total_packets--) {
+                stop_signal_called = true;
+            } else {
+                // make sure to keep rx chain going during this time
+                int32_t num_rx_wait_samps = usrp->get_rx_rate() / packets_per_second;
+                while (num_rx_wait_samps > 0) {
+                    size_t num_rx_samps = rx_stream->recv(&rxBuff.front(), rxBuff.size(), rxMd, 3.0);
+                    num_rx_wait_samps = num_rx_wait_samps - num_rx_samps;
+                }
+            }
+    #endif
+        } else {
+            if (verbose) std::cout << boost::format("BUSY") << std::endl;
+        }
+    }
+
+#endif
+
+}
+
+
+
+
+
+
+
+
+
+
 
 
 // set transmitter frequency

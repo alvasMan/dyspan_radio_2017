@@ -104,10 +104,13 @@ private:
     std::vector< ChannelConfig > channels_;
 
 
-    boost::scoped_ptr< boost::thread > tx_thread_, modulation_thread_;
+    boost::scoped_ptr< boost::thread > transmit_thread_, receive_thread_, modulation_thread_;
 
     void transmit_function();
     void modulation_function();
+    void receive_function();
+
+
     void reconfigure_usrp(const int num);
     //pthread_t rx_process;           // receive thread
     //pthread_mutex_t rx_mutex;       // receive mutex
