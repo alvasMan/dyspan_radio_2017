@@ -14,11 +14,12 @@ typedef enum {
 
 
 typedef struct {
-    std::string desc;
-    double f_center;
-    double rf_freq;
-    double dsp_freq;
-    double bandwidth;
+    std::string desc;  // description
+    double f_center;   // the actual center frequency of that channel (as seen on the spectrum analyzer)
+    double bandwidth;  // the actual bandwidth of that channel
+    double rf_freq;    // the RF frequency that the USRP is tuned to (LO)
+    double dsp_freq;   // offset from the LO to reach the center frequency
+    double rate;       // the sampling rate used in the channel
 } ChannelConfig;
 
 

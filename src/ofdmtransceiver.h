@@ -5,6 +5,8 @@
 
 #include <complex>
 #include <boost/thread.hpp>
+#include <boost/ptr_container/ptr_vector.hpp>
+#include <boost/ptr_container/ptr_deque.hpp>
 #include <liquid/liquid.h>
 #include <uhd/usrp/multi_usrp.hpp>
 #include "Buffer.h"
@@ -16,12 +18,15 @@ typedef std::vector<std::complex<float> > CplxFVec;
 class OfdmTransceiver
 {
 public:
-    // default constructor
+    // default constructor   
     OfdmTransceiver(const std::string args,
-                    const double freq,
-                    const double rate,
+                    const int num_channels,
+                    const double f_center,
+                    const double channel_bandwidth,
+                    const double channel_rate,
                     const float tx_gain_soft,
-                    const float tx_gain_uhd);
+                    const float tx_gain_uhd,
+                    const float rx_gain_uhd);
 
     // destructor
     ~OfdmTransceiver();
@@ -36,11 +41,7 @@ public:
     void set_tx_antenna(char * _tx_antenna);
 
     void run();
-
-
-
     void stop();
-
     void reset_tx();
 
     // update payload data on a particular channel
@@ -67,17 +68,14 @@ public:
     // gain acess to private members of the class
     friend void * ofdmtxrx_rx_worker(void * _arg);
 
-
-
-
 private:
-    // set timespec for timeout
-    //  _ts         :   pointer to timespec structure
-    //  _timeout    :   time before timeout
-    void set_timespec(struct timespec * _ts,
-                      float             _timeout);
-
-    bool verbose;
+    // generic properties
+    int num_channels_;
+    double channel_bandwidth_;
+    double channel_rate_;
+    std::vector< ChannelConfig > channels_;
+    boost::ptr_vector<boost::thread> threads_;
+    bool debug_;             // is debugging enabled?
 
     // OFDM properties
     unsigned int M;                 // number of subcarriers
@@ -88,36 +86,25 @@ private:
     // transmitter objects
     ofdmflexframegen fg;            // frame generator object
     std::complex<float> * fgbuffer; // frame generator output buffer [size: M + cp_len x 1]
+    //boost::scoped_ptr<CplxFVec> fgbuffer; // TODO: Convert to smart ptr
+
     unsigned int fgbuffer_len;      // length of frame generator buffer
     float tx_gain;                  // soft transmit gain (linear)
-#if 0
-    pthread_t tx_process;           // transmit thread
-    pthread_mutex_t tx_mutex;       // transmit mutex
-#endif
-    Buffer<CplxFVec> frame_buffer;
-    EnergyDetector e_detec;
+    uint32_t seq_no_;
 
+    //boost::ptr_deque<CplxFVec> frame_buffer;
+    Buffer<boost::shared_ptr<CplxFVec> > frame_buffer;
 
     // receiver objects
-    //ofdmflexframesync fs;           // frame synchronizer object
+    EnergyDetector e_detec;
+    uhd::time_spec_t timestamp_;
 
-    std::vector< ChannelConfig > channels_;
-
-
-    boost::scoped_ptr< boost::thread > transmit_thread_, receive_thread_, modulation_thread_;
-
+    // member functions
     void transmit_function();
+    void random_transmit_function(); // this is just a test function which randomly transmits on every available channel
     void modulation_function();
     void receive_function();
-
-
     void reconfigure_usrp(const int num);
-    //pthread_t rx_process;           // receive thread
-    //pthread_mutex_t rx_mutex;       // receive mutex
-    //pthread_cond_t  rx_cond;        // receive condition
-    bool rx_running;                // is receiver running? (physical receiver)
-    bool rx_thread_running;         // is receiver thread running?
-    bool debug_;             // is debugging enabled?
 
     // RF objects and properties
     uhd::usrp::multi_usrp::sptr usrp_tx;

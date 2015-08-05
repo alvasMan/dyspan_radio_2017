@@ -20,68 +20,6 @@ using namespace std;
 static bool verbose = false;
 static bool stop_signal_called = false;
 
-//static OfdmTransceiver trx;
-
-template<typename samp_type> void calc(std::vector<samp_type> &buff, typename samp_type::value_type &res)
-{
-#if 0
-    // print first samples
-    for (size_t i = 0; i < 10; i++) {
-        std::cout << boost::format("%d: (%12.2d + i * %12.2d)") % i % buff[i].real() % buff[i].imag() << std::endl;
-    }
-#endif
-
-    // compute RSSI using standard math library
-    typename samp_type::value_type rssi_hat = 0;
-    
-    // sum up the squared magnitude of the samples
-    for (size_t i = 0; i < buff.size(); i++) {
-        rssi_hat += pow(abs(buff[i]), 2); //rssi + pow(abs(buff[i]), 2);pow(norm(buff[i]), 2);
-    }
-    
-    if (sizeof(typename samp_type::value_type) == 2) {
-        // convert to float if in sc16 mode
-        res = 10 * log10f((boost::uint32_t)rssi_hat << 16);
-        if(verbose) std::cout << boost::format("RSSI short: %d") % res;
-    } else {
-        res = 10 * log10f(rssi_hat);
-        if(verbose) std::cout << boost::format("RSSI float: %12.8f") % res;
-    }
-}
-
-#if 0
-void transmit_thread(
-    uhd::usrp::multi_usrp::sptr usrp,
-    float what = 1.0)
-{
-
-
-    // transit a burst of packets
-    txcvr.start_tx();
-    printf("transmitting burst...\n");
-    while ( timer_toc(timer_tx) < tx_burst_time) {
-        // get next available channel (blocking)
-        unsigned int c = txcvr.get_available_channel();
-        assert( c < num_channels);
-
-        // assemble packet
-        unsigned int this_packet_len = rand() % payload_len;
-        assemble_packet(pid, header, payload, this_packet_len);
-
-        // transmit frame on channel 'c'
-        printf("transmitting packet %6u (%6u bytes) on channel %6u\n", pid, this_packet_len, c);
-        //int rc =
-        txcvr.transmit_packet(c, header, payload, this_packet_len, ms, fec0, fec1);
-
-        // update packet counter on channel 'c'
-        pid++;
-    }
-
-}
-#endif
-
-
-
 static void signal_handler(int signum)
 {
     std::cout << "Terminating .." << std::endl;
@@ -100,7 +38,8 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     size_t spb;
     size_t num_total_packets, packets_per_second;
     size_t tx_buffer_size;
-    double rate, freq, rx_gain, tx_gain_soft, tx_gain_uhd;
+    size_t num_channels;
+    double channel_bandwidth, channel_rate, freq, rx_gain, tx_gain_soft, tx_gain_uhd;
     float ampl;
     
     
@@ -117,9 +56,11 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("npackets", po::value<size_t>(&num_total_packets)->default_value(100), "How many packets to transmit in total")
         ("pps", po::value<size_t>(&packets_per_second)->default_value(1), "How many packets to transmit per second")
         ("ampl", po::value<float>(&ampl)->default_value(float(0.9)), "amplitude of each sample")
-        ("rate", po::value<double>(&rate)->default_value(2000e3), "rate of incoming samples")
-        ("freq",po::value<double>(&freq)->default_value(2450e6),"Sets Center Frequency")
-        ("rxgain",po::value<double>(&rx_gain)->default_value(5),"Sets receive gain")
+        ("num_channels", po::value<size_t>(&num_channels)->default_value(2), "Number of channels (must be multiple of two)")
+        ("channel_bandwidth", po::value<double>(&channel_bandwidth)->default_value(5000e3), "Bandwidth of each individual channel")
+        ("channel_rate", po::value<double>(&channel_rate)->default_value(2000e3), "Transmission rate in each individual channel")
+        ("freq",po::value<double>(&freq)->default_value(2.4475e9),"Sets center frequency")
+        ("rxgain",po::value<double>(&rx_gain)->default_value(5),"Sets UHD receive gain")
         ("txgain_soft",po::value<double>(&tx_gain_soft)->default_value(-12),"Sets software transmit gain")
         ("txgain_uhd",po::value<double>(&tx_gain_uhd)->default_value(10),"Sets UHD transmit gain")
         ("txbufsize",po::value<size_t>(&tx_buffer_size)->default_value(10),"How many frames in Tx buffer")
@@ -139,17 +80,19 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     }
 
     verbose = vm.count("dilv") == 0;
-
     std::signal(SIGINT, signal_handler);
-    std::cout << "Press Ctrl + C to stop radio ..." << std::endl;
-    
+
+    // create transceiver
+    OfdmTransceiver trx(args, num_channels, freq, channel_bandwidth, channel_rate, tx_gain_soft, tx_gain_uhd, rx_gain);
+
+    // delay start a bit ..
     boost::this_thread::sleep(boost::posix_time::seconds(1));
-    OfdmTransceiver trx(args, freq, rate, tx_gain_soft, tx_gain_uhd);
+    std::cout << "Press Ctrl + C to stop radio ..." << std::endl;
     trx.run();
 
     // sleep until end ..
     while (not stop_signal_called) {
-        boost::this_thread::sleep(boost::posix_time::seconds(1));
+        boost::this_thread::sleep(boost::posix_time::milliseconds(100));
     }
     trx.stop();
     std::cout << std::endl << "Done!" << std::endl << std::endl;
