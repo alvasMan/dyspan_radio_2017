@@ -13,12 +13,7 @@
 //  _callback       :   frame synchronizer callback function
 //  _userdata       :   user-defined data structure
 OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels, const double f_center, const double channel_bandwidth, const double channel_rate, const float tx_gain_soft, const float tx_gain_uhd, const float rx_gain_uhd) :
-    M(48),
-    cp_len(6),
-    taper_len(4),
-    num_channels_(num_channels),
-    channel_rate_(channel_rate),
-    channel_bandwidth_(channel_bandwidth),
+    DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, 48, 6, 4),
     seq_no_(0),
     debug_(true)
 {
@@ -29,30 +24,18 @@ OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels,
     fgprops.fec0            = LIQUID_FEC_NONE;
     fgprops.fec1            = LIQUID_FEC_HAMMING128;
     fgprops.mod_scheme      = LIQUID_MODEM_QPSK;
-    fg = ofdmflexframegen_create(M, cp_len, taper_len, p, &fgprops);
+    fg = ofdmflexframegen_create(M_, cp_len_, taper_len_, p, &fgprops);
 
     // allocate memory for frame generator output (single OFDM symbol)
-    fgbuffer_len = M + cp_len;
+    fgbuffer_len = M_ + cp_len_;
     fgbuffer = (std::complex<float>*) malloc(fgbuffer_len * sizeof(std::complex<float>));
 
-    // create frame synchronizer
     //create a usrp device
     std::cout << std::endl;
     std::cout << boost::format("Creating the usrp device with: %s...") % args << std::endl;
     usrp_tx = uhd::usrp::multi_usrp::make(args);
     std::cout << boost::format("Using Device: %s") % usrp_tx->get_pp_string() << std::endl;
     usrp_rx = uhd::usrp::multi_usrp::make(args);
-
-    // initialize channels, add two in each iteration
-    assert(num_channels % 2 == 0);
-    for (int i = 0; i < num_channels; i += 2) {
-        double offset = i / 2 * channel_bandwidth + channel_bandwidth / 2;
-        // add left neighbor
-        channels_.push_back({"Channel" + std::to_string(i), f_center + offset, channel_bandwidth, f_center, +offset, channel_rate});
-        // add right neighbor
-        channels_.push_back({"Channel" + std::to_string(i + 1), f_center + offset, channel_bandwidth, f_center, -offset, channel_rate});
-    }
-    // TODO: check that all channels have the same center frequency for faster tuning
 
     // initialize default tx values
     set_tx_freq(f_center);
@@ -80,7 +63,7 @@ OfdmTransceiver::~OfdmTransceiver()
 //
 // transmitter methods
 //
-void OfdmTransceiver::run(void)
+void OfdmTransceiver::start(void)
 {
     // start threads
     threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::modulation_function, this ) ) );
@@ -90,17 +73,6 @@ void OfdmTransceiver::run(void)
     threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );
     //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
 }
-
-
-void OfdmTransceiver::stop()
-{
-    boost::ptr_vector<boost::thread>::iterator it;
-    for (it = threads_.begin(); it != threads_.end(); ++it) {
-        it->interrupt();
-        it->join();
-    }
-}
-
 
 
 // This function creates new frames and pushes them on a shared buffer

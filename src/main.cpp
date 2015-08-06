@@ -12,6 +12,7 @@
 #include <boost/filesystem.hpp>
 
 #include "ofdmtransceiver.h"
+#include "multichannelrx.h"
 
 using namespace boost;
 namespace po = boost::program_options;
@@ -31,6 +32,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     uhd::set_thread_priority_safe();
 
     //variables to be set by po
+    bool is_tx;
     std::string args, type, threshold, wirefmt;
     double seconds_in_future;
     size_t total_num_samps;
@@ -41,13 +43,14 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     size_t num_channels;
     double channel_bandwidth, channel_rate, freq, rx_gain, tx_gain_soft, tx_gain_uhd;
     float ampl;
-    
-    
+
+
     //setup the program options
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help", "help message")
         ("args", po::value<std::string>(&args)->default_value(""), "single uhd device address args")
+        ("tx", po::value<bool>(&is_tx)->default_value(true), "Whether to run as transmitter")
         ("secs", po::value<double>(&seconds_in_future)->default_value(1.5), "number of seconds in the future to receive")
         ("type", po::value<std::string>(&type)->default_value("short"), "sample type: double, float, or short")
         ("nsamps", po::value<size_t>(&total_num_samps)->default_value(10000), "total number of samples to receive")
@@ -82,19 +85,30 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     verbose = vm.count("dilv") == 0;
     std::signal(SIGINT, signal_handler);
 
-    // create transceiver
-    OfdmTransceiver trx(args, num_channels, freq, channel_bandwidth, channel_rate, tx_gain_soft, tx_gain_uhd, rx_gain);
+    // TODO: make them a parameter
+    int M = 48;
+    int cp_len = 6;
+    int taper_len = 4;
+    unsigned char * p = NULL;   // default subcarrier allocation
+
+    // create radio
+    boost::shared_ptr<DyspanRadio> radio;
+    if (is_tx)
+        radio.reset(new OfdmTransceiver(args, num_channels, freq, channel_bandwidth, channel_rate, tx_gain_soft, tx_gain_uhd, rx_gain));
+    else
+        radio.reset(new multichannelrx(args, num_channels, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p));
+
 
     // delay start a bit ..
     boost::this_thread::sleep(boost::posix_time::seconds(1));
     std::cout << "Press Ctrl + C to stop radio ..." << std::endl;
-    trx.run();
+    radio->start();
 
     // sleep until end ..
     while (not stop_signal_called) {
         boost::this_thread::sleep(boost::posix_time::milliseconds(100));
     }
-    trx.stop();
+    radio->stop();
     std::cout << std::endl << "Done!" << std::endl << std::endl;
 
     return 0;

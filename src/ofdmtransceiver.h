@@ -4,18 +4,17 @@
 // This class is based on liquid-usrp's ofdmtxrx class.
 
 #include <complex>
-#include <boost/thread.hpp>
-#include <boost/ptr_container/ptr_vector.hpp>
+
+
 #include <boost/ptr_container/ptr_deque.hpp>
 #include <liquid/liquid.h>
-#include <uhd/usrp/multi_usrp.hpp>
+
+#include "dypanradio.h"
 #include "Buffer.h"
 #include "channels.h"
 #include "EnergyDetector.h"
 
-typedef std::vector<std::complex<float> > CplxFVec;
-
-class OfdmTransceiver
+class OfdmTransceiver : public DyspanRadio
 {
 public:
     // default constructor   
@@ -40,7 +39,7 @@ public:
     void set_tx_gain_uhd(float gain);
     void set_tx_antenna(char * _tx_antenna);
 
-    void run();
+    void start();
     void stop();
     void reset_tx();
 
@@ -69,18 +68,11 @@ public:
     friend void * ofdmtxrx_rx_worker(void * _arg);
 
 private:
-    // generic properties
-    int num_channels_;
-    double channel_bandwidth_;
-    double channel_rate_;
-    std::vector< ChannelConfig > channels_;
-    boost::ptr_vector<boost::thread> threads_;
+
+    //boost::ptr_vector<boost::thread> threads_;
     bool debug_;             // is debugging enabled?
 
-    // OFDM properties
-    unsigned int M;                 // number of subcarriers
-    unsigned int cp_len;            // cyclic prefix length
-    unsigned int taper_len;         // taper length
+
     ofdmflexframegenprops_s fgprops;// frame generator properties
 
     // transmitter objects
