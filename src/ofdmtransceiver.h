@@ -88,7 +88,7 @@ private:
     std::complex<float> * fgbuffer; // frame generator output buffer [size: M + cp_len x 1]
     //boost::scoped_ptr<CplxFVec> fgbuffer; // TODO: Convert to smart ptr
 
-    unsigned int fgbuffer_len;      // length of frame generator buffer
+    unsigned int fgbuffer_len;      // length of frame generator buffer (is the size of a single OFDM symbol)
     float tx_gain;                  // soft transmit gain (linear)
     uint32_t seq_no_;
 

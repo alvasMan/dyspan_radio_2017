@@ -13,8 +13,8 @@
 //  _callback       :   frame synchronizer callback function
 //  _userdata       :   user-defined data structure
 OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels, const double f_center, const double channel_bandwidth, const double channel_rate, const float tx_gain_soft, const float tx_gain_uhd, const float rx_gain_uhd) :
-    M(256),
-    cp_len(16),
+    M(48),
+    cp_len(6),
     taper_len(4),
     num_channels_(num_channels),
     channel_rate_(channel_rate),
@@ -64,7 +64,7 @@ OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels,
     set_rx_freq(f_center);
     set_rx_rate(rx_rf_rate);
     set_rx_gain_uhd(rx_gain_uhd);
-    set_rx_antenna("J1");
+    //set_rx_antenna("J1");
 
     // setting up the energy detector (number of averages,window step size,fftsize)
     e_detec.set_parameters(10, num_channels, 1024);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
@@ -107,7 +107,7 @@ void OfdmTransceiver::stop()
 void OfdmTransceiver::modulation_function(void)
 {
     try {
-        int payload_len = 1000;
+        int payload_len = 100;
         unsigned char header[8];
         unsigned char payload[payload_len];
 
@@ -130,25 +130,26 @@ void OfdmTransceiver::modulation_function(void)
             for (int i = 0; i < payload_len; i++)
                 payload[i] = rand() & 0xff;
 
-            // create fresh buffer for this frame
-            boost::shared_ptr<CplxFVec> usrp_buffer( new CplxFVec(fgbuffer_len) );
-
             ofdmflexframegen_setprops(fg, &fgprops);
 
             // assemble frame
             ofdmflexframegen_assemble(fg, header, payload, payload_len);
+            if (debug_) ofdmflexframegen_print(fg);
 
-            // generate a single OFDM frame
-            bool last_symbol = false;
-            while (not last_symbol) {
-                // generate symbol
-                last_symbol = ofdmflexframegen_writesymbol(fg, fgbuffer);
+            size_t num_symbols = ofdmflexframegen_getframelen(fg);
+            const size_t frame_size = num_symbols * fgbuffer_len;
 
+            // create fresh buffer for this frame
+            boost::shared_ptr<CplxFVec> usrp_buffer( new CplxFVec(frame_size) );
+            unsigned int bytes_written = 0;
+            while (num_symbols--) {
+                ofdmflexframegen_writesymbol(fg, fgbuffer);
                 // copy symbol and apply gain
                 for (int i = 0; i < fgbuffer_len; i++)
-                    (*usrp_buffer.get())[i] = fgbuffer[i] * tx_gain;
+                    (*usrp_buffer.get())[bytes_written + i] = fgbuffer[i] * tx_gain;
+                bytes_written += fgbuffer_len;
             }
-
+            assert(bytes_written == frame_size);
             frame_buffer.pushBack(usrp_buffer);
             seq_no_++;
         }
@@ -194,7 +195,6 @@ void OfdmTransceiver::transmit_function(void)
 void OfdmTransceiver::random_transmit_function(void)
 {
     try {
-
         while (true) {
             boost::this_thread::interruption_point();
 
@@ -239,8 +239,7 @@ void OfdmTransceiver::transmit_packet()
     metadata_tx.has_time_spec  = false; // set to false to send immediately
 
     boost::shared_ptr<CplxFVec> buffer;
-    frame_buffer.popFront(buffer);// new CplxFVec(fgbuffer_len) );
-    //std::cout << boost::format("Size is: %d") % buffer.size() << std::endl;
+    frame_buffer.popFront(buffer);
 
     // send samples to the device
     usrp_tx->get_device()->send(
@@ -374,11 +373,13 @@ void OfdmTransceiver::receive_function(void)
 void OfdmTransceiver::set_tx_freq(float freq)
 {
     std::cout << boost::format("Setting TX Center Frequency: %f") % freq << std::endl;
-    uhd::tune_request_t request(freq, 0.0);
+    uhd::tune_request_t request(freq);
     uhd::tune_result_t result = usrp_tx->set_tx_freq(request);
+
     if (debug_) {
         std::cout << result.to_pp_string() << std::endl;
     }
+    std::cout << "Actual TX Frequency: " << (usrp_tx->get_tx_freq()/1e6) << " MHz" << std::endl;
 }
 
 // set transmitter sample rate
@@ -426,6 +427,7 @@ void OfdmTransceiver::reset_tx()
 void OfdmTransceiver::set_rx_freq(float _rx_freq)
 {
     usrp_rx->set_rx_freq(_rx_freq);
+    std::cout << "Actual RX Frequency: " << (usrp_rx->get_rx_freq()/1e6) << " MHz" << std::endl;
 
     // check LO Lock
     std::vector<std::string> sensor_names;
