@@ -123,6 +123,11 @@ public:
     uint16_t nBins;
     
     EnergyDetector();
+    ~EnergyDetector()
+    {
+        destroy();
+    }
+
     void set_parameters(uint16_t _avg_win_size, uint16_t num_channels, const std::vector<int> &_bin_mask);
     void set_parameters(uint16_t _avg_win_size, uint16_t num_channels, uint16_t fftsize);
     void setup();
