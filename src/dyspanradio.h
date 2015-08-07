@@ -26,6 +26,21 @@ public:
         cp_len_(cp_len),
         taper_len_(taper_len)
     {
+        // validate input
+        if (num_channels < 1) {
+            fprintf(stderr,"error: multichannelrx::multichannelrx(), must have at least one channel\n");
+            throw 0;
+        } else if (M < 8) {
+            fprintf(stderr,"error: multichannelrx::multichannelrx(), number of subcarriers must be at least 8\n");
+            throw 0;
+        } else if (cp_len < 1) {
+            fprintf(stderr,"error: multichannelrx::multichannelrx(), cyclic prefix length must be at least 1\n");
+            throw 0;
+        } else if (taper_len > cp_len) {
+            fprintf(stderr,"error: multichannelrx::multichannelrx(), taper length cannot exceed cyclic prefix length\n");
+            throw 0;
+        }
+
         // initialize channels, add two in each iteration
         assert(num_channels_ % 2 == 0);
         for (int i = 0; i < num_channels_; i += 2) {

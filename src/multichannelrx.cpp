@@ -16,7 +16,7 @@
 
 #define BST_DEBUG 0
 
-static bool verbose;
+static bool verbose = true;
 // global callback function
 int callback(unsigned char *  _header,
              int              _header_valid,
@@ -27,25 +27,20 @@ int callback(unsigned char *  _header,
              void *           _userdata)
 {
     if (verbose) {
-        // compute true carrier offset
-        printf("***** rssi=%7.2fdB evm=%7.2fdB, ", _stats.rssi, _stats.evm);
-
+        std::cout << boost::format("***** rssi=%7.2fdB evm=%7.2fdB, ") % _stats.rssi % _stats.evm;
         if (_header_valid) {
-            unsigned int packet_id = (_header[0] << 8 | _header[1]);
-        unsigned int channel = _header[2];
-        printf("channel: %u ", channel);
-            printf("rx packet id: %6u", packet_id);
-            if (_payload_valid)
-        {
-          printf("\n");
-        }
-            else                printf(" PAYLOAD INVALID\n");
+            uint32_t seq_no = (_header[0] << 24 | _header[1] << 16 | _header[2] << 8 | _header[3]);
+            std::cout << boost::format("seqno: %6u, ") % seq_no;
+            if (_payload_valid) {
+                std::cout << boost::format("payload size: %d") % _payload_len;
+            } else {
+                std::cout << boost::format("PAYLOAD INVALID");
+            }
         } else {
-            printf("HEADER INVALID\n");
+            std::cout << boost::format("HEADER INVALID");
         }
-    } else {
+        std::cout << std::endl;
     }
-
     return 0;
 }
 
@@ -64,40 +59,18 @@ multichannelrx::multichannelrx(const std::string args,
                unsigned char * p) :          // OFDM: subcarrier allocation
     DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len)
 {
-    // validate input
-    if (num_channels < 1) {
-        fprintf(stderr,"error: multichannelrx::multichannelrx(), must have at least one channel\n");
-        throw 0;
-    } else if (M < 8) {
-        fprintf(stderr,"error: multichannelrx::multichannelrx(), number of subcarriers must be at least 8\n");
-        throw 0;
-    } else if (cp_len < 1) {
-        fprintf(stderr,"error: multichannelrx::multichannelrx(), cyclic prefix length must be at least 1\n");
-        throw 0;
-    } else if (taper_len > cp_len) {
-        fprintf(stderr,"error: multichannelrx::multichannelrx(), taper length cannot exceed cyclic prefix length\n");
-        throw 0;
-    }
-    unsigned int i;
-
     // create callbacks
-    // create multi-channel receiver object
+    userdata  = (void **)             malloc(num_channels * sizeof(void *));
     callbacks = (framesync_callback*) malloc(num_channels * sizeof(framesync_callback));
-    //void * userdata[num_channels_];
-    //framesync_callback callbacks[num_channels_];
-    for (int i=0; i<num_channels_; i++) {
-        //userdata[i] = NULL;
+    for (int i = 0; i < num_channels_; i++) {
+        userdata[i] = NULL;
         callbacks[i] = callback;
     }
 
     // create frame generators
     framesync = (ofdmflexframesync*)  malloc(num_channels * sizeof(ofdmflexframesync));
-    userdata  = (void **)             malloc(num_channels * sizeof(void *));
-    callbacks = (framesync_callback*) malloc(num_channels * sizeof(framesync_callback));
-    for (i=0; i<num_channels; i++) {
-        //userdata[i]  = _userdata[i];
-        //callback[i]  = _callback[i];
-        framesync[i] = ofdmflexframesync_create(M_, cp_len_, taper_len_, p, callbacks[i], NULL);
+    for (int i = 0; i < num_channels_; i++) {
+        framesync[i] = ofdmflexframesync_create(M_, cp_len_, taper_len_, p, callbacks[i], userdata[i]);
 #if BST_DEBUG
         ofdmflexframesync_debug_enable(framesync[i]);
 #endif
@@ -218,21 +191,16 @@ void multichannelrx::receive_function(void)
     const size_t max_samps_per_packet = usrp_rx->get_device()->get_max_recv_samps_per_packet();
     CplxFVec buff(max_samps_per_packet);
 
-
     //meta-data will be filled in by recv()
     uhd::rx_metadata_t metadata;
     bool overflow_message = true;
-
-
 
     try {
 
         while (true) {
             boost::this_thread::interruption_point();
 
-
             size_t num_rx_samps = rx_stream->recv(&buff.front(), buff.size(), metadata, 3.0);
-
 
             //handle the error code
             if (metadata.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) {
@@ -260,8 +228,6 @@ void multichannelrx::receive_function(void)
                 // push resulting samples through receiver
                 execute(&usrp_sample, 1);
             }
-
-
         }
     }
     catch(boost::thread_interrupted)

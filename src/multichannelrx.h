@@ -3,7 +3,7 @@
 
 // This class is based on liquid-usrp's multichannelrx class
 
-#include "dypanradio.h"
+#include "dyspanradio.h"
 #include <liquid/liquid.h>
 
 class multichannelrx : public DyspanRadio {

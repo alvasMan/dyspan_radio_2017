@@ -9,7 +9,7 @@
 #include <boost/ptr_container/ptr_deque.hpp>
 #include <liquid/liquid.h>
 
-#include "dypanradio.h"
+#include "dyspanradio.h"
 #include "Buffer.h"
 #include "channels.h"
 #include "EnergyDetector.h"
