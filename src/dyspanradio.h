@@ -4,9 +4,12 @@
 #include <boost/thread.hpp>
 #include <uhd/usrp/multi_usrp.hpp>
 #include <boost/ptr_container/ptr_vector.hpp>
+#include "boost/multi_array.hpp"
 #include "channels.h"
 
 typedef std::vector<std::complex<float> > CplxFVec;
+typedef boost::multi_array<std::complex<float>, 2> CplxFArray;
+
 
 class DyspanRadio
 {

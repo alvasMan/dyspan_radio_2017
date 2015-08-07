@@ -12,6 +12,7 @@
 #include <vector>
 #include <liquid/liquid.h>
 
+
 #include "multichannelrx.h"
 
 #define BST_DEBUG 0
@@ -43,6 +44,7 @@ int callback(unsigned char *  _header,
     }
     return 0;
 }
+
 
 
 
@@ -81,17 +83,12 @@ multichannelrx::multichannelrx(const std::string args,
     float As        = 60.0f;    // stop-band attenuation
     channelizer = firpfbch_crcf_create_kaiser(LIQUID_ANALYZER, 2*num_channels, m, As);
 
-    // channelizer input/output arrays
-    X = (std::complex<float>*) malloc( 2 * num_channels * sizeof(std::complex<float>) );
-    x = (std::complex<float>*) malloc( 2 * num_channels * sizeof(std::complex<float>) );
-
     // create NCO to center spectrum
     float offset = -0.5f*(float)(num_channels-1) / (float)num_channels * M_PI;
     nco = nco_crcf_create(LIQUID_VCO);
     nco_crcf_set_frequency(nco, offset);
 
-    // reset base station transmitter
-    Reset();
+
 
 
     //create a usrp device
@@ -99,6 +96,20 @@ multichannelrx::multichannelrx(const std::string args,
     std::cout << boost::format("Creating the usrp device with: %s...") % args << std::endl;
     usrp_rx = uhd::usrp::multi_usrp::make(args);
     std::cout << boost::format("Using Device: %s") % usrp_rx->get_pp_string() << std::endl;
+
+
+    // channelizer input/output arrays
+    const size_t max_samps_per_packet = usrp_rx->get_device()->get_max_recv_samps_per_packet();
+
+    X = (std::complex<float>*) malloc( 2 * max_samps_per_packet * num_channels * sizeof(std::complex<float>) );
+    x = (std::complex<float>*) malloc( 2 * max_samps_per_packet * num_channels * sizeof(std::complex<float>) );
+    // reset base station transmitter
+    Reset();
+
+    // resize channelizer input/output arrays
+    y.resize(boost::extents[2 * num_channels][max_samps_per_packet]);
+    Y.resize(boost::extents[2 * num_channels][max_samps_per_packet]);
+
 
     // computer actual RF rate
     double rx_rf_rate = num_channels * channel_bandwidth;
@@ -161,6 +172,7 @@ void multichannelrx::Reset()
 
     //nco_crcf_reset(nco);
 
+    // TODO: reset entire array
     for (i=0; i<2*num_channels_; i++) {
         X[i] = 0.0f;
         x[i] = 0.0f;
@@ -220,14 +232,21 @@ void multichannelrx::receive_function(void)
                                                  ) % metadata.error_code));
             }
 
+
+#if 1
+            execute(&buff[0], num_rx_samps);
+#else
             // push data through arbitrary resampler and give to frame synchronizer
             for (int j=0; j<num_rx_samps; j++) {
                 // grab sample from usrp buffer
                 std::complex<float> usrp_sample = buff[j];
 
                 // push resulting samples through receiver
+
+
                 execute(&usrp_sample, 1);
             }
+#endif
         }
     }
     catch(boost::thread_interrupted)
@@ -241,6 +260,8 @@ void multichannelrx::receive_function(void)
 void multichannelrx::execute(std::complex<float> * _x,
                                   unsigned int          _num_samples)
 {
+
+#if 0
     unsigned int i;
     for (i=0; i<_num_samples; i++) {
 #if 1
@@ -265,6 +286,38 @@ void multichannelrx::execute(std::complex<float> * _x,
 
 #endif
     }
+
+#else
+
+    //assert(_num_samples % (2*num_channels_)  == 0);
+    int counter = 0;
+
+    // buffer_index will be the channel number
+    for (int i = 0; i < _num_samples; i++) {
+        // mix signal down and put resulting sample into
+        // channelizer input buffer
+        nco_crcf_mix_down(nco, _x[i], &y[buffer_index][counter]);
+        nco_crcf_step(nco);
+
+        buffer_index++;
+        if (buffer_index == 2*num_channels_) {
+            // reset index
+            buffer_index = 0;
+            counter++;
+        }
+    }
+
+    size_t width = 2 * num_channels_;
+    for (int i = 0; i < counter; i++) {
+        // execute filterbank channelizer as analyzer
+        firpfbch_crcf_analyzer_execute(channelizer, &y[0][i], &Y[0][i]);
+    }
+
+    for (int k = 0; k < num_channels_; k++) {
+        ofdmflexframesync_execute(framesync[k], &Y[k][0], counter);
+    }
+#endif
+
 }
 
 // TODO: make this multi-threaded (each synchronizer runs in its own thread)

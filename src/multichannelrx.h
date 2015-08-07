@@ -47,6 +47,9 @@ private:
     std::complex<float> * X;        // channelizer output
     unsigned int buffer_index;      // input index
 
+    CplxFArray y;
+    CplxFArray Y;
+
     // objects
     ofdmflexframesync * framesync;  // array of frame generator objects
     void ** userdata;               // array of userdata pointers
