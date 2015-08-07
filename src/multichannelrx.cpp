@@ -127,9 +127,16 @@ multichannelrx::multichannelrx(const std::string args,
     usrp_rx = uhd::usrp::multi_usrp::make(args);
     std::cout << boost::format("Using Device: %s") % usrp_rx->get_pp_string() << std::endl;
 
+    // computer actual RF rate
     double rx_rf_rate = num_channels * channel_bandwidth;
+    usrp_rx->set_rx_rate(2.0f * rx_rf_rate); // try to set rx rate (oversampled to compensate for CIC filter)
 
-    usrp_rx->set_rx_rate(rx_rf_rate);
+#if 0
+    double usrp_rx_rate = usrp->get_rx_rate();
+    double rx_resamp_rate = rx_rate / usrp_rx_rate; // compute arbitrary resampling rate (make up the difference in software)
+#endif
+
+    // set up remaining parameters
     usrp_rx->set_rx_freq(f_center_);
     usrp_rx->set_rx_gain(rx_gain_uhd);
 }
@@ -208,9 +215,15 @@ void multichannelrx::receive_function(void)
     stream_cmd.time_spec = uhd::time_spec_t();
     usrp_rx->issue_stream_cmd(stream_cmd);
 
+    const size_t max_samps_per_packet = usrp_rx->get_device()->get_max_recv_samps_per_packet();
+    CplxFVec buff(max_samps_per_packet);
+
+
     //meta-data will be filled in by recv()
     uhd::rx_metadata_t metadata;
     bool overflow_message = true;
+
+
 
     try {
 
@@ -218,14 +231,8 @@ void multichannelrx::receive_function(void)
             boost::this_thread::interruption_point();
 
 
-            //allocate recv buffer and metatdata
-            uhd::rx_metadata_t metadata;
-            const size_t max_samps_per_packet = usrp_rx->get_device()->get_max_recv_samps_per_packet();
-            CplxFVec buff(max_samps_per_packet);
-
-
             size_t num_rx_samps = rx_stream->recv(&buff.front(), buff.size(), metadata, 3.0);
-            //size_t num_rx_samps = rx_stream->recv(e_detec.fftBins, e_detec.nBins, metadata, 5.0);
+
 
             //handle the error code
             if (metadata.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) {
@@ -245,17 +252,27 @@ void multichannelrx::receive_function(void)
                                                  ) % metadata.error_code));
             }
 
+            // push data through arbitrary resampler and give to frame synchronizer
+            for (int j=0; j<num_rx_samps; j++) {
+                // grab sample from usrp buffer
+                std::complex<float> usrp_sample = buff[j];
+
+                // push resulting samples through receiver
+                execute(&usrp_sample, 1);
+            }
+
 
         }
     }
     catch(boost::thread_interrupted)
     {
         std::cout << "Receive thread interrupted." << std::endl;
+        usrp_rx->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
     }
 }
 
 
-void multichannelrx::Execute(std::complex<float> * _x,
+void multichannelrx::execute(std::complex<float> * _x,
                                   unsigned int          _num_samples)
 {
     unsigned int i;
