@@ -39,14 +39,10 @@ public:
 private:
     // ...
     void receive_function();
-    void RunChannelizer();
 
     // finite impulse response polyphase filterbank channelizer
     firpfbch_crcf channelizer;      // channelizer size is 2*num_channels
-    std::complex<float> * x;        // channelizer input
-    std::complex<float> * X;        // channelizer output
     unsigned int buffer_index;      // input index
-
     CplxFArray y;
     CplxFArray Y;
 

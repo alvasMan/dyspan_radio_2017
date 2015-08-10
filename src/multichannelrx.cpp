@@ -88,9 +88,6 @@ multichannelrx::multichannelrx(const std::string args,
     nco = nco_crcf_create(LIQUID_VCO);
     nco_crcf_set_frequency(nco, offset);
 
-
-
-
     //create a usrp device
     std::cout << std::endl;
     std::cout << boost::format("Creating the usrp device with: %s...") % args << std::endl;
@@ -100,16 +97,11 @@ multichannelrx::multichannelrx(const std::string args,
 
     // channelizer input/output arrays
     const size_t max_samps_per_packet = usrp_rx->get_device()->get_max_recv_samps_per_packet();
+    y.resize(boost::extents[max_samps_per_packet][2 * num_channels]);
+    Y.resize(boost::extents[max_samps_per_packet][2 * num_channels]);
 
-    X = (std::complex<float>*) malloc( 2 * max_samps_per_packet * num_channels * sizeof(std::complex<float>) );
-    x = (std::complex<float>*) malloc( 2 * max_samps_per_packet * num_channels * sizeof(std::complex<float>) );
     // reset base station transmitter
     Reset();
-
-    // resize channelizer input/output arrays
-    y.resize(boost::extents[2 * num_channels][max_samps_per_packet]);
-    Y.resize(boost::extents[2 * num_channels][max_samps_per_packet]);
-
 
     // computer actual RF rate
     double rx_rf_rate = num_channels * channel_bandwidth;
@@ -147,10 +139,6 @@ multichannelrx::~multichannelrx()
     free(framesync);
     free(userdata);
     free(callbacks);
-
-    // free other buffers
-    free(X);
-    free(x);
 }
 
 void multichannelrx::start(void)
@@ -169,14 +157,6 @@ void multichannelrx::Reset()
         ofdmflexframesync_reset(framesync[i]);
 
     firpfbch_crcf_reset(channelizer);
-
-    //nco_crcf_reset(nco);
-
-    // TODO: reset entire array
-    for (i=0; i<2*num_channels_; i++) {
-        X[i] = 0.0f;
-        x[i] = 0.0f;
-    }
 
     // reset write index of channelizer buffer
     buffer_index = 0;
@@ -231,22 +211,7 @@ void multichannelrx::receive_function(void)
                                                  "Unexpected error code 0x%x"
                                                  ) % metadata.error_code));
             }
-
-
-#if 1
             execute(&buff[0], num_rx_samps);
-#else
-            // push data through arbitrary resampler and give to frame synchronizer
-            for (int j=0; j<num_rx_samps; j++) {
-                // grab sample from usrp buffer
-                std::complex<float> usrp_sample = buff[j];
-
-                // push resulting samples through receiver
-
-
-                execute(&usrp_sample, 1);
-            }
-#endif
         }
     }
     catch(boost::thread_interrupted)
@@ -260,43 +225,13 @@ void multichannelrx::receive_function(void)
 void multichannelrx::execute(std::complex<float> * _x,
                                   unsigned int          _num_samples)
 {
-
-#if 0
-    unsigned int i;
-    for (i=0; i<_num_samples; i++) {
-#if 1
-        // mix signal down and put resulting sample into
-        // channelizer input buffer
-        nco_crcf_mix_down(nco, _x[i], &x[buffer_index]);
-        nco_crcf_step(nco);
-
-        // update buffer index and...
-        buffer_index++;
-        if (buffer_index == 2*num_channels_) {
-            // reset index
-            buffer_index = 0;
-
-            // run...
-            RunChannelizer();
-        }
-#else
-        buffer_index++;
-        if ( (buffer_index % (2*num_channels))==0 )
-            ofdmflexframesync_execute(framesync[0], &_x[i], 1);
-
-#endif
-    }
-
-#else
-
-    //assert(_num_samples % (2*num_channels_)  == 0);
     int counter = 0;
 
     // buffer_index will be the channel number
     for (int i = 0; i < _num_samples; i++) {
         // mix signal down and put resulting sample into
         // channelizer input buffer
-        nco_crcf_mix_down(nco, _x[i], &y[buffer_index][counter]);
+        nco_crcf_mix_down(nco, _x[i], &y[counter][buffer_index]);
         nco_crcf_step(nco);
 
         buffer_index++;
@@ -307,30 +242,15 @@ void multichannelrx::execute(std::complex<float> * _x,
         }
     }
 
-    size_t width = 2 * num_channels_;
+    // execute filterbank channelizer as analyzer ..
     for (int i = 0; i < counter; i++) {
-        // execute filterbank channelizer as analyzer
-        firpfbch_crcf_analyzer_execute(channelizer, &y[0][i], &Y[0][i]);
+        firpfbch_crcf_analyzer_execute(channelizer, &y[i][0], &Y[i][0]);
     }
 
-    for (int k = 0; k < num_channels_; k++) {
-        ofdmflexframesync_execute(framesync[k], &Y[k][0], counter);
+    // run OFDM sychronizer ..
+    for (int i = 0; i < counter; i++) {
+        for (int k = 0; k < num_channels_; k++) {
+            ofdmflexframesync_execute(framesync[k], &Y[i][k], 1);
+        }
     }
-#endif
-
 }
-
-// TODO: make this multi-threaded (each synchronizer runs in its own thread)
-void multichannelrx::RunChannelizer()
-{
-    // execute filterbank channelizer as analyzer
-    firpfbch_crcf_analyzer_execute(channelizer, x, X);
-
-    // push resulting samples through frame synchronizers one
-    // sample at a time
-    unsigned int i;
-    for (i=0; i<num_channels_; i++)
-        ofdmflexframesync_execute(framesync[i], &X[i], 1);
-}
-
-
