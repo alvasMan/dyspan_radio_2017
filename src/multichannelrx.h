@@ -33,8 +33,9 @@ public:
     unsigned int GetNumChannels() { return num_channels_; }
 
     // push samples into base station receiver
-    void execute(std::complex<float> * _x,
-                 unsigned int          _num_samples);
+    void mix_down(std::complex<float> * _x, unsigned int _num_samples);
+    void channelize(std::complex<float> * _y, unsigned int counter);
+    void sychronize(std::complex<float> * _y, unsigned int counter);
 
 private:
     // ...

@@ -181,8 +181,8 @@ void multichannelrx::receive_function(void)
     stream_cmd.time_spec = uhd::time_spec_t();
     usrp_rx->issue_stream_cmd(stream_cmd);
 
-    const size_t max_samps_per_packet = usrp_rx->get_device()->get_max_recv_samps_per_packet();
-    CplxFVec buff(max_samps_per_packet);
+    const size_t max_spp = usrp_rx->get_device()->get_max_recv_samps_per_packet();
+    CplxFVec buff(max_spp);
 
     //meta-data will be filled in by recv()
     uhd::rx_metadata_t metadata;
@@ -212,7 +212,7 @@ void multichannelrx::receive_function(void)
                                                  "Unexpected error code 0x%x"
                                                  ) % metadata.error_code));
             }
-            execute(&buff[0], num_rx_samps);
+            mix_down(&buff[0], num_rx_samps);
         }
     }
     catch(boost::thread_interrupted)
@@ -223,8 +223,7 @@ void multichannelrx::receive_function(void)
 }
 
 
-void multichannelrx::execute(std::complex<float> * _x,
-                                  unsigned int          _num_samples)
+void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_samples)
 {
     int counter = 0;
 
@@ -242,12 +241,21 @@ void multichannelrx::execute(std::complex<float> * _x,
             counter++;
         }
     }
+    channelize(&y[0], counter);
+}
 
+
+void multichannelrx::channelize(std::complex<float> * _y, unsigned int counter)
+{
     // execute filterbank channelizer as analyzer ..
     for (int i = 0; i < counter; i++) {
         firpfbch_crcf_analyzer_execute(channelizer, &y[i * num_sampled_chans + 0], &Y[i * num_sampled_chans]);
     }
+    sychronize(&Y[0], counter);
+}
 
+void multichannelrx::sychronize(std::complex<float> * _y, unsigned int counter)
+{
     // run OFDM sychronizer ..
     for (int i = 0; i < counter; i++) {
         for (int k = 0; k < num_channels_; k++) {
