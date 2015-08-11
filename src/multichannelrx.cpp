@@ -96,9 +96,10 @@ multichannelrx::multichannelrx(const std::string args,
 
 
     // channelizer input/output arrays
-    const size_t max_samps_per_packet = usrp_rx->get_device()->get_max_recv_samps_per_packet();
-    y.resize(boost::extents[max_samps_per_packet][2 * num_channels]);
-    Y.resize(boost::extents[max_samps_per_packet][2 * num_channels]);
+    const size_t max_spp = usrp_rx->get_device()->get_max_recv_samps_per_packet();
+    num_sampled_chans = 2 * num_channels_; // oversampling ratio of 2.0
+    y.resize(max_spp * num_sampled_chans);
+    Y.resize(max_spp * num_sampled_chans);
 
     // reset base station transmitter
     Reset();
@@ -231,11 +232,11 @@ void multichannelrx::execute(std::complex<float> * _x,
     for (int i = 0; i < _num_samples; i++) {
         // mix signal down and put resulting sample into
         // channelizer input buffer
-        nco_crcf_mix_down(nco, _x[i], &y[counter][buffer_index]);
+        nco_crcf_mix_down(nco, _x[i], &y[counter * num_sampled_chans + buffer_index]);
         nco_crcf_step(nco);
 
         buffer_index++;
-        if (buffer_index == 2*num_channels_) {
+        if (buffer_index == num_sampled_chans) {
             // reset index
             buffer_index = 0;
             counter++;
@@ -244,13 +245,13 @@ void multichannelrx::execute(std::complex<float> * _x,
 
     // execute filterbank channelizer as analyzer ..
     for (int i = 0; i < counter; i++) {
-        firpfbch_crcf_analyzer_execute(channelizer, &y[i][0], &Y[i][0]);
+        firpfbch_crcf_analyzer_execute(channelizer, &y[i * num_sampled_chans + 0], &Y[i * num_sampled_chans]);
     }
 
     // run OFDM sychronizer ..
     for (int i = 0; i < counter; i++) {
         for (int k = 0; k < num_channels_; k++) {
-            ofdmflexframesync_execute(framesync[k], &Y[i][k], 1);
+            ofdmflexframesync_execute(framesync[k], &Y[i * num_sampled_chans + k], 1);
         }
     }
 }

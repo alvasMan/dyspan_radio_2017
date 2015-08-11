@@ -43,8 +43,10 @@ private:
     // finite impulse response polyphase filterbank channelizer
     firpfbch_crcf channelizer;      // channelizer size is 2*num_channels
     unsigned int buffer_index;      // input index
-    CplxFArray y;
-    CplxFArray Y;
+
+    size_t num_sampled_chans;
+    CplxFVec y;
+    CplxFVec Y;
 
     // objects
     ofdmflexframesync * framesync;  // array of frame generator objects
