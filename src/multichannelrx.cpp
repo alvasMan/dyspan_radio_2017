@@ -59,7 +59,8 @@ multichannelrx::multichannelrx(const std::string args,
                unsigned int    cp_len,       // OFDM: cyclic prefix length
                unsigned int    taper_len,    // OFDM: taper prefix length
                unsigned char * p) :          // OFDM: subcarrier allocation
-    DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len)
+    DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len),
+    mix_to_chan_buffer_(400 * 4 * 8, 200)
 {
     // create callbacks
     userdata  = (void **)             malloc(num_channels * sizeof(void *));
@@ -94,24 +95,17 @@ multichannelrx::multichannelrx(const std::string args,
     usrp_rx = uhd::usrp::multi_usrp::make(args);
     std::cout << boost::format("Using Device: %s") % usrp_rx->get_pp_string() << std::endl;
 
-
     // channelizer input/output arrays
     const size_t max_spp = usrp_rx->get_device()->get_max_recv_samps_per_packet();
-    num_sampled_chans_ = 2 * num_channels_; // oversampling ratio of 2.0
-    //y.resize(max_spp * num_sampled_chans);
+    num_sampled_chans_ = OVERSAMPLING_FACTOR * num_channels_; // oversampling ratio of 2.0
     Y.resize(max_spp * num_sampled_chans_);
-
-    // assign memory to storage
-    const size_t buffer_block_size = max_spp * num_sampled_chans_ * sizeof(std::complex<float>);
-    v.resize(MAX_BUFFER_BLOCKS * buffer_block_size);
-    storage.add_block(&v.front(), v.size(), buffer_block_size);
 
     // reset base station transmitter
     Reset();
 
     // computer actual RF rate
     double rx_rf_rate = num_channels * channel_bandwidth;
-    usrp_rx->set_rx_rate(2.0f * rx_rf_rate); // try to set rx rate (oversampled to compensate for CIC filter)
+    usrp_rx->set_rx_rate(OVERSAMPLING_FACTOR * rx_rf_rate); // try to set rx rate (oversampled to compensate for CIC filter)
 
 #if 0
     double usrp_rx_rate = usrp->get_rx_rate();
@@ -238,16 +232,13 @@ void multichannelrx::channelizer_function(void)
             boost::this_thread::interruption_point();
 
             BufferElement y;
-            frame_buffer.popFront(y);
+            mix_to_chan_buffer_.popFront(y);
+
+            // do the hard work here
             channelize(&y.buffer[0], y.len);
 
-#if 1
-            {
-                boost::lock_guard<boost::mutex> lock{mutex};
-                storage.free_n(y.buffer, 1, max_spp_ * num_sampled_chans_ * sizeof(std::complex<float>));
-            }
-#endif
-
+            // finally, release element
+            mix_to_chan_buffer_.release_element(y);
         }
     }
     catch(boost::thread_interrupted)
@@ -257,25 +248,17 @@ void multichannelrx::channelizer_function(void)
 }
 
 
-
-
-
 void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_samples)
 {
-
-    std::complex<float> *y;
-    {
-        boost::lock_guard<boost::mutex> lock{mutex};
-        y = static_cast<std::complex<float>*>(storage.malloc_n(1, max_spp_ * num_sampled_chans_ * sizeof(std::complex<float>)));
-        assert(y != nullptr);
-    }
     int counter = 0;
+    BufferElement element;
+    mix_to_chan_buffer_.get_new_element(element);
+    assert(element.buffer != nullptr);
 
     // buffer_index will be the channel number
     for (int i = 0; i < _num_samples; i++) {
-        // mix signal down and put resulting sample into
-        // channelizer input buffer
-        nco_crcf_mix_down(nco, _x[i], &y[counter * num_sampled_chans_ + buffer_index]);
+        // mix signal down and put resulting sample into channelizer input buffer
+        nco_crcf_mix_down(nco, _x[i], &element.buffer[counter * num_sampled_chans_ + buffer_index]);
         nco_crcf_step(nco);
 
         buffer_index++;
@@ -285,16 +268,16 @@ void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_sample
             counter++;
         }
     }
-    //std::cout << "counter: " << counter << std::endl;
-    //std::cout << "buffer_index: " << buffer_index << std::endl;
-    //assert(counter == 90);
-    BufferElement elem;
-    elem.buffer = y;
-    elem.len = counter;
+    // update len field
+    element.len = counter;
 
-    frame_buffer.pushBack(elem);
-
-    //channelize(&y[0], counter);
+#if MULTITHREAD
+    mix_to_chan_buffer_.pushBack(element);
+#else
+    // continue in same thread
+    channelize(&element.buffer[0], counter);
+    mix_to_chan_buffer_.release_element(element);
+#endif
 }
 
 

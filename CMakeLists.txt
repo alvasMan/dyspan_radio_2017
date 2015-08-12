@@ -20,7 +20,7 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11" )
 ########################################################################
 # Set up compiler flags for producing vectorized code if possible
 ########################################################################
-SET(VECTORIZATION 0)
+#SET(VECTORIZATION 0)
 IF(VECTORIZATION)
   IF( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
     MESSAGE(STATUS "Using experimental compiler flags.")

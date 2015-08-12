@@ -4,24 +4,15 @@
 // This class is based on liquid-usrp's multichannelrx class
 
 #include "dyspanradio.h"
-
 #include "Buffer.h"
+#include "buffer_manager.h" // TODO: rename file
 #include <vector>
 #include <map>
-#include <boost/pool/simple_segregated_storage.hpp>
-
 #include <liquid/liquid.h>
 
-#define MAX_BUFFER_BLOCKS 64
+#define OVERSAMPLING_FACTOR 2.0f
 
-typedef struct
-{
-    std::complex<float>* buffer;
-    size_t len;
-} BufferElement;
-
-
-
+#define MULTITHREAD 1
 
 class multichannelrx : public DyspanRadio {
 public:
@@ -70,17 +61,12 @@ private:
     //CplxFVec y;
     CplxFVec Y;
 
-    boost::simple_segregated_storage<std::size_t> storage;
-
-
-    Buffer<BufferElement> frame_buffer;
-    std::vector<uint8_t> v;
-    boost::mutex mutex;
+    BlockBuffer<BufferElement> mix_to_chan_buffer_;
 
     // objects
     ofdmflexframesync * framesync;  // array of frame generator objects
     void ** userdata;               // array of userdata pointers
-    framesync_callback * callbacks;  // array of callback functions
+    framesync_callback * callbacks; // array of callback functions
     nco_crcf nco;                   // frequency-centering NCO
 
     uhd::usrp::multi_usrp::sptr usrp_rx;
