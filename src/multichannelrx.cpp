@@ -97,9 +97,14 @@ multichannelrx::multichannelrx(const std::string args,
 
     // channelizer input/output arrays
     const size_t max_spp = usrp_rx->get_device()->get_max_recv_samps_per_packet();
-    num_sampled_chans = 2 * num_channels_; // oversampling ratio of 2.0
-    y.resize(max_spp * num_sampled_chans);
-    Y.resize(max_spp * num_sampled_chans);
+    num_sampled_chans_ = 2 * num_channels_; // oversampling ratio of 2.0
+    //y.resize(max_spp * num_sampled_chans);
+    Y.resize(max_spp * num_sampled_chans_);
+
+    // assign memory to storage
+    const size_t buffer_block_size = max_spp * num_sampled_chans_ * sizeof(std::complex<float>);
+    v.resize(MAX_BUFFER_BLOCKS * buffer_block_size);
+    storage.add_block(&v.front(), v.size(), buffer_block_size);
 
     // reset base station transmitter
     Reset();
@@ -146,6 +151,7 @@ void multichannelrx::start(void)
 {
     // start threads
     threads_.push_back( new boost::thread( boost::bind( &multichannelrx::receive_function, this ) ) );
+    threads_.push_back( new boost::thread( boost::bind( &multichannelrx::channelizer_function, this ) ) );
 }
 
 
@@ -181,8 +187,8 @@ void multichannelrx::receive_function(void)
     stream_cmd.time_spec = uhd::time_spec_t();
     usrp_rx->issue_stream_cmd(stream_cmd);
 
-    const size_t max_spp = usrp_rx->get_device()->get_max_recv_samps_per_packet();
-    CplxFVec buff(max_spp);
+    max_spp_ = usrp_rx->get_device()->get_max_recv_samps_per_packet();
+    CplxFVec buff(max_spp_);
 
     //meta-data will be filled in by recv()
     uhd::rx_metadata_t metadata;
@@ -223,25 +229,72 @@ void multichannelrx::receive_function(void)
 }
 
 
+
+
+void multichannelrx::channelizer_function(void)
+{
+    try {
+        while (true) {
+            boost::this_thread::interruption_point();
+
+            BufferElement y;
+            frame_buffer.popFront(y);
+            channelize(&y.buffer[0], y.len);
+
+#if 1
+            {
+                boost::lock_guard<boost::mutex> lock{mutex};
+                storage.free_n(y.buffer, 1, max_spp_ * num_sampled_chans_ * sizeof(std::complex<float>));
+            }
+#endif
+
+        }
+    }
+    catch(boost::thread_interrupted)
+    {
+        std::cout << "Channelizer thread interrupted." << std::endl;
+    }
+}
+
+
+
+
+
 void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_samples)
 {
+
+    std::complex<float> *y;
+    {
+        boost::lock_guard<boost::mutex> lock{mutex};
+        y = static_cast<std::complex<float>*>(storage.malloc_n(1, max_spp_ * num_sampled_chans_ * sizeof(std::complex<float>)));
+        assert(y != nullptr);
+    }
     int counter = 0;
 
     // buffer_index will be the channel number
     for (int i = 0; i < _num_samples; i++) {
         // mix signal down and put resulting sample into
         // channelizer input buffer
-        nco_crcf_mix_down(nco, _x[i], &y[counter * num_sampled_chans + buffer_index]);
+        nco_crcf_mix_down(nco, _x[i], &y[counter * num_sampled_chans_ + buffer_index]);
         nco_crcf_step(nco);
 
         buffer_index++;
-        if (buffer_index == num_sampled_chans) {
+        if (buffer_index == num_sampled_chans_) {
             // reset index
             buffer_index = 0;
             counter++;
         }
     }
-    channelize(&y[0], counter);
+    //std::cout << "counter: " << counter << std::endl;
+    //std::cout << "buffer_index: " << buffer_index << std::endl;
+    //assert(counter == 90);
+    BufferElement elem;
+    elem.buffer = y;
+    elem.len = counter;
+
+    frame_buffer.pushBack(elem);
+
+    //channelize(&y[0], counter);
 }
 
 
@@ -249,17 +302,17 @@ void multichannelrx::channelize(std::complex<float> * _y, unsigned int counter)
 {
     // execute filterbank channelizer as analyzer ..
     for (int i = 0; i < counter; i++) {
-        firpfbch_crcf_analyzer_execute(channelizer, &y[i * num_sampled_chans + 0], &Y[i * num_sampled_chans]);
+        firpfbch_crcf_analyzer_execute(channelizer, &_y[i * num_sampled_chans_ + 0], &Y[i * num_sampled_chans_]);
     }
-    sychronize(&Y[0], counter);
+    sychronize(counter);
 }
 
-void multichannelrx::sychronize(std::complex<float> * _y, unsigned int counter)
+void multichannelrx::sychronize(unsigned int counter)
 {
     // run OFDM sychronizer ..
     for (int i = 0; i < counter; i++) {
         for (int k = 0; k < num_channels_; k++) {
-            ofdmflexframesync_execute(framesync[k], &Y[i * num_sampled_chans + k], 1);
+            ofdmflexframesync_execute(framesync[k], &Y[i * num_sampled_chans_ + k], 1);
         }
     }
 }

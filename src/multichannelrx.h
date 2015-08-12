@@ -4,7 +4,24 @@
 // This class is based on liquid-usrp's multichannelrx class
 
 #include "dyspanradio.h"
+
+#include "Buffer.h"
+#include <vector>
+#include <map>
+#include <boost/pool/simple_segregated_storage.hpp>
+
 #include <liquid/liquid.h>
+
+#define MAX_BUFFER_BLOCKS 64
+
+typedef struct
+{
+    std::complex<float>* buffer;
+    size_t len;
+} BufferElement;
+
+
+
 
 class multichannelrx : public DyspanRadio {
 public:
@@ -33,21 +50,32 @@ public:
     unsigned int GetNumChannels() { return num_channels_; }
 
     // push samples into base station receiver
-    void mix_down(std::complex<float> * _x, unsigned int _num_samples);
-    void channelize(std::complex<float> * _y, unsigned int counter);
-    void sychronize(std::complex<float> * _y, unsigned int counter);
+
 
 private:
     // ...
     void receive_function();
+    void channelizer_function();
+
+    void mix_down(std::complex<float> * _x, unsigned int _num_samples);
+    void channelize(std::complex<float> * _y, unsigned int counter);
+    void sychronize(unsigned int counter);
 
     // finite impulse response polyphase filterbank channelizer
     firpfbch_crcf channelizer;      // channelizer size is 2*num_channels
     unsigned int buffer_index;      // input index
 
-    size_t num_sampled_chans;
-    CplxFVec y;
+    size_t num_sampled_chans_;
+    size_t max_spp_;
+    //CplxFVec y;
     CplxFVec Y;
+
+    boost::simple_segregated_storage<std::size_t> storage;
+
+
+    Buffer<BufferElement> frame_buffer;
+    std::vector<uint8_t> v;
+    boost::mutex mutex;
 
     // objects
     ofdmflexframesync * framesync;  // array of frame generator objects
