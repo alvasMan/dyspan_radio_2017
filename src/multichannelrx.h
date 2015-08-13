@@ -47,6 +47,7 @@ private:
     // ...
     void receive_function();
     void channelizer_function();
+    void synchronizer_function(Buffer<BufferElement> &buffer, const int channel_index);
 
     void mix_down(std::complex<float> * _x, unsigned int _num_samples);
     void channelize(std::complex<float> * _y, unsigned int counter);
@@ -58,11 +59,10 @@ private:
 
     size_t num_sampled_chans_;
     size_t max_spp_;
-    //CplxFVec y;
-    CplxFVec Y;
 
     BufferFactory buffer_factory_;
     Buffer<BufferElement> mix_to_chan_buffer_;
+    boost::ptr_vector<Buffer<BufferElement> > chan_to_sync_buffers_;
 
     // objects
     ofdmflexframesync * framesync;  // array of frame generator objects

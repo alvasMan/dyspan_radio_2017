@@ -99,7 +99,11 @@ multichannelrx::multichannelrx(const std::string args,
     // channelizer input/output arrays
     const size_t max_spp = usrp_rx->get_device()->get_max_recv_samps_per_packet();
     num_sampled_chans_ = OVERSAMPLING_FACTOR * num_channels_; // oversampling ratio of 2.0
-    Y.resize(max_spp * num_sampled_chans_);
+
+    // create neccesary buffer objects
+    for (int i = 0; i < num_channels_; i++) {
+        chan_to_sync_buffers_.push_back(new Buffer<BufferElement>(10));
+    }
 
     // reset base station transmitter
     Reset();
@@ -147,6 +151,11 @@ void multichannelrx::start(void)
     // start threads
     threads_.push_back( new boost::thread( boost::bind( &multichannelrx::receive_function, this ) ) );
     threads_.push_back( new boost::thread( boost::bind( &multichannelrx::channelizer_function, this ) ) );
+
+    // start synchronizer thread for each channel
+    for (int i = 0; i < chan_to_sync_buffers_.size(); i++) {
+        threads_.push_back( new boost::thread( boost::bind( &multichannelrx::synchronizer_function, this, boost::ref(chan_to_sync_buffers_[i]), i) ) );
+    }
 }
 
 
@@ -237,9 +246,6 @@ void multichannelrx::channelizer_function(void)
 
             // do the hard work here
             channelize(&y.buffer[0], y.len);
-
-            // finally, release element
-            //buffer_factory_.release_element(y);
         }
     }
     catch(boost::thread_interrupted)
@@ -248,6 +254,27 @@ void multichannelrx::channelizer_function(void)
     }
 }
 
+
+void multichannelrx::synchronizer_function(Buffer<BufferElement> &buffer, const int channel_index)
+{
+    try {
+        while (true) {
+            boost::this_thread::interruption_point();
+
+            BufferElement y;
+            buffer.popFront(y);
+
+            // do the hard work here, run OFDM sychronizer ..
+            for (int i = 0; i < y.len; i++) {
+                ofdmflexframesync_execute(framesync[channel_index], &y.buffer[i * num_sampled_chans_ + channel_index], 1);
+            }
+        }
+    }
+    catch(boost::thread_interrupted)
+    {
+        std::cout << "Synchronizer thread for channel " << channel_index << " interrupted." << std::endl;
+    }
+}
 
 void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_samples)
 {
@@ -282,13 +309,25 @@ void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_sample
 
 void multichannelrx::channelize(std::complex<float> * _y, unsigned int counter)
 {
+    BufferElement element = buffer_factory_.get_new_element();
+    element.len = counter; // set len to previous len
+
     // execute filterbank channelizer as analyzer ..
     for (int i = 0; i < counter; i++) {
-        firpfbch_crcf_analyzer_execute(channelizer, &_y[i * num_sampled_chans_ + 0], &Y[i * num_sampled_chans_]);
+        firpfbch_crcf_analyzer_execute(channelizer, &_y[i * num_sampled_chans_ + 0], &element.buffer[i * num_sampled_chans_]);
     }
+
+#if MULTITHREAD
+    // add sync buffer to queue of all channels
+    for (auto &i : chan_to_sync_buffers_) {
+        i.pushBack(element);
+    }
+#else
     sychronize(counter);
+#endif
 }
 
+#if 0
 void multichannelrx::sychronize(unsigned int counter)
 {
     // run OFDM sychronizer ..
@@ -298,3 +337,4 @@ void multichannelrx::sychronize(unsigned int counter)
         }
     }
 }
+#endif
