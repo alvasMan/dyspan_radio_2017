@@ -239,7 +239,7 @@ void multichannelrx::channelizer_function(void)
             channelize(&y.buffer[0], y.len);
 
             // finally, release element
-            buffer_factory_.release_element(y);
+            //buffer_factory_.release_element(y);
         }
     }
     catch(boost::thread_interrupted)
@@ -252,9 +252,7 @@ void multichannelrx::channelizer_function(void)
 void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_samples)
 {
     int counter = 0;
-    BufferElement element;
-    buffer_factory_.get_new_element(element);
-    assert(element.buffer != nullptr);
+    BufferElement element = buffer_factory_.get_new_element();
 
     // buffer_index will be the channel number
     for (int i = 0; i < _num_samples; i++) {
