@@ -61,7 +61,8 @@ private:
     //CplxFVec y;
     CplxFVec Y;
 
-    BlockBuffer<BufferElement> mix_to_chan_buffer_;
+    BufferFactory buffer_factory_;
+    Buffer<BufferElement> mix_to_chan_buffer_;
 
     // objects
     ofdmflexframesync * framesync;  // array of frame generator objects

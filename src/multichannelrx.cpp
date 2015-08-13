@@ -60,7 +60,8 @@ multichannelrx::multichannelrx(const std::string args,
                unsigned int    taper_len,    // OFDM: taper prefix length
                unsigned char * p) :          // OFDM: subcarrier allocation
     DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len),
-    mix_to_chan_buffer_(400 * 4 * 8, 200)
+    mix_to_chan_buffer_(10),
+    buffer_factory_(400 * 4 * 8, 200)
 {
     // create callbacks
     userdata  = (void **)             malloc(num_channels * sizeof(void *));
@@ -238,7 +239,7 @@ void multichannelrx::channelizer_function(void)
             channelize(&y.buffer[0], y.len);
 
             // finally, release element
-            mix_to_chan_buffer_.release_element(y);
+            buffer_factory_.release_element(y);
         }
     }
     catch(boost::thread_interrupted)
@@ -252,7 +253,7 @@ void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_sample
 {
     int counter = 0;
     BufferElement element;
-    mix_to_chan_buffer_.get_new_element(element);
+    buffer_factory_.get_new_element(element);
     assert(element.buffer != nullptr);
 
     // buffer_index will be the channel number
