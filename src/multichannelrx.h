@@ -46,10 +46,10 @@ public:
 
 private:
     // ...
-    void receive_function();
+    void receive_thread();
     void mixdown_thread();
-    void channelizer_function();
-    void synchronizer_function(Buffer<BufferElement> &buffer, const int channel_index);
+    void channelizer_thread();
+    void synchronizer_thread(Buffer<BufferElement> &buffer, const int channel_index);
 
     void mix_down(std::complex<float> * _x, unsigned int _num_samples);
     void channelize(std::complex<float> * _y, unsigned int counter);

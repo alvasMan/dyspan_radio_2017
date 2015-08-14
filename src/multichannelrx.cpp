@@ -150,13 +150,13 @@ multichannelrx::~multichannelrx()
 void multichannelrx::start(void)
 {
     // start threads
-    threads_.push_back( new boost::thread( boost::bind( &multichannelrx::receive_function, this ) ) );
+    threads_.push_back( new boost::thread( boost::bind( &multichannelrx::receive_thread, this ) ) );
     threads_.push_back( new boost::thread( boost::bind( &multichannelrx::mixdown_thread, this ) ) );
-    threads_.push_back( new boost::thread( boost::bind( &multichannelrx::channelizer_function, this ) ) );
+    threads_.push_back( new boost::thread( boost::bind( &multichannelrx::channelizer_thread, this ) ) );
 
     // start a synchronizer thread for each channel
     for (int i = 0; i < chan_to_sync_buffers_.size(); i++) {
-        threads_.push_back( new boost::thread( boost::bind( &multichannelrx::synchronizer_function, this, boost::ref(chan_to_sync_buffers_[i]), i) ) );
+        threads_.push_back( new boost::thread( boost::bind( &multichannelrx::synchronizer_thread, this, boost::ref(chan_to_sync_buffers_[i]), i) ) );
     }
 }
 
@@ -176,7 +176,7 @@ void multichannelrx::Reset()
 }
 
 
-void multichannelrx::receive_function(void)
+void multichannelrx::receive_thread(void)
 {
     //create a receive streamer
     std::string wire_format("sc16");
@@ -265,7 +265,7 @@ void multichannelrx::mixdown_thread(void)
 
 
 
-void multichannelrx::channelizer_function(void)
+void multichannelrx::channelizer_thread(void)
 {
     try {
         while (true) {
@@ -285,7 +285,7 @@ void multichannelrx::channelizer_function(void)
 }
 
 
-void multichannelrx::synchronizer_function(Buffer<BufferElement> &buffer, const int channel_index)
+void multichannelrx::synchronizer_thread(Buffer<BufferElement> &buffer, const int channel_index)
 {
     try {
         while (true) {
