@@ -47,12 +47,13 @@ public:
 private:
     // ...
     void receive_function();
+    void mixdown_thread();
     void channelizer_function();
     void synchronizer_function(Buffer<BufferElement> &buffer, const int channel_index);
 
     void mix_down(std::complex<float> * _x, unsigned int _num_samples);
     void channelize(std::complex<float> * _y, unsigned int counter);
-    void sychronize(unsigned int counter);
+    void sychronize(std::complex<float> * _x, const int len, const int channel_index);
 
     // finite impulse response polyphase filterbank channelizer
     firpfbch_crcf channelizer;      // channelizer size is 2*num_channels
@@ -62,6 +63,7 @@ private:
     size_t max_spp_;
 
     BufferFactory buffer_factory_;
+    Buffer<BufferElement> rx_to_mix_buffer_;
     Buffer<BufferElement> mix_to_chan_buffer_;
     boost::ptr_vector<Buffer<BufferElement> > chan_to_sync_buffers_;
 

@@ -60,6 +60,7 @@ multichannelrx::multichannelrx(const std::string args,
                unsigned int    taper_len,    // OFDM: taper prefix length
                unsigned char * p) :          // OFDM: subcarrier allocation
     DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len),
+    rx_to_mix_buffer_(THREAD_BUFFER_SIZE),
     mix_to_chan_buffer_(THREAD_BUFFER_SIZE),
     buffer_factory_(400 * 4 * 8, 200)
 {
@@ -150,9 +151,10 @@ void multichannelrx::start(void)
 {
     // start threads
     threads_.push_back( new boost::thread( boost::bind( &multichannelrx::receive_function, this ) ) );
+    threads_.push_back( new boost::thread( boost::bind( &multichannelrx::mixdown_thread, this ) ) );
     threads_.push_back( new boost::thread( boost::bind( &multichannelrx::channelizer_function, this ) ) );
 
-    // start synchronizer thread for each channel
+    // start a synchronizer thread for each channel
     for (int i = 0; i < chan_to_sync_buffers_.size(); i++) {
         threads_.push_back( new boost::thread( boost::bind( &multichannelrx::synchronizer_function, this, boost::ref(chan_to_sync_buffers_[i]), i) ) );
     }
@@ -192,7 +194,7 @@ void multichannelrx::receive_function(void)
     usrp_rx->issue_stream_cmd(stream_cmd);
 
     max_spp_ = usrp_rx->get_device()->get_max_recv_samps_per_packet();
-    CplxFVec buff(max_spp_);
+    //CplxFVec buff(max_spp_);
 
     //meta-data will be filled in by recv()
     uhd::rx_metadata_t metadata;
@@ -203,7 +205,9 @@ void multichannelrx::receive_function(void)
         while (true) {
             boost::this_thread::interruption_point();
 
-            size_t num_rx_samps = rx_stream->recv(&buff.front(), buff.size(), metadata, 3.0);
+            BufferElement element = buffer_factory_.get_new_element();
+            size_t num_rx_samps = rx_stream->recv(element.buffer.get(), max_spp_, metadata, 3.0);
+            element.len = num_rx_samps;
 
             //handle the error code
             if (metadata.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) {
@@ -222,7 +226,9 @@ void multichannelrx::receive_function(void)
                                                  "Unexpected error code 0x%x"
                                                  ) % metadata.error_code));
             }
-            mix_down(&buff[0], num_rx_samps);
+
+            // push on queue for next processing step
+            rx_to_mix_buffer_.pushBack(element);
         }
     }
     catch(boost::thread_interrupted)
@@ -232,6 +238,30 @@ void multichannelrx::receive_function(void)
     }
 }
 
+
+
+void multichannelrx::mixdown_thread(void)
+{
+    try {
+        while (true) {
+            boost::this_thread::interruption_point();
+
+
+            BufferElement y;
+            rx_to_mix_buffer_.popFront(y);
+
+            // do the hard work here
+            mix_down(&y.buffer[0], y.len);
+
+
+
+        }
+    }
+    catch(boost::thread_interrupted)
+    {
+        std::cout << "Down-mixing thread interrupted." << std::endl;
+    }
+}
 
 
 
@@ -265,9 +295,7 @@ void multichannelrx::synchronizer_function(Buffer<BufferElement> &buffer, const 
             buffer.popFront(y);
 
             // do the hard work here, run OFDM sychronizer ..
-            for (int i = 0; i < y.len; i++) {
-                ofdmflexframesync_execute(framesync[channel_index], &y.buffer[i * num_sampled_chans_ + channel_index], 1);
-            }
+            sychronize(&y.buffer[0], y.len, channel_index);
         }
     }
     catch(boost::thread_interrupted)
@@ -279,12 +307,12 @@ void multichannelrx::synchronizer_function(Buffer<BufferElement> &buffer, const 
 void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_samples)
 {
     int counter = 0;
-    BufferElement element = buffer_factory_.get_new_element();
+    BufferElement output_buffer = buffer_factory_.get_new_element();
 
     // buffer_index will be the channel number
     for (int i = 0; i < _num_samples; i++) {
         // mix signal down and put resulting sample into channelizer input buffer
-        nco_crcf_mix_down(nco, _x[i], &element.buffer[counter * num_sampled_chans_ + buffer_index]);
+        nco_crcf_mix_down(nco, _x[i], &output_buffer.buffer[counter * num_sampled_chans_ + buffer_index]);
         nco_crcf_step(nco);
 
         buffer_index++;
@@ -295,46 +323,42 @@ void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_sample
         }
     }
     // update len field
-    element.len = counter;
+    output_buffer.len = counter;
 
 #if MULTITHREAD
-    mix_to_chan_buffer_.pushBack(element);
+    mix_to_chan_buffer_.pushBack(output_buffer);
 #else
     // continue in same thread
-    channelize(&element.buffer[0], counter);
-    mix_to_chan_buffer_.release_element(element);
+    channelize(&output_buffer.buffer[0], counter);
 #endif
 }
 
 
 void multichannelrx::channelize(std::complex<float> * _y, unsigned int counter)
 {
-    BufferElement element = buffer_factory_.get_new_element();
-    element.len = counter; // set len to previous len
+    BufferElement output_buffer = buffer_factory_.get_new_element();
+    output_buffer.len = counter; // set len to previous len
 
     // execute filterbank channelizer as analyzer ..
     for (int i = 0; i < counter; i++) {
-        firpfbch_crcf_analyzer_execute(channelizer, &_y[i * num_sampled_chans_ + 0], &element.buffer[i * num_sampled_chans_]);
+        firpfbch_crcf_analyzer_execute(channelizer, &_y[i * num_sampled_chans_ + 0], &output_buffer.buffer[i * num_sampled_chans_]);
     }
 
 #if MULTITHREAD
     // add sync buffer to queue of all channels
     for (auto &i : chan_to_sync_buffers_) {
-        i.pushBack(element);
+        i.pushBack(output_buffer);
     }
 #else
-    sychronize(counter);
+    for (int i = 0; i < num_channels_; i++) {
+        sychronize(&output_buffer.buffer[0], counter, i);
+    }
 #endif
 }
 
-#if 0
-void multichannelrx::sychronize(unsigned int counter)
+void multichannelrx::sychronize(std::complex<float> * _x, const int len, const int channel_index)
 {
-    // run OFDM sychronizer ..
-    for (int i = 0; i < counter; i++) {
-        for (int k = 0; k < num_channels_; k++) {
-            ofdmflexframesync_execute(framesync[k], &Y[i * num_sampled_chans_ + k], 1);
-        }
+    for (int i = 0; i < len; i++) {
+        ofdmflexframesync_execute(framesync[channel_index], &_x[i * num_sampled_chans_ + channel_index], 1);
     }
 }
-#endif
