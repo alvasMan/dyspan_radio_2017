@@ -60,7 +60,7 @@ multichannelrx::multichannelrx(const std::string args,
                unsigned int    taper_len,    // OFDM: taper prefix length
                unsigned char * p) :          // OFDM: subcarrier allocation
     DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len),
-    mix_to_chan_buffer_(10),
+    mix_to_chan_buffer_(THREAD_BUFFER_SIZE),
     buffer_factory_(400 * 4 * 8, 200)
 {
     // create callbacks
@@ -102,7 +102,7 @@ multichannelrx::multichannelrx(const std::string args,
 
     // create neccesary buffer objects
     for (int i = 0; i < num_channels_; i++) {
-        chan_to_sync_buffers_.push_back(new Buffer<BufferElement>(10));
+        chan_to_sync_buffers_.push_back(new Buffer<BufferElement>(THREAD_BUFFER_SIZE));
     }
 
     // reset base station transmitter

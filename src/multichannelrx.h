@@ -13,6 +13,7 @@
 #define OVERSAMPLING_FACTOR 2.0f
 
 #define MULTITHREAD 1
+#define THREAD_BUFFER_SIZE 20
 
 class multichannelrx : public DyspanRadio {
 public:
