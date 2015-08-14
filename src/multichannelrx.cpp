@@ -58,8 +58,9 @@ multichannelrx::multichannelrx(const std::string args,
                unsigned int    M,            // OFDM: number of subcarriers
                unsigned int    cp_len,       // OFDM: cyclic prefix length
                unsigned int    taper_len,    // OFDM: taper prefix length
-               unsigned char * p) :          // OFDM: subcarrier allocation
-    DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len),
+               unsigned char * p,            // OFDM: subcarrier allocation
+               bool debug) :
+    DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len, debug),
     rx_to_mix_buffer_(THREAD_BUFFER_SIZE),
     mix_to_chan_buffer_(THREAD_BUFFER_SIZE),
     buffer_factory_(400 * 4 * 8, 200)

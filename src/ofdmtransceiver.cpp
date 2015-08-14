@@ -12,10 +12,9 @@
 //  _p              :   OFDM: subcarrier allocation
 //  _callback       :   frame synchronizer callback function
 //  _userdata       :   user-defined data structure
-OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels, const double f_center, const double channel_bandwidth, const double channel_rate, const float tx_gain_soft, const float tx_gain_uhd, const float rx_gain_uhd) :
-    DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, 48, 6, 4),
-    seq_no_(0),
-    debug_(true)
+OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels, const double f_center, const double channel_bandwidth, const double channel_rate, const float tx_gain_soft, const float tx_gain_uhd, const float rx_gain_uhd, const bool debug) :
+    DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, 48, 6, 4, debug),
+    seq_no_(0)
 {
     // create frame generator
     unsigned char * p = NULL;   // subcarrier allocation (default)

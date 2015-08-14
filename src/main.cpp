@@ -18,7 +18,6 @@ using namespace boost;
 namespace po = boost::program_options;
 using namespace std;
 
-static bool verbose = false;
 static bool stop_signal_called = false;
 
 static void signal_handler(int signum)
@@ -33,6 +32,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
 
     //variables to be set by po
     bool is_tx;
+    bool debug;
     std::string args, type, threshold, wirefmt;
     double seconds_in_future;
     size_t total_num_samps;
@@ -69,7 +69,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("txbufsize",po::value<size_t>(&tx_buffer_size)->default_value(10),"How many frames in Tx buffer")
         ("threshold", po::value<std::string>(&threshold)->default_value("-75"), "RSSI threshold in dBm")
         ("wirefmt", po::value<std::string>(&wirefmt)->default_value("sc16"), "wire format (sc8 or sc16)")
-        ("dilv", "specify to disable inner-loop verbose")
+        ("debug", po::value<bool>(&debug)->default_value(false), "Whether to print debug messages")
     ;
     
     po::variables_map vm;
@@ -82,7 +82,6 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         return ~0;
     }
 
-    verbose = vm.count("dilv") == 0;
     std::signal(SIGINT, signal_handler);
 
     // TODO: make them a parameter
@@ -94,9 +93,9 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     // create radio
     boost::shared_ptr<DyspanRadio> radio;
     if (is_tx)
-        radio.reset(new OfdmTransceiver(args, num_channels, freq, channel_bandwidth, channel_rate, tx_gain_soft, tx_gain_uhd, rx_gain));
+        radio.reset(new OfdmTransceiver(args, num_channels, freq, channel_bandwidth, channel_rate, tx_gain_soft, tx_gain_uhd, rx_gain, debug));
     else
-        radio.reset(new multichannelrx(args, num_channels, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p));
+        radio.reset(new multichannelrx(args, num_channels, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p, debug));
 
 
     // delay start a bit ..

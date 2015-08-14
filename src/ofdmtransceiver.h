@@ -25,7 +25,8 @@ public:
                     const double channel_rate,
                     const float tx_gain_soft,
                     const float tx_gain_uhd,
-                    const float rx_gain_uhd);
+                    const float rx_gain_uhd,
+                    const bool debug);
 
     // destructor
     ~OfdmTransceiver();
@@ -57,22 +58,7 @@ public:
     void start_rx();
     void stop_rx();
 
-    //
-    // additional methods
-    //
-    void debug_enable();
-    void debug_disable();
-
-    // specify rx worker method as friend function so that it may
-    // gain acess to private members of the class
-    friend void * ofdmtxrx_rx_worker(void * _arg);
-
 private:
-
-    //boost::ptr_vector<boost::thread> threads_;
-    bool debug_;             // is debugging enabled?
-
-
     ofdmflexframegenprops_s fgprops;// frame generator properties
 
     // transmitter objects

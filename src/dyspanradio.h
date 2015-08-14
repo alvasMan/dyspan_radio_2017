@@ -17,14 +17,16 @@ public:
                 const double channel_rate,
                 unsigned int M,
                 unsigned int cp_len,
-                unsigned int taper_len) :
+                unsigned int taper_len,
+                bool debug) :
         num_channels_(num_channels),
         f_center_(f_center),
         channel_bandwidth_(channel_bandwidth),
         channel_rate_(channel_rate),
         M_(M),
         cp_len_(cp_len),
-        taper_len_(taper_len)
+        taper_len_(taper_len),
+        debug_(debug)
     {
         // validate input
         if (num_channels < 1) {
@@ -72,6 +74,7 @@ protected:
     double channel_bandwidth_;
     double channel_rate_;
     std::vector< ChannelConfig > channels_;
+    bool debug_;
 
     // OFDM properties
     unsigned int M_;                 // number of subcarriers

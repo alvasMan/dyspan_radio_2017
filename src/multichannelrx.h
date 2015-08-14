@@ -27,7 +27,8 @@ public:
                    unsigned int    M,            // OFDM: number of subcarriers
                    unsigned int    cp_len,       // OFDM: cyclic prefix length
                    unsigned int    taper_len,    // OFDM: taper prefix length
-                   unsigned char * p);           // OFDM: subcarrier allocation
+                   unsigned char * p,            // OFDM: subcarrier allocation
+                   bool debug);
 
     // destructor
     ~multichannelrx();
