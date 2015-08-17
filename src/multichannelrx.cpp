@@ -65,16 +65,22 @@ multichannelrx::multichannelrx(const std::string args,
     mix_to_chan_buffer_(THREAD_BUFFER_SIZE),
     buffer_factory_(400 * 4 * 8, 200)
 {
+    num_sampled_chans_ = num_channels_;
+    if (num_channels_ == 4 && channel_bandwidth == 5e6) {
+        std::cout << "Increasing number of channels to 5 to match full USRP sample rate." << std::endl;
+        num_sampled_chans_++;
+    }
+
     // create callbacks
-    userdata  = (void **)             malloc(num_channels * sizeof(void *));
-    callbacks = (framesync_callback*) malloc(num_channels * sizeof(framesync_callback));
+    userdata  = (void **)             malloc(num_sampled_chans_ * sizeof(void *));
+    callbacks = (framesync_callback*) malloc(num_sampled_chans_ * sizeof(framesync_callback));
     for (int i = 0; i < num_channels_; i++) {
         userdata[i] = NULL;
         callbacks[i] = callback;
     }
 
-    // create frame generators
-    framesync = (ofdmflexframesync*)  malloc(num_channels * sizeof(ofdmflexframesync));
+    // create frame synchronizers
+    framesync = (ofdmflexframesync*)  malloc(num_sampled_chans_ * sizeof(ofdmflexframesync));
     for (int i = 0; i < num_channels_; i++) {
         framesync[i] = ofdmflexframesync_create(M_, cp_len_, taper_len_, p, callbacks[i], userdata[i]);
 #if BST_DEBUG
@@ -85,10 +91,10 @@ multichannelrx::multichannelrx(const std::string args,
     // design custom filterbank channelizer
     unsigned int m  = 7;        // prototype filter delay
     float As        = 60.0f;    // stop-band attenuation
-    channelizer = firpfbch_crcf_create_kaiser(LIQUID_ANALYZER, 2*num_channels, m, As);
+    channelizer = firpfbch_crcf_create_kaiser(LIQUID_ANALYZER, num_sampled_chans_, m, As);
 
     // create NCO to center spectrum
-    float offset = -0.5f*(float)(num_channels-1) / (float)num_channels * M_PI;
+    float offset = -0.5f*(float)(num_sampled_chans_-1) / (float)num_sampled_chans_ * M_PI;
     nco = nco_crcf_create(LIQUID_VCO);
     nco_crcf_set_frequency(nco, offset);
 
@@ -99,27 +105,20 @@ multichannelrx::multichannelrx(const std::string args,
     std::cout << boost::format("Using Device: %s") % usrp_rx->get_pp_string() << std::endl;
 
     // channelizer input/output arrays
-    const size_t max_spp = usrp_rx->get_device()->get_max_recv_samps_per_packet();
-    num_sampled_chans_ = OVERSAMPLING_FACTOR * num_channels_; // oversampling ratio of 2.0
+    max_spp_ = usrp_rx->get_device()->get_max_recv_samps_per_packet();
 
     // create neccesary buffer objects
     for (int i = 0; i < num_channels_; i++) {
         chan_to_sync_buffers_.push_back(new Buffer<BufferElement>(THREAD_BUFFER_SIZE));
     }
+    // computer actual RF rate
+    double rx_rf_rate = num_sampled_chans_ * channel_bandwidth;
 
     // reset base station transmitter
     Reset();
 
-    // computer actual RF rate
-    double rx_rf_rate = num_channels * channel_bandwidth;
-    usrp_rx->set_rx_rate(OVERSAMPLING_FACTOR * rx_rf_rate); // try to set rx rate (oversampled to compensate for CIC filter)
-
-#if 0
-    double usrp_rx_rate = usrp->get_rx_rate();
-    double rx_resamp_rate = rx_rate / usrp_rx_rate; // compute arbitrary resampling rate (make up the difference in software)
-#endif
-
-    // set up remaining parameters
+    // configure receiver parameters
+    usrp_rx->set_rx_rate(rx_rf_rate);
     usrp_rx->set_rx_freq(f_center_);
     usrp_rx->set_rx_gain(rx_gain_uhd);
 }
@@ -194,9 +193,6 @@ void multichannelrx::receive_thread(void)
     stream_cmd.time_spec = uhd::time_spec_t();
     usrp_rx->issue_stream_cmd(stream_cmd);
 
-    max_spp_ = usrp_rx->get_device()->get_max_recv_samps_per_packet();
-    //CplxFVec buff(max_spp_);
-
     //meta-data will be filled in by recv()
     uhd::rx_metadata_t metadata;
     bool overflow_message = true;
@@ -229,7 +225,11 @@ void multichannelrx::receive_thread(void)
             }
 
             // push on queue for next processing step
+#if SKIP_MIXING
             rx_to_mix_buffer_.pushBack(element);
+#else
+            mix_to_chan_buffer_.pushBack(element);
+#endif
         }
     }
     catch(boost::thread_interrupted)

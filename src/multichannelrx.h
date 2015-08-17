@@ -10,7 +10,7 @@
 #include <map>
 #include <liquid/liquid.h>
 
-#define OVERSAMPLING_FACTOR 2.0f
+#define SKIP_MIXING 1
 
 #define MULTITHREAD 1
 #define THREAD_BUFFER_SIZE 20
