@@ -247,15 +247,11 @@ void multichannelrx::mixdown_thread(void)
         while (true) {
             boost::this_thread::interruption_point();
 
-
             BufferElement y;
             rx_to_mix_buffer_.popFront(y);
 
             // do the hard work here
             mix_down(&y.buffer[0], y.len);
-
-
-
         }
     }
     catch(boost::thread_interrupted)
