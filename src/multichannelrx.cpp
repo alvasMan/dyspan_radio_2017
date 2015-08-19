@@ -62,8 +62,7 @@ multichannelrx::multichannelrx(const std::string args,
                bool debug) :
     DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len, debug),
     rx_to_mix_buffer_(THREAD_BUFFER_SIZE),
-    mix_to_chan_buffer_(THREAD_BUFFER_SIZE),
-    buffer_factory_(400 * 4 * 8, 200)
+    mix_to_chan_buffer_(THREAD_BUFFER_SIZE)
 {
     num_sampled_chans_ = num_channels_;
     if (num_channels_ == 4 && channel_bandwidth == 5e6) {
@@ -109,7 +108,7 @@ multichannelrx::multichannelrx(const std::string args,
 
     // create neccesary buffer objects
     for (int i = 0; i < num_channels_; i++) {
-        chan_to_sync_buffers_.push_back(new Buffer<BufferElement>(THREAD_BUFFER_SIZE));
+        chan_to_sync_buffers_.push_back(new Buffer<ItemPtr>(THREAD_BUFFER_SIZE));
     }
     // computer actual RF rate
     double rx_rf_rate = num_sampled_chans_ * channel_bandwidth;
@@ -198,13 +197,12 @@ void multichannelrx::receive_thread(void)
     bool overflow_message = true;
 
     try {
-
         while (true) {
             boost::this_thread::interruption_point();
 
-            BufferElement element = buffer_factory_.get_new_element();
-            size_t num_rx_samps = rx_stream->recv(element.buffer.get(), max_spp_, metadata, 3.0);
-            element.len = num_rx_samps;
+            ItemPtr buffer = buffer_factory_.get_new();
+            size_t num_rx_samps = rx_stream->recv(&buffer->data.front(), max_spp_, metadata, 3.0);
+            buffer->len = num_rx_samps;
 
             //handle the error code
             if (metadata.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) {
@@ -225,11 +223,8 @@ void multichannelrx::receive_thread(void)
             }
 
             // push on queue for next processing step
-#if SKIP_MIXING
-            rx_to_mix_buffer_.pushBack(element);
-#else
-            mix_to_chan_buffer_.pushBack(element);
-#endif
+            rx_to_mix_buffer_.pushBack(buffer);
+            //mix_to_chan_buffer_.pushBack(element);
         }
     }
     catch(boost::thread_interrupted)
@@ -247,11 +242,11 @@ void multichannelrx::mixdown_thread(void)
         while (true) {
             boost::this_thread::interruption_point();
 
-            BufferElement y;
-            rx_to_mix_buffer_.popFront(y);
+            ItemPtr item;
+            rx_to_mix_buffer_.popFront(item);
 
             // do the hard work here
-            mix_down(&y.buffer[0], y.len);
+            mix_down(&item->data.front(), item->len);
         }
     }
     catch(boost::thread_interrupted)
@@ -268,11 +263,11 @@ void multichannelrx::channelizer_thread(void)
         while (true) {
             boost::this_thread::interruption_point();
 
-            BufferElement y;
-            mix_to_chan_buffer_.popFront(y);
+            ItemPtr buffer;
+            mix_to_chan_buffer_.popFront(buffer);
 
             // do the hard work here
-            channelize(&y.buffer[0], y.len);
+            channelize(&buffer->data.front(), buffer->len);
         }
     }
     catch(boost::thread_interrupted)
@@ -282,17 +277,17 @@ void multichannelrx::channelizer_thread(void)
 }
 
 
-void multichannelrx::synchronizer_thread(Buffer<BufferElement> &buffer, const int channel_index)
+void multichannelrx::synchronizer_thread(Buffer<ItemPtr> &buffer, const int channel_index)
 {
     try {
         while (true) {
             boost::this_thread::interruption_point();
 
-            BufferElement y;
-            buffer.popFront(y);
+            ItemPtr item;
+            buffer.popFront(item);
 
             // do the hard work here, run OFDM sychronizer ..
-            sychronize(&y.buffer[0], y.len, channel_index);
+            sychronize(&item->data.front(), item->len, channel_index);
         }
     }
     catch(boost::thread_interrupted)
@@ -303,13 +298,13 @@ void multichannelrx::synchronizer_thread(Buffer<BufferElement> &buffer, const in
 
 void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_samples)
 {
+    ItemPtr buffer = buffer_factory_.get_new();
     int counter = 0;
-    BufferElement output_buffer = buffer_factory_.get_new_element();
 
     // buffer_index will be the channel number
     for (int i = 0; i < _num_samples; i++) {
         // mix signal down and put resulting sample into channelizer input buffer
-        nco_crcf_mix_down(nco, _x[i], &output_buffer.buffer[counter * num_sampled_chans_ + buffer_index]);
+        nco_crcf_mix_down(nco, _x[i], &buffer->data[counter * num_sampled_chans_ + buffer_index]);
         nco_crcf_step(nco);
 
         buffer_index++;
@@ -320,10 +315,10 @@ void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_sample
         }
     }
     // update len field
-    output_buffer.len = counter;
+    buffer->len = counter;
 
 #if MULTITHREAD
-    mix_to_chan_buffer_.pushBack(output_buffer);
+    mix_to_chan_buffer_.pushBack(buffer);
 #else
     // continue in same thread
     channelize(&output_buffer.buffer[0], counter);
@@ -333,18 +328,18 @@ void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_sample
 
 void multichannelrx::channelize(std::complex<float> * _y, unsigned int counter)
 {
-    BufferElement output_buffer = buffer_factory_.get_new_element();
-    output_buffer.len = counter; // set len to previous len
+    ItemPtr buffer = buffer_factory_.get_new();
+    buffer->len = counter; // set len to previous len
 
     // execute filterbank channelizer as analyzer ..
     for (int i = 0; i < counter; i++) {
-        firpfbch_crcf_analyzer_execute(channelizer, &_y[i * num_sampled_chans_ + 0], &output_buffer.buffer[i * num_sampled_chans_]);
+        firpfbch_crcf_analyzer_execute(channelizer, &_y[i * num_sampled_chans_ + 0], &buffer->data[i * num_sampled_chans_]);
     }
 
 #if MULTITHREAD
     // add sync buffer to queue of all channels
     for (auto &i : chan_to_sync_buffers_) {
-        i.pushBack(output_buffer);
+        i.pushBack(buffer);
     }
 #else
     for (int i = 0; i < num_channels_; i++) {

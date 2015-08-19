@@ -5,12 +5,12 @@
 
 #include "dyspanradio.h"
 #include "Buffer.h"
-#include "buffer_manager.h" // TODO: rename file
+#include "buffer_factory.h"
 #include <vector>
 #include <map>
 #include <liquid/liquid.h>
 
-#define SKIP_MIXING 1
+#define SKIP_MIXING 0
 
 #define MULTITHREAD 1
 #define THREAD_BUFFER_SIZE 20
@@ -50,7 +50,7 @@ private:
     void receive_thread();
     void mixdown_thread();
     void channelizer_thread();
-    void synchronizer_thread(Buffer<BufferElement> &buffer, const int channel_index);
+    void synchronizer_thread(Buffer<ItemPtr> &buffer, const int channel_index);
 
     void mix_down(std::complex<float> * _x, unsigned int _num_samples);
     void channelize(std::complex<float> * _y, unsigned int counter);
@@ -64,9 +64,9 @@ private:
     size_t max_spp_;
 
     BufferFactory buffer_factory_;
-    Buffer<BufferElement> rx_to_mix_buffer_;
-    Buffer<BufferElement> mix_to_chan_buffer_;
-    boost::ptr_vector<Buffer<BufferElement> > chan_to_sync_buffers_;
+    Buffer<ItemPtr> rx_to_mix_buffer_;
+    Buffer<ItemPtr> mix_to_chan_buffer_;
+    boost::ptr_vector<Buffer<ItemPtr> > chan_to_sync_buffers_;
 
     // objects
     ofdmflexframesync * framesync;  // array of frame generator objects

@@ -15,7 +15,7 @@ file(GLOB headers
     EnergyDetector.h
     channels.h
     Buffer.h
-    buffer_manager.h)
+    buffer_factory.h)
 
 ADD_EXECUTABLE(dyspanradio ${sources} ${headers})
 
