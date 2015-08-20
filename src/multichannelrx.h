@@ -60,7 +60,7 @@ private:
     void channelizer_thread();
     void synchronizer_thread(Buffer<ItemPtr> &buffer, const int channel_index);
 
-    void mix_down(std::complex<float> * _x, unsigned int _num_samples);
+    int mix_down(std::complex<float> * _x, unsigned int _num_samples);
     void channelize(std::complex<float> * _y, unsigned int counter);
     void sychronize(std::complex<float> * _x, const int len, const int channel_index);
 

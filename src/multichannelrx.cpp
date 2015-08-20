@@ -289,7 +289,9 @@ void multichannelrx::mixdown_thread(void)
             rx_to_mix_buffer_.popFront(item);
 
             // do the hard work here
-            mix_down(&item->data.front(), item->len);
+            item->len = mix_down(&item->data.front(), item->len);
+
+            mix_to_chan_buffer_.pushBack(item);
         }
     }
     catch(boost::thread_interrupted)
@@ -311,6 +313,11 @@ void multichannelrx::channelizer_thread(void)
 
             // do the hard work here
             channelize(&buffer->data.front(), buffer->len);
+
+            // add sync buffer to queue of all channels
+            for (auto &i : chan_to_sync_buffers_) {
+                i.pushBack(buffer);
+            }
         }
     }
     catch(boost::thread_interrupted)
@@ -339,15 +346,14 @@ void multichannelrx::synchronizer_thread(Buffer<ItemPtr> &buffer, const int chan
     }
 }
 
-void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_samples)
+int multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_samples)
 {
-    ItemPtr buffer = buffer_factory_.get_new();
     int counter = 0;
 
     // buffer_index will be the channel number
     for (int i = 0; i < _num_samples; i++) {
         // mix signal down and put resulting sample into channelizer input buffer
-        nco_crcf_mix_down(nco, _x[i], &buffer->data[counter * num_sampled_chans_ + buffer_index]);
+        nco_crcf_mix_down(nco, _x[i], &_x[counter * num_sampled_chans_ + buffer_index]);
         nco_crcf_step(nco);
 
         buffer_index++;
@@ -357,38 +363,16 @@ void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_sample
             counter++;
         }
     }
-    // update len field
-    buffer->len = counter;
-
-#if MULTITHREAD
-    mix_to_chan_buffer_.pushBack(buffer);
-#else
-    // continue in same thread
-    channelize(&output_buffer.buffer[0], counter);
-#endif
+    return counter;
 }
 
 
 void multichannelrx::channelize(std::complex<float> * _y, unsigned int counter)
 {
-    ItemPtr buffer = buffer_factory_.get_new();
-    buffer->len = counter; // set len to previous len
-
     // execute filterbank channelizer as analyzer ..
     for (int i = 0; i < counter; i++) {
-        firpfbch_crcf_analyzer_execute(channelizer, &_y[i * num_sampled_chans_ + 0], &buffer->data[i * num_sampled_chans_]);
+        firpfbch_crcf_analyzer_execute(channelizer, &_y[i * num_sampled_chans_], &_y[i * num_sampled_chans_]);
     }
-
-#if MULTITHREAD
-    // add sync buffer to queue of all channels
-    for (auto &i : chan_to_sync_buffers_) {
-        i.pushBack(buffer);
-    }
-#else
-    for (int i = 0; i < num_channels_; i++) {
-        sychronize(&output_buffer.buffer[0], counter, i);
-    }
-#endif
 }
 
 void multichannelrx::sychronize(std::complex<float> * _x, const int len, const int channel_index)
