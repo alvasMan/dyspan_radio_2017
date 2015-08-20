@@ -18,8 +18,29 @@
 #define BST_DEBUG 0
 
 static bool verbose = true;
+
 // global callback function
-int callback(unsigned char *  _header,
+namespace multichannelrxdetail
+{
+int gCallback( unsigned char *  _header,
+               int              _header_valid,
+               unsigned char *  _payload,
+               unsigned int     _payload_len,
+               int              _payload_valid,
+               framesyncstats_s _stats,
+               void *           _userdata)
+{
+  static_cast<multichannelrx*>(_userdata)->callback(_header,
+     _header_valid,
+     _payload,
+     _payload_len,
+     _payload_valid,
+     _stats,
+     _userdata);
+}
+}
+
+int multichannelrx::callback(unsigned char *  _header,
              int              _header_valid,
              unsigned char *  _payload,
              unsigned int     _payload_len,
@@ -31,7 +52,19 @@ int callback(unsigned char *  _header,
         std::cout << boost::format("***** rssi=%7.2fdB evm=%7.2fdB, ") % _stats.rssi % _stats.evm;
         if (_header_valid) {
             uint32_t seq_no = (_header[0] << 24 | _header[1] << 16 | _header[2] << 8 | _header[3]);
-            std::cout << boost::format("seqno: %6u, ") % seq_no;
+
+            // do the stats ..
+            if (last_seq_no_ == 0) {
+                std::cout << boost::format("Setting first seqno: %6u") % seq_no << std::endl;
+                last_seq_no_ = seq_no;
+            } else {
+                // count lost frames
+                lost_frames_ += (seq_no - last_seq_no_ - 1);
+                last_seq_no_ = seq_no;
+            }
+            total_frames_++;
+
+            std::cout << boost::format("seqno: %6u (%6u lost), ") % seq_no % lost_frames_;
             if (_payload_valid) {
                 std::cout << boost::format("payload size: %d") % _payload_len;
             } else {
@@ -62,7 +95,10 @@ multichannelrx::multichannelrx(const std::string args,
                bool debug) :
     DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len, debug),
     rx_to_mix_buffer_(THREAD_BUFFER_SIZE),
-    mix_to_chan_buffer_(THREAD_BUFFER_SIZE)
+    mix_to_chan_buffer_(THREAD_BUFFER_SIZE),
+    total_frames_(0),
+    last_seq_no_(0),
+    lost_frames_(0)
 {
     num_sampled_chans_ = num_channels_;
     if (num_channels_ == 4 && channel_bandwidth == 5e6) {
@@ -74,8 +110,8 @@ multichannelrx::multichannelrx(const std::string args,
     userdata  = (void **)             malloc(num_sampled_chans_ * sizeof(void *));
     callbacks = (framesync_callback*) malloc(num_sampled_chans_ * sizeof(framesync_callback));
     for (int i = 0; i < num_channels_; i++) {
-        userdata[i] = NULL;
-        callbacks[i] = callback;
+        callbacks[i] = multichannelrxdetail::gCallback;
+        userdata[i] = this;
     }
 
     // create frame synchronizers
@@ -144,6 +180,13 @@ multichannelrx::~multichannelrx()
     free(framesync);
     free(userdata);
     free(callbacks);
+
+    std::cout << "Total frames received: " << total_frames_ << std::endl;
+    std::cout << "Lost frames: " << lost_frames_ << std::endl;
+    if (total_frames_ > 0) {
+        float fer = static_cast<float>(lost_frames_) / static_cast<float>(total_frames_);
+        std::cout << boost::str(boost::format("Frame error rate: %.2f") % fer) << std::endl;
+    }
 }
 
 void multichannelrx::start(void)

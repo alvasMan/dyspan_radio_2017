@@ -42,6 +42,14 @@ public:
     // accessor methods
     unsigned int GetNumChannels() { return num_channels_; }
 
+    int callback(unsigned char *  _header,
+                 int              _header_valid,
+                 unsigned char *  _payload,
+                 unsigned int     _payload_len,
+                 int              _payload_valid,
+                 framesyncstats_s _stats,
+                 void *           _userdata);
+
     // push samples into base station receiver
 
 
@@ -56,12 +64,19 @@ private:
     void channelize(std::complex<float> * _y, unsigned int counter);
     void sychronize(std::complex<float> * _x, const int len, const int channel_index);
 
+
+
     // finite impulse response polyphase filterbank channelizer
     firpfbch_crcf channelizer;      // channelizer size is 2*num_channels
     unsigned int buffer_index;      // input index
 
     size_t num_sampled_chans_;
     size_t max_spp_;
+
+    // statistics
+    uint32_t total_frames_;
+    uint32_t lost_frames_;
+    uint32_t last_seq_no_;
 
     BufferFactory buffer_factory_;
     Buffer<ItemPtr> rx_to_mix_buffer_;
