@@ -96,6 +96,7 @@ multichannelrx::multichannelrx(const std::string args,
     DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len, debug),
     rx_to_mix_buffer_(THREAD_BUFFER_SIZE),
     mix_to_chan_buffer_(THREAD_BUFFER_SIZE),
+    buffer_factory_(5000, 100),
     total_frames_(0),
     last_seq_no_(0),
     lost_frames_(0)

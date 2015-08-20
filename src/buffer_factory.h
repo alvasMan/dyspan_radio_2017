@@ -6,43 +6,86 @@
 #include <boost/pool/pool_alloc.hpp>
 #include <vector>
 
-#define NUM_ELEMENTS 2000
+#define MAX_SPP 5000 //< Maximum samples per packet
+
+// This class is inspired by Kurt Neufeld
 
 struct BufferItem
 {
-    BufferItem() : data(NUM_ELEMENTS), len(0) {}
+    BufferItem() : data(MAX_SPP), len(0) {}
     CplxFVec data;
     size_t len;                     //< This is the amont of space in use (the actual size is always block_size_)
 };
 
 typedef boost::shared_ptr<BufferItem> ItemPtr;
 
-// The default fast_pool_allocator seems to just work fine
-#if 1
-typedef boost::fast_pool_allocator<BufferItem> ItemPool;
-#else
-typedef boost::fast_pool_allocator<BufferElement,
-                                    boost::default_user_allocator_new_delete,
-                                    boost::details::pool::default_mutex,
-                                    2 * NUM_ELEMENTS * sizeof(std::complex<float>), // NextSize
-                                    5500000> ItemPool;
-#endif
-
-
+template<typename T>
 class BufferFactory : boost::noncopyable
 {
 public:
-    explicit BufferFactory() {}
+    typedef BufferFactory<T> buffer_type;
+    typedef std::list<T*> list;
+
+    BufferFactory(size_t initial_size = 10, size_t grow_by = 1)
+    {
+        grow_by_ = grow_by;
+        make(initial_size);
+    }
+
+    virtual ~BufferFactory()
+    {
+        free_pool();
+    }
 
     ItemPtr get_new(void)
     {
-        boost::mutex::scoped_lock lock(mutex_);
-        return ItemPtr(new (pool_.allocate()) BufferItem(), boost::bind(&ItemPool::destroy, ref(pool_), _1) );
+        ItemPtr ptr = create();
+        assert(ptr != nullptr);
+        return ptr;
     }
 
 private:
+    void make(size_t n)
+    {
+        boost::mutex::scoped_lock lock(mutex_);
+        for (unsigned i=0; i < n; i++)
+        {
+            pool_.push_back(new T());
+        }
+    }
+
+    ItemPtr create()
+    {
+        boost::mutex::scoped_lock lock(mutex_);
+        if (pool_.empty())
+            make(grow_by_);
+
+        T* p = pool_.back();
+        pool_.pop_back();
+
+        // magic is here, custom "deleter" puts raw pointer back in pool
+        return ItemPtr(p, boost::bind(&buffer_type::release, this, _1) );
+    }
+
+    void release(T* p)
+    {
+        boost::mutex::scoped_lock lock(mutex_);
+        pool_.push_back(p);
+    }
+
+    void free_pool()
+    {
+        boost::mutex::scoped_lock lock(mutex_);
+        for (typename list::iterator it = pool_.begin(); it != pool_.end(); ++it) {
+            delete *it;
+        }
+        pool_.clear();
+    }
+
     mutable boost::mutex mutex_;
-    ItemPool pool_;
+    list pool_;
+    size_t grow_by_;
+
     // not used ..
     size_t block_size_;
     size_t max_num_blocks_;

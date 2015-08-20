@@ -78,7 +78,7 @@ private:
     uint32_t lost_frames_;
     uint32_t last_seq_no_;
 
-    BufferFactory buffer_factory_;
+    BufferFactory<BufferItem> buffer_factory_;
     Buffer<ItemPtr> rx_to_mix_buffer_;
     Buffer<ItemPtr> mix_to_chan_buffer_;
     boost::ptr_vector<Buffer<ItemPtr> > chan_to_sync_buffers_;
