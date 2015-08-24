@@ -96,7 +96,7 @@ multichannelrx::multichannelrx(const std::string args,
     DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len, debug),
     rx_to_mix_buffer_(THREAD_BUFFER_SIZE),
     mix_to_chan_buffer_(THREAD_BUFFER_SIZE),
-    buffer_factory_(5000, 100),
+    buffer_factory_(100, 100),
     total_frames_(0),
     last_seq_no_(0),
     lost_frames_(0)
@@ -145,7 +145,7 @@ multichannelrx::multichannelrx(const std::string args,
 
     // create neccesary buffer objects
     for (int i = 0; i < num_channels_; i++) {
-        chan_to_sync_buffers_.push_back(new Buffer<ItemPtr>(THREAD_BUFFER_SIZE));
+        chan_to_sync_buffers_.push_back(new BlockingReaderWriterQueue<ItemPtr>(THREAD_BUFFER_SIZE));
     }
     // computer actual RF rate
     double rx_rf_rate = num_sampled_chans_ * channel_bandwidth;
@@ -267,7 +267,7 @@ void multichannelrx::receive_thread(void)
             }
 
             // push on queue for next processing step
-            rx_to_mix_buffer_.pushBack(buffer);
+            rx_to_mix_buffer_.enqueue(buffer);
             //mix_to_chan_buffer_.pushBack(element);
         }
     }
@@ -287,7 +287,7 @@ void multichannelrx::mixdown_thread(void)
             boost::this_thread::interruption_point();
 
             ItemPtr item;
-            rx_to_mix_buffer_.popFront(item);
+            rx_to_mix_buffer_.wait_dequeue(item);
 
             // do the hard work here
             mix_down(&item->data.front(), item->len);
@@ -308,10 +308,12 @@ void multichannelrx::channelizer_thread(void)
             boost::this_thread::interruption_point();
 
             ItemPtr buffer;
-            mix_to_chan_buffer_.popFront(buffer);
+            mix_to_chan_buffer_.wait_dequeue(buffer);
 
             // do the hard work here
             channelize(&buffer->data.front(), buffer->len);
+
+
         }
     }
     catch(boost::thread_interrupted)
@@ -321,14 +323,14 @@ void multichannelrx::channelizer_thread(void)
 }
 
 
-void multichannelrx::synchronizer_thread(Buffer<ItemPtr> &buffer, const int channel_index)
+void multichannelrx::synchronizer_thread(BlockingReaderWriterQueue<ItemPtr> &queue, const int channel_index)
 {
     try {
         while (true) {
             boost::this_thread::interruption_point();
 
             ItemPtr item;
-            buffer.popFront(item);
+            queue.wait_dequeue(item);
 
             // do the hard work here, run OFDM sychronizer ..
             sychronize(&item->data.front(), item->len, channel_index);
@@ -361,12 +363,7 @@ void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_sample
     // update len field
     buffer->len = counter;
 
-#if MULTITHREAD
-    mix_to_chan_buffer_.pushBack(buffer);
-#else
-    // continue in same thread
-    channelize(&output_buffer.buffer[0], counter);
-#endif
+    mix_to_chan_buffer_.enqueue(buffer);
 }
 
 
@@ -380,16 +377,10 @@ void multichannelrx::channelize(std::complex<float> * _y, unsigned int counter)
         firpfbch_crcf_analyzer_execute(channelizer, &_y[i * num_sampled_chans_ + 0], &buffer->data[i * num_sampled_chans_]);
     }
 
-#if MULTITHREAD
     // add sync buffer to queue of all channels
     for (auto &i : chan_to_sync_buffers_) {
-        i.pushBack(buffer);
+        i.enqueue(buffer);
     }
-#else
-    for (int i = 0; i < num_channels_; i++) {
-        sychronize(&output_buffer.buffer[0], counter, i);
-    }
-#endif
 }
 
 void multichannelrx::sychronize(std::complex<float> * _x, const int len, const int channel_index)

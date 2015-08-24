@@ -6,6 +6,7 @@
 #include "dyspanradio.h"
 #include "Buffer.h"
 #include "buffer_factory.h"
+#include "readerwriterqueue.h"
 #include <vector>
 #include <map>
 #include <liquid/liquid.h>
@@ -14,6 +15,8 @@
 
 #define MULTITHREAD 1
 #define THREAD_BUFFER_SIZE 20
+
+using namespace moodycamel;
 
 class multichannelrx : public DyspanRadio {
 public:
@@ -58,7 +61,7 @@ private:
     void receive_thread();
     void mixdown_thread();
     void channelizer_thread();
-    void synchronizer_thread(Buffer<ItemPtr> &buffer, const int channel_index);
+    void synchronizer_thread(BlockingReaderWriterQueue<ItemPtr> &queue, const int channel_index);
 
     void mix_down(std::complex<float> * _x, unsigned int _num_samples);
     void channelize(std::complex<float> * _y, unsigned int counter);
@@ -79,9 +82,9 @@ private:
     uint32_t last_seq_no_;
 
     BufferFactory<BufferItem> buffer_factory_;
-    Buffer<ItemPtr> rx_to_mix_buffer_;
-    Buffer<ItemPtr> mix_to_chan_buffer_;
-    boost::ptr_vector<Buffer<ItemPtr> > chan_to_sync_buffers_;
+    BlockingReaderWriterQueue<ItemPtr> rx_to_mix_buffer_;
+    BlockingReaderWriterQueue<ItemPtr> mix_to_chan_buffer_;
+    boost::ptr_vector<BlockingReaderWriterQueue<ItemPtr> > chan_to_sync_buffers_;
 
     // objects
     ofdmflexframesync * framesync;  // array of frame generator objects
