@@ -4,9 +4,11 @@
 #include <boost/thread.hpp>
 #include <uhd/usrp/multi_usrp.hpp>
 #include <boost/ptr_container/ptr_vector.hpp>
+#include "aligned_allocator.h"
 #include "channels.h"
 
 typedef std::vector<std::complex<float> > CplxFVec;
+typedef std::vector<std::complex<float>, aligned_allocator<__m128, sizeof(__m128)> > ACplxFVec;
 
 class DyspanRadio
 {
@@ -60,8 +62,9 @@ public:
     virtual void start() = 0;
     void stop()
     {
-        boost::ptr_vector<boost::thread>::iterator it;
-        for (it = threads_.begin(); it != threads_.end(); ++it) {
+        // stop threads in reverse order
+        boost::ptr_vector<boost::thread>::reverse_iterator it;
+        for (it = threads_.rbegin(); it != threads_.rend(); ++it) {
             it->interrupt();
             it->join();
         }
