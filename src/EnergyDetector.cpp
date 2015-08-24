@@ -12,11 +12,16 @@ void EnergyDetector::set_parameters(uint16_t _avg_win_size, uint16_t num_channel
     nBins = fftsize;
     
     // Define the bin mask
-    bin_mask.resize(fftsize);
-    float bins_per_channel = nBins / (float)Nch;
+    bin_mask.resize(nBins);
+    float inv_bins_per_channel = (float)Nch / nBins; // 1/bins_per_channel
     for(int i = 0; i < nBins; i++) {
-        bin_mask[i] = floor(i / bins_per_channel);
+        bin_mask[i] = floor(((i + nBins/2) % nBins) * inv_bins_per_channel);
     }
+    
+    // Cancel DC Offset
+    bin_mask[nBins-1] = -1;
+    bin_mask[0] = -1;
+    bin_mask[1] = -1;
     
     setup();
 }
@@ -38,7 +43,7 @@ void EnergyDetector::setup() {
     bin_idx = 0;
     
     // Create Moving Averages
-    ch_pwr_ma.resize(Nch, MovingAverage<float>(mavg_size));
+    ch_pwr_ma.resize(Nch, MovingAverage<double>(mavg_size));
     tmp_ch_power.resize(Nch);
     ch_avg_coeff.resize(Nch, 1);
     mavg_step_size = mavg_size;
@@ -47,7 +52,8 @@ void EnergyDetector::setup() {
     // Count number of bins belonging to each channel
     vector<int> ch_count(Nch,0);
     for(unsigned int i = 0; i < nBins; i++) {
-        ch_count[bin_mask[i]]++;
+        if(bin_mask[i] >= 0)
+            ch_count[bin_mask[i]]++;
     }
     for(int j = 0; j < Nch; j++)
         ch_avg_coeff[j] = 1/((float)ch_count[j] * nBins);
@@ -57,10 +63,10 @@ void EnergyDetector::setup() {
         delete noise_filter;
     // threshold is equal to lamb / (number of samples used in each channel energy value)
     int Me = ch_count[0] * mavg_size, count = 0;
-    float val, thr = 1, dist;
+    /*float val, thr = 1, dist;
     do {
     	boost::math::poisson pois(thr * Me); // poisson distribution with lambda
-    	val = boost::math::quantile(pois, 0.01) / Me; // Pfa = 0.01
+    	val = boost::math::quantile(pois, 0.0001) / Me; // Pfa = 0.001
     	dist = 1 - val;
     	thr += dist;
     	++count;
@@ -68,7 +74,9 @@ void EnergyDetector::setup() {
     		throw "Couldn't converge to a threshold value!";
     		break;
     	}
-    } while(dist > 0.0001);
+    } while(dist > 0.0001);*/
+    float thr = 2; // 3 dB
+    std::cout << "Calculated threshold: " << 10*log10(thr) << " dB\n";
 
 
     // check: http://www.boost.org/doc/libs/1_35_0/libs/math/doc/sf_and_dist/html/math_toolkit/dist/dist_ref/nmp.html#math.dist.quantile
@@ -103,14 +111,21 @@ void EnergyDetector::push_sample(Cplx val) {
 }
 
 void EnergyDetector::process(double tstamp) {
-    
+    //std::cout << "\nfft input: [";
+    //for_each(&fftBins[0], &fftBins[nBins], [](Cplx f){std::cout << 10*log10(std::norm(f)) << ", ";});
+    //std::cout << "] " << std::endl;
     
     fftwf_execute(fft);
     tmp_ch_power.assign(ch_pwr_ma.size(), 0);
+    
+    //std::cout << "\nfft output: [";
+    //for_each(&fftBins[0], &fftBins[nBins], [](Cplx f){std::cout << 10*log10(std::norm(f)) << ", ";});
+    //std::cout << "] " << std::endl;
 
     // Averages across bins belonging to the same channel
     for(unsigned int i = 0; i < nBins; i++) {
-        tmp_ch_power[bin_mask[i]] += fftBins[i].real()*fftBins[i].real() + fftBins[i].imag()*fftBins[i].imag();//norm(fftBins[i]);
+        if(bin_mask[i] >= 0)
+            tmp_ch_power[bin_mask[i]] += fftBins[i].real()*fftBins[i].real() + fftBins[i].imag()*fftBins[i].imag();//norm(fftBins[i]);
     }
     
     // Adds the channel average power to the moving average
@@ -122,6 +137,9 @@ void EnergyDetector::process(double tstamp) {
     if(++mavg_count == mavg_step_size) {
         vector<float> ch_pwr(ch_pwr_ma.size());
         for(uint16_t j = 0; j < ch_pwr_ma.size(); j++) {
+            //double err = std::abs(ch_pwr_ma[j].get_refreshed_avg() - ch_pwr_ma[j].get_avg())/ch_pwr_ma[j].get_refreshed_avg();
+            //if(err > 0.1)
+            //    std::cout << "error val: " << err;
             ch_pwr[j] = ch_pwr_ma[j].get_avg();
         }
         noise_filter->filter(ch_pwr);
@@ -143,40 +161,47 @@ void EnergyDetector::pop_result(double &tstamp, std::vector<float> &vec) {
     return;
 }
 
-NoiseFilter::NoiseFilter(uint16_t _Nch, float _thres) : Nch(_Nch), thres(_thres) {
-    tmp_sort_idx.resize(Nch);
-    for(uint16_t i = 0; i < Nch; ++i) {
-    	tmp_sort_idx[i] = i;
-    }
+NoiseFilter::NoiseFilter(uint16_t _Nch, float _thres) : Nch(_Nch), thres(_thres), noise_estim_mode(true) {
+    //tmp_sort_idx.resize(Nch);
+    //for(uint16_t i = 0; i < Nch; ++i) {
+    //	tmp_sort_idx[i] = i;
+    //}
 #ifdef NOISE_STATS
     noise_ch_pwr_stats.resize(Nch,val_stats());
     noise_hits_stats.resize(Nch,rate_stats());
 #endif
-    min_noise_count = 1;
+    min_noise_count = 2;
 }
 
 void NoiseFilter::filter(std::vector<float> &ch_pwr) { // Warning: may change ch_pwr
-    get_idx_sort_op.assign(ch_pwr);
-    sort(tmp_sort_idx.begin(), tmp_sort_idx.end(), get_idx_sort_op);
-    
-    register uint16_t i = 0;
-    if (noise_pwr_stats.val_count < min_noise_count) {    // until it stabilizes
-        filter_as_noise(ch_pwr, tmp_sort_idx[i]);
-        i++;
-    }
 
-    for (; i < Nch; i++) {
-        if (ch_pwr[tmp_sort_idx[i]] < thres * noise_pwr_stats.get_avg()) {
-            filter_as_noise(ch_pwr, tmp_sort_idx[i]);
+    for (register uint16_t i = 0; i < Nch; i++) {
+        if (noise_ch_pwr_stats[i].val_count < min_noise_count) {    // until it stabilizes
+            filter_as_noise(ch_pwr, i);
+        }
+        else if (ch_pwr[i] < thres * noise_ch_pwr_stats[i].get_avg()) {
+            filter_as_noise(ch_pwr, i);
         }
         else {
-#ifdef NOISE_STATS
-            for(register uint16_t j = i; j < Nch; j++)
-                noise_hits_stats[tmp_sort_idx[j]].hit();
-#endif
-            break;
+            noise_hits_stats[i].hit();
         }
     }
+}
+
+void NoiseFilter::set_static_noise_floor(const std::vector<float> &noise_floor) {
+        for(uint16_t i = 0; i < Nch; ++i) {
+            noise_ch_pwr_stats[i].reset();
+            noise_ch_pwr_stats[i].push(noise_floor[i]);
+        }
+        noise_estim_mode = false;
+}
+
+float NoiseFilter::estimated_noise_floor() {
+    float avg_tot = 0;
+    for (register int i = 0; i < noise_ch_pwr_stats.size(); ++i) {
+        avg_tot += noise_ch_pwr_stats[i].get_avg();
+    }
+    return avg_tot / Nch;
 }
 
 float time_thres;

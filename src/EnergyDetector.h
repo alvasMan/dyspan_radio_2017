@@ -7,6 +7,7 @@
 #include "fftw3.h"
 #include <boost/cstdint.hpp>
 #include <boost/math/distributions/poisson.hpp>
+#include <sstream>
 
 
 typedef std::complex<float> Cplx;
@@ -84,18 +85,32 @@ class MovingAverage {
     std::vector<T> buf;
     T pwr_sum;
     uint32_t idx;
+    uint16_t count_refresh, refresh_period;
 
 public:
     MovingAverage() {pwr_sum = 0; idx = 0;}
     MovingAverage(uint32_t size) {set_size(size);}
-    inline void set_size(uint32_t size) {buf.resize(size, 0); pwr_sum = 0; idx = 0;}
+    inline void set_size(uint32_t size) {buf.resize(size, 0); pwr_sum = 0; idx = 0; count_refresh = 0; refresh_period = 4 * buf.size();}
     inline uint32_t size() {return buf.size();}
     inline void push(const T &val) {
         pwr_sum += val - buf[idx];
         buf[idx++] = val;
+        if(count_refresh++ >= refresh_period)
+            refresh();
         if(idx >= size()) idx = 0;
     }
     inline T get_avg() { return pwr_sum / (float)size(); }
+    inline T get_refreshed_avg() {
+        return std::accumulate(buf.begin(), buf.end(), 0.0) / (float)size();
+    }
+    inline void refresh() {
+        T old_pwr_sum = pwr_sum;
+        pwr_sum = std::accumulate(buf.begin(), buf.end(), 0.0);
+        T test = std::abs(old_pwr_sum - pwr_sum)/pwr_sum;
+        if(test < 0.001) refresh_period += buf.size();
+        else if(test > 0.1)  refresh_period = buf.size();
+        count_refresh = 0;
+    }
 };
 
 class NoiseFilter;
@@ -112,7 +127,7 @@ class EnergyDetector {
     std::vector<float> tmp_ch_power;
     std::vector<float> ch_avg_coeff;
     std::vector<int> bin_mask;
-    std::vector<MovingAverage<float> > ch_pwr_ma;
+    std::vector<MovingAverage<double> > ch_pwr_ma;
 
     std::deque<std::pair<double, std::vector<float> > > results;
     
@@ -123,6 +138,11 @@ public:
     uint16_t nBins;
     
     EnergyDetector();
+    ~EnergyDetector()
+    {
+        destroy();
+    }
+
     void set_parameters(uint16_t _avg_win_size, uint16_t num_channels, const std::vector<int> &_bin_mask);
     void set_parameters(uint16_t _avg_win_size, uint16_t num_channels, uint16_t fftsize);
     void setup();
@@ -155,24 +175,22 @@ struct sort_idx_op {
  */
 class NoiseFilter {
     uint16_t Nch;
-    sort_idx_op get_idx_sort_op;
-    std::vector<uint16_t> tmp_sort_idx;
-    val_stats noise_pwr_stats;
+    std::vector<val_stats> noise_ch_pwr_stats;
     unsigned int min_noise_count;
     
     float thres;
+    bool noise_estim_mode;
     
 #ifdef NOISE_STATS
-    std::vector<val_stats> noise_ch_pwr_stats;
     std::vector<rate_stats> noise_hits_stats;
 #endif
     
     inline void filter_as_noise(std::vector<float> &ch_pwr, uint16_t idx) {
 #ifdef NOISE_STATS
-        noise_ch_pwr_stats[idx].push(ch_pwr[idx]);
         noise_hits_stats[idx].miss();
 #endif
-        noise_pwr_stats.push(ch_pwr[idx]);
+        if(noise_estim_mode == true && ch_pwr[idx] > 1e-10) // cut off some NaN crap you may get
+            noise_ch_pwr_stats[idx].push(ch_pwr[idx]);
         ch_pwr[idx] = 0;
     }
     
@@ -185,25 +203,45 @@ public:
             noise_hits_stats[i].reset();
         }
 #endif
-        noise_pwr_stats.reset();
     }
     void set_thres(float _thres) {
         thres = _thres;
         reset();
     }
     void filter(std::vector<float> &ch_pwr);
-    inline float estimated_noise_floor() {
-        return (noise_pwr_stats.val_count > 0) ? noise_pwr_stats.get_avg() : 0;
-    }
-#ifdef NOISE_STATS
+    float estimated_noise_floor();
     inline float ch_noise_floor(uint16_t idx) {
         return (noise_ch_pwr_stats[idx].val_count > 0) ? noise_ch_pwr_stats[idx].get_avg() : 0;
     }
+    void set_static_noise_floor(const std::vector<float> &noise_floor);
+#ifdef NOISE_STATS
     inline float ch_detec_rate(uint16_t idx) {
         return (noise_hits_stats[idx].val_count > 0) ? noise_hits_stats[idx].get_rate() : 0;
     }
+    std::string print_ch_pdetec() {
+        std::stringstream ss;
+        for (int i = 0; i < Nch; i++) {
+            ss << boost::format("%d: %.4f") % i % (ch_detec_rate(i) * 100) << "%\t";
+        }
+        ss << "\n";
+        return ss.str();
+    }
 #endif
 };
+
+template<typename T>
+std::string print_vector_dB(const std::vector<T> &vec) {
+    std::stringstream ss;
+    for (int i = 0; i < vec.size(); i++) {
+        ss << boost::format("%d: %1.11f dB\t") % i % (10 * log10(vec[i]));
+    }
+    ss << "\n";
+    return ss.str();
+}
+
+/////////////////////////////////////////////////////////
+//////////////// DWELL TIME ESTIMATION //////////////////
+/////////////////////////////////////////////////////////
 
 enum TOA_FIT {KBELOW, KOVER, TOA_VALID, TOA_INVALID, SEQ_REMOVAL};
 

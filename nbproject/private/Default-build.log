@@ -1,0 +1,6 @@
+Scanning dependencies of target dyspanradio
+[ 33%] Building CXX object src/CMakeFiles/dyspanradio.dir/main.cpp.o
+cc1plus: error: unrecognized command line option ‘-std=c++11’
+make[2]: *** [src/CMakeFiles/dyspanradio.dir/main.cpp.o] Error 1
+make[1]: *** [src/CMakeFiles/dyspanradio.dir/all] Error 2
+make: *** [all] Error 2

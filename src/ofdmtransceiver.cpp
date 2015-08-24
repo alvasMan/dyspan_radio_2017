@@ -5,6 +5,11 @@
 #include <iostream>
 #include <string>
 
+#define DEBUG_MODE
+
+#ifdef DEBUG_MODE
+#include <ctime>
+#endif
 // default constructor
 //  _M              :   OFDM: number of subcarriers
 //  _cp_len         :   OFDM: cyclic prefix length
@@ -20,7 +25,7 @@ OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels,
     channel_rate_(channel_rate),
     channel_bandwidth_(channel_bandwidth),
     seq_no_(0),
-    debug_(true)
+    debug_(false)
 {
     // create frame generator
     unsigned char * p = NULL;   // subcarrier allocation (default)
@@ -33,16 +38,17 @@ OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels,
 
     // allocate memory for frame generator output (single OFDM symbol)
     fgbuffer_len = M + cp_len;
-    fgbuffer = (std::complex<float>*) malloc(fgbuffer_len * sizeof(std::complex<float>));
+  fgbuffer = (std::complex<float>*) malloc(fgbuffer_len * sizeof(std::complex<float>));
 
     // create frame synchronizer
     //create a usrp device
     std::cout << std::endl;
     std::cout << boost::format("Creating the usrp device with: %s...") % args << std::endl;
-    usrp_tx = uhd::usrp::multi_usrp::make(args);
+    usrp_tx = uhd::usrp::multi_usrp::make(std::string("master_clock_rate=20e6"));
+    usrp_tx->set_tx_subdev_spec(std::string("A:B")); 
     std::cout << boost::format("Using Device: %s") % usrp_tx->get_pp_string() << std::endl;
-    usrp_rx = uhd::usrp::multi_usrp::make(args);
-
+    usrp_rx = uhd::usrp::multi_usrp::make(std::string("master_clock_rate=20e6"));
+    usrp_rx->set_rx_subdev_spec(std::string("A:B"));
     // initialize channels, add two in each iteration
     assert(num_channels % 2 == 0);
     for (int i = 0; i < num_channels; i += 2) {
@@ -64,10 +70,10 @@ OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels,
     set_rx_freq(f_center);
     set_rx_rate(rx_rf_rate);
     set_rx_gain_uhd(rx_gain_uhd);
-    set_rx_antenna("J1");
+    //set_rx_antenna("J1");
 
     // setting up the energy detector (number of averages,window step size,fftsize)
-    e_detec.set_parameters(10, num_channels, 1024);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
+    e_detec.set_parameters(60, num_channels, 1024);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
 }
 
 
@@ -87,8 +93,8 @@ void OfdmTransceiver::run(void)
     threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::receive_function, this ) ) );
 
     // either start random transmit function or normal one ..
-    threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );
-    //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
+  threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );
+  //  threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
 }
 
 
@@ -194,16 +200,30 @@ void OfdmTransceiver::transmit_function(void)
 void OfdmTransceiver::random_transmit_function(void)
 {
     try {
-
+        
+        bool yes = true;
+        int a = 0;
         while (true) {
             boost::this_thread::interruption_point();
-
+            
             // get random channel
-            int num = rand() % channels_.size();
-            reconfigure_usrp(num);
-            for (int i = 0; i < 50; i++)
+            //int num = rand() % channels_.size();
+           // reconfigure_usrp(num);
+            for (int i = 0; i < 2; i++)
                 transmit_packet();
-
+               // if(yes)
+                //{
+                    //set_tx_freq(2.5e9);
+                    //boost::this_thread::sleep(boost::posix_time::milliseconds(500));
+                 //   yes = false;
+                    a++;
+                    if(a == 4)
+                        a=0;
+                    if(yes){
+                        reconfigure_usrp(1);
+                        yes = false;
+                    }
+                //}
             //boost::this_thread::sleep(boost::posix_time::milliseconds(500));
         }
     }
@@ -224,6 +244,7 @@ void OfdmTransceiver::reconfigure_usrp(const int num)
     // only tune DSP frequency
     request.dsp_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
     request.dsp_freq = channels_.at(num).dsp_freq;
+    request.args = uhd::device_addr_t("mode_n=integer");
     uhd::tune_result_t result = usrp_tx->set_tx_freq(request);
 
     if (debug_) {
@@ -241,7 +262,13 @@ void OfdmTransceiver::transmit_packet()
     boost::shared_ptr<CplxFVec> buffer;
     frame_buffer.popFront(buffer);// new CplxFVec(fgbuffer_len) );
     //std::cout << boost::format("Size is: %d") % buffer.size() << std::endl;
-
+    float mag = 0;
+   // for(int i= 0; i < buffer->size();i++)
+    //{
+    //    mag += buffer[i];
+   // }
+        //mag = mag/buffer->size();
+        //std::cout << "mag of IQ samples : " << mag << std::endl; 
     // send samples to the device
     usrp_tx->get_device()->send(
         &buffer->front(), buffer->size(),
@@ -272,6 +299,11 @@ void OfdmTransceiver::transmit_packet()
 
 void OfdmTransceiver::receive_function(void)
 {
+    
+    #ifdef DEBUG_MODE
+    time_t tnow, tlast = time(0);
+#endif
+
     //create a receive streamer
     std::string wire_format("sc16");
     std::string cpu_format("fc32");
@@ -297,8 +329,9 @@ void OfdmTransceiver::receive_function(void)
             boost::this_thread::interruption_point();
 
             do {
-
-                //size_t num_rx_samps = rx_stream->recv(&rxBuff.front(), rxBuff.size(), metadata, 3.0);
+                std::vector<std::complex<float> > rxBuff;
+                rxBuff.resize(100);
+                //size_t num_rx_samps1 = rx_stream->recv(&rxBuff.front(), rxBuff.size(), metadata, 3.0);
                 size_t num_rx_samps = rx_stream->recv(e_detec.fftBins, e_detec.nBins, metadata, 5.0);
 
                 //handle the error code
@@ -331,12 +364,22 @@ void OfdmTransceiver::receive_function(void)
             int numfree = 0;
 
             // print power levels for each channel
-            if (debug_) {
+#ifdef DEBUG_MODE
+            tnow = time(0);
+            // print power levels for each channel
+            if (difftime(tnow,tlast) > 0.01) {
+                std::cout << "Energy: " << print_vector_dB(ch_power);
+                std::cout << "p(Detection): " << e_detec.noise_filter->print_ch_pdetec();
+                std::cout << "noise floor: ";
                 for (int i = 0; i < ch_power.size(); i++) {
-                    std::cout << boost::format("%d: %1.11f ") % i % ch_power[i];
+                    float dB_value = 10*log10(e_detec.noise_filter->ch_noise_floor(i)), detec_rate = e_detec.noise_filter->ch_detec_rate(i);
+                    std::cout << boost::format("%d: %1.4f dB\t") % i % dB_value;
                 }
                 std::cout << std::endl;
+                tlast = tnow;
             }
+#endif
+
 
 #if 0
             //std::cout << " Channels are :  " << "1: "<< ch_power[0] << " 2 :"<<ch_power[1] << " 3 :"<< ch_power[2] <<" 4 :"<< ch_power[3] << std::endl;

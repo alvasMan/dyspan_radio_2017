@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configurationDescriptor version="95">
+  <logicalFolder name="root" displayName="root" projectFiles="true" kind="ROOT">
+    <df root="/home/nodeuser/data/alt_iris/spec_chall/andre/dyspan_radio" name="0">
+      <df name="src">
+        <in>EnergyDetector.cpp</in>
+        <in>main.cpp</in>
+        <in>ofdmtransceiver.cpp</in>
+      </df>
+    </df>
+    <logicalFolder name="ExternalFiles"
+                   displayName="Important Files"
+                   projectFiles="false"
+                   kind="IMPORTANT_FILES_FOLDER">
+      <itemPath>/home/nodeuser/data/alt_iris/spec_chall/andre/dyspan_radio/CMakeLists.txt</itemPath>
+      <itemPath>/home/nodeuser/data/alt_iris/spec_chall/andre/dyspan_radio/build/Makefile</itemPath>
+    </logicalFolder>
+  </logicalFolder>
+  <sourceFolderFilter>^(nbproject)$</sourceFolderFilter>
+  <sourceRootList>
+    <Elem>/home/nodeuser/data/alt_iris/spec_chall/andre/dyspan_radio</Elem>
+  </sourceRootList>
+  <projectmakefile>/home/nodeuser/data/alt_iris/spec_chall/andre/dyspan_radio/build/Makefile</projectmakefile>
+  <confs>
+    <conf name="Default" type="0">
+      <toolsSet>
+        <compilerSet>default</compilerSet>
+        <dependencyChecking>false</dependencyChecking>
+        <rebuildPropChanged>false</rebuildPropChanged>
+      </toolsSet>
+      <flagsDictionary>
+        <element flagsID="0" commonFlags="-std=c++11"/>
+      </flagsDictionary>
+      <codeAssistance>
+      </codeAssistance>
+      <makefileType>
+        <makeTool>
+          <buildCommandWorkingDir>/home/nodeuser/data/alt_iris/spec_chall/andre/dyspan_radio/build</buildCommandWorkingDir>
+          <buildCommand>${MAKE} -f Makefile</buildCommand>
+          <cleanCommand>${MAKE} -f Makefile clean</cleanCommand>
+          <executablePath>/home/nodeuser/data/alt_iris/spec_chall/andre/dyspan_radio/build/src/dyspanradio</executablePath>
+          <ccTool>
+            <incDir>
+              <pElem>build/src</pElem>
+            </incDir>
+          </ccTool>
+        </makeTool>
+      </makefileType>
+      <item path="/home/nodeuser/data/alt_iris/spec_chall/andre/dyspan_radio/src/EnergyDetector.cpp"
+            ex="false"
+            tool="1"
+            flavor2="8">
+        <ccTool flags="0">
+        </ccTool>
+      </item>
+      <item path="/home/nodeuser/data/alt_iris/spec_chall/andre/dyspan_radio/src/main.cpp"
+            ex="false"
+            tool="1"
+            flavor2="8">
+        <ccTool flags="0">
+        </ccTool>
+      </item>
+      <item path="/home/nodeuser/data/alt_iris/spec_chall/andre/dyspan_radio/src/ofdmtransceiver.cpp"
+            ex="false"
+            tool="1"
+            flavor2="8">
+        <ccTool flags="0">
+        </ccTool>
+      </item>
+    </conf>
+  </confs>
+</configurationDescriptor>

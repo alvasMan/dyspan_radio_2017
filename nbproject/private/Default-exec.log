@@ -1,0 +1,11 @@
+called: /usr/bin/g++
+	/home/nodeuser/data/alt_iris/spec_chall/andre/dyspan_radio/build/src
+	/usr/bin/g++
+	-std=c++11
+	-g3
+	-gdwarf-2
+	-o
+	CMakeFiles/dyspanradio.dir/main.cpp.o
+	-c
+	/home/nodeuser/data/alt_iris/spec_chall/andre/dyspan_radio/src/main.cpp
+
