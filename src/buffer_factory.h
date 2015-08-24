@@ -6,7 +6,7 @@
 #include <boost/pool/pool_alloc.hpp>
 #include <vector>
 
-#define MAX_SPP 5000 //< Maximum samples per packet
+#define MAX_SPP 4096 //< Maximum samples per packet
 
 // This class is inspired by Kurt Neufeld
 
@@ -14,7 +14,7 @@ struct BufferItem
 {
     BufferItem() : data(MAX_SPP), len(0) {}
     CplxFVec data;
-    size_t len;                     //< This is the amont of space in use (the actual size is always block_size_)
+    int len;                     //< This is the amont of space in use (the actual size is always block_size_)
 };
 
 typedef boost::shared_ptr<BufferItem> ItemPtr;
@@ -47,7 +47,6 @@ public:
 private:
     void make(size_t n)
     {
-        boost::mutex::scoped_lock lock(mutex_);
         for (unsigned i=0; i < n; i++)
         {
             pool_.push_back(new T());
