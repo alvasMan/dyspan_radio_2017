@@ -125,13 +125,13 @@ multichannelrx::multichannelrx(const std::string args,
     }
 
     // design custom filterbank channelizer
-    unsigned int m  = 7;        // prototype filter delay
+    unsigned int m  = 2;        // prototype filter delay
     float As        = 60.0f;    // stop-band attenuation
     channelizer = firpfbch_crcf_create_kaiser(LIQUID_ANALYZER, num_sampled_chans_, m, As);
 
     // create NCO to center spectrum
     float offset = -0.5f*(float)(num_sampled_chans_-1) / (float)num_sampled_chans_ * M_PI;
-    nco = nco_crcf_create(LIQUID_VCO);
+    nco = nco_crcf_create(LIQUID_NCO);
     nco_crcf_set_frequency(nco, offset);
 
     //create a usrp device
