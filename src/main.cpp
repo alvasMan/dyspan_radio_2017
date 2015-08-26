@@ -39,6 +39,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     size_t num_total_packets, packets_per_second;
     size_t tx_buffer_size;
     size_t num_channels;
+    std::string subdev;
     double channel_bandwidth, channel_rate, freq, rx_gain, tx_gain_soft, tx_gain_uhd;
     float ampl;
 
@@ -48,6 +49,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     desc.add_options()
         ("help", "help message")
         ("args", po::value<std::string>(&args)->default_value(""), "single uhd device address args")
+        ("subdev", po::value<std::string>(&subdev)->default_value(""), "Subdev specification")
         ("mode", po::value<std::string>(&mode)->default_value("tx"), "Mode selection (tx/rx/rx_pfb)")
         ("secs", po::value<double>(&seconds_in_future)->default_value(1.5), "number of seconds in the future to receive")
         ("type", po::value<std::string>(&type)->default_value("short"), "sample type: double, float, or short")
@@ -93,7 +95,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     if (mode == "tx")
         radio.reset(new OfdmTransceiver(args, num_channels, freq, channel_bandwidth, channel_rate, tx_gain_soft, tx_gain_uhd, rx_gain, debug));
     else if (mode == "rx")
-        radio.reset(new multichannelrx(args, num_channels, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p, debug));
+        radio.reset(new multichannelrx(args, subdev, num_channels, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p, debug));
     else if (mode == "rx_pfb")
         radio.reset(new multichannelrx_pfb(args, num_channels, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p, debug));
     else

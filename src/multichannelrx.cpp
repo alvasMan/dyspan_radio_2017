@@ -78,6 +78,7 @@ int multichannelrx::callback(unsigned char *  _header,
 
 // default constructor
 multichannelrx::multichannelrx(const std::string args,
+               const std::string subdev,
                const int num_channels,
                const double f_center,
                const double channel_bandwidth,
@@ -112,7 +113,6 @@ multichannelrx::multichannelrx(const std::string args,
 
     Reset();
 
-    std::string subdev("A:0 A:0");
     std::string channel_list("0,1");
 
     //create a usrp device

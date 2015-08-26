@@ -22,6 +22,7 @@ class multichannelrx : public DyspanRadio {
 public:
     // default constructor
     multichannelrx(const std::string args,
+                   const std::string subdev,
                    const int num_channels,
                    const double f_center,
                    const double channel_bandwidth,
