@@ -11,16 +11,14 @@
 #include <complex>
 #include <vector>
 #include <liquid/liquid.h>
-
-
-#include "multichannelrx.h"
+#include "multichannelrx_pfb.h"
 
 #define BST_DEBUG 0
 
 static bool verbose = true;
 
 // global callback function
-namespace multichannelrxdetail
+namespace multichannelrxpfbdetail
 {
 int gCallback( unsigned char *  _header,
                int              _header_valid,
@@ -30,7 +28,7 @@ int gCallback( unsigned char *  _header,
                framesyncstats_s _stats,
                void *           _userdata)
 {
-  static_cast<multichannelrx*>(_userdata)->callback(_header,
+  static_cast<multichannelrx_pfb*>(_userdata)->callback(_header,
      _header_valid,
      _payload,
      _payload_len,
@@ -40,7 +38,7 @@ int gCallback( unsigned char *  _header,
 }
 }
 
-int multichannelrx::callback(unsigned char *  _header,
+int multichannelrx_pfb::callback(unsigned char *  _header,
              int              _header_valid,
              unsigned char *  _payload,
              unsigned int     _payload_len,
@@ -82,7 +80,7 @@ int multichannelrx::callback(unsigned char *  _header,
 
 
 // default constructor
-multichannelrx::multichannelrx(const std::string args,
+multichannelrx_pfb::multichannelrx_pfb(const std::string args,
                const int num_channels,
                const double f_center,
                const double channel_bandwidth,
@@ -111,7 +109,7 @@ multichannelrx::multichannelrx(const std::string args,
     userdata  = (void **)             malloc(num_sampled_chans_ * sizeof(void *));
     callbacks = (framesync_callback*) malloc(num_sampled_chans_ * sizeof(framesync_callback));
     for (int i = 0; i < num_channels_; i++) {
-        callbacks[i] = multichannelrxdetail::gCallback;
+        callbacks[i] = multichannelrxpfbdetail::gCallback;
         userdata[i] = this;
     }
 
@@ -160,7 +158,7 @@ multichannelrx::multichannelrx(const std::string args,
 }
 
 // destructor
-multichannelrx::~multichannelrx()
+multichannelrx_pfb::~multichannelrx_pfb()
 {
     // destroy NCO
     nco_crcf_destroy(nco);
@@ -190,22 +188,22 @@ multichannelrx::~multichannelrx()
     }
 }
 
-void multichannelrx::start(void)
+void multichannelrx_pfb::start(void)
 {
     // start threads
-    threads_.push_back( new boost::thread( boost::bind( &multichannelrx::receive_thread, this ) ) );
-    threads_.push_back( new boost::thread( boost::bind( &multichannelrx::mixdown_thread, this ) ) );
-    threads_.push_back( new boost::thread( boost::bind( &multichannelrx::channelizer_thread, this ) ) );
+    threads_.push_back( new boost::thread( boost::bind( &multichannelrx_pfb::receive_thread, this ) ) );
+    threads_.push_back( new boost::thread( boost::bind( &multichannelrx_pfb::mixdown_thread, this ) ) );
+    threads_.push_back( new boost::thread( boost::bind( &multichannelrx_pfb::channelizer_thread, this ) ) );
 
     // start a synchronizer thread for each channel
     for (int i = 0; i < chan_to_sync_buffers_.size(); i++) {
-        threads_.push_back( new boost::thread( boost::bind( &multichannelrx::synchronizer_thread, this, boost::ref(chan_to_sync_buffers_[i]), i) ) );
+        threads_.push_back( new boost::thread( boost::bind( &multichannelrx_pfb::synchronizer_thread, this, boost::ref(chan_to_sync_buffers_[i]), i) ) );
     }
 }
 
 
 // reset
-void multichannelrx::Reset()
+void multichannelrx_pfb::Reset()
 {
     // reset all objects
     unsigned int i;
@@ -219,7 +217,7 @@ void multichannelrx::Reset()
 }
 
 
-void multichannelrx::receive_thread(void)
+void multichannelrx_pfb::receive_thread(void)
 {
     //create a receive streamer
     std::string wire_format("sc16");
@@ -280,7 +278,7 @@ void multichannelrx::receive_thread(void)
 
 
 
-void multichannelrx::mixdown_thread(void)
+void multichannelrx_pfb::mixdown_thread(void)
 {
     try {
         while (true) {
@@ -301,7 +299,7 @@ void multichannelrx::mixdown_thread(void)
 
 
 
-void multichannelrx::channelizer_thread(void)
+void multichannelrx_pfb::channelizer_thread(void)
 {
     try {
         while (true) {
@@ -323,7 +321,7 @@ void multichannelrx::channelizer_thread(void)
 }
 
 
-void multichannelrx::synchronizer_thread(BlockingReaderWriterQueue<ItemPtr> &queue, const int channel_index)
+void multichannelrx_pfb::synchronizer_thread(BlockingReaderWriterQueue<ItemPtr> &queue, const int channel_index)
 {
     try {
         while (true) {
@@ -342,7 +340,7 @@ void multichannelrx::synchronizer_thread(BlockingReaderWriterQueue<ItemPtr> &que
     }
 }
 
-void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_samples)
+void multichannelrx_pfb::mix_down(std::complex<float> * _x, unsigned int _num_samples)
 {
     ItemPtr buffer = buffer_factory_.get_new();
     int counter = 0;
@@ -367,7 +365,7 @@ void multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_sample
 }
 
 
-void multichannelrx::channelize(std::complex<float> * _y, unsigned int counter)
+void multichannelrx_pfb::channelize(std::complex<float> * _y, unsigned int counter)
 {
     ItemPtr buffer = buffer_factory_.get_new();
     buffer->len = counter; // set len to previous len
@@ -383,7 +381,7 @@ void multichannelrx::channelize(std::complex<float> * _y, unsigned int counter)
     }
 }
 
-void multichannelrx::sychronize(std::complex<float> * _x, const int len, const int channel_index)
+void multichannelrx_pfb::sychronize(std::complex<float> * _x, const int len, const int channel_index)
 {
     for (int i = 0; i < len; i++) {
         ofdmflexframesync_execute(framesync[channel_index], &_x[i * num_sampled_chans_ + channel_index], 1);

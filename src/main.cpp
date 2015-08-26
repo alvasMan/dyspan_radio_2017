@@ -12,7 +12,7 @@
 #include <boost/filesystem.hpp>
 
 #include "ofdmtransceiver.h"
-#include "multichannelrx.h"
+#include "multichannelrx_pfb.h"
 
 using namespace boost;
 namespace po = boost::program_options;
@@ -95,7 +95,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     if (is_tx)
         radio.reset(new OfdmTransceiver(args, num_channels, freq, channel_bandwidth, channel_rate, tx_gain_soft, tx_gain_uhd, rx_gain, debug));
     else
-        radio.reset(new multichannelrx(args, num_channels, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p, debug));
+        radio.reset(new multichannelrx_pfb(args, num_channels, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p, debug));
 
 
     // delay start a bit ..

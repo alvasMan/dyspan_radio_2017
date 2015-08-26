@@ -18,10 +18,10 @@
 
 using namespace moodycamel;
 
-class multichannelrx : public DyspanRadio {
+class multichannelrx_pfb : public DyspanRadio {
 public:
     // default constructor
-    multichannelrx(const std::string args,
+    multichannelrx_pfb(const std::string args,
                    const int num_channels,
                    const double f_center,
                    const double channel_bandwidth,
@@ -34,7 +34,7 @@ public:
                    bool debug);
 
     // destructor
-    ~multichannelrx();
+    ~multichannelrx_pfb();
 
     void start();
     void stop();

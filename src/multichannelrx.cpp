@@ -8,14 +8,14 @@
 #include <liquid/liquid.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>
-#include "ofdmreceiver.h"
+#include "multichannelrx.h"
 
 #define BST_DEBUG 0
 
 static bool verbose = true;
 
 // global callback function
-namespace ofdmreceiverdetail
+namespace multichannelrxdetail
 {
 int gCallback( unsigned char *  _header,
                int              _header_valid,
@@ -25,7 +25,7 @@ int gCallback( unsigned char *  _header,
                framesyncstats_s _stats,
                void *           _userdata)
 {
-  static_cast<ofdmreceiver*>(_userdata)->callback(_header,
+  static_cast<multichannelrx*>(_userdata)->callback(_header,
      _header_valid,
      _payload,
      _payload_len,
@@ -35,7 +35,7 @@ int gCallback( unsigned char *  _header,
 }
 }
 
-int ofdmreceiver::callback(unsigned char *  _header,
+int multichannelrx::callback(unsigned char *  _header,
              int              _header_valid,
              unsigned char *  _payload,
              unsigned int     _payload_len,
@@ -77,7 +77,7 @@ int ofdmreceiver::callback(unsigned char *  _header,
 
 
 // default constructor
-ofdmreceiver::ofdmreceiver(const std::string args,
+multichannelrx::multichannelrx(const std::string args,
                const int num_channels,
                const double f_center,
                const double channel_bandwidth,
@@ -97,7 +97,7 @@ ofdmreceiver::ofdmreceiver(const std::string args,
     userdata  = (void **)             malloc(num_sampled_chans_ * sizeof(void *));
     callbacks = (framesync_callback*) malloc(num_sampled_chans_ * sizeof(framesync_callback));
     for (int i = 0; i < num_channels_; i++) {
-        callbacks[i] = ofdmreceiverdetail::gCallback;
+        callbacks[i] = multichannelrxdetail::gCallback;
         userdata[i] = this;
     }
 
@@ -176,7 +176,7 @@ ofdmreceiver::ofdmreceiver(const std::string args,
 }
 
 // destructor
-ofdmreceiver::~ofdmreceiver()
+multichannelrx::~multichannelrx()
 {
     // destroy frame synchronizers
     unsigned int i;
@@ -200,10 +200,10 @@ ofdmreceiver::~ofdmreceiver()
     }
 }
 
-void ofdmreceiver::start(void)
+void multichannelrx::start(void)
 {
     // start threads
-    threads_.push_back( new boost::thread( boost::bind( &ofdmreceiver::receive_thread, this ) ) );
+    threads_.push_back( new boost::thread( boost::bind( &multichannelrx::receive_thread, this ) ) );
 
 #if 0
     // start a synchronizer thread for each channel
@@ -215,7 +215,7 @@ void ofdmreceiver::start(void)
 
 
 // reset
-void ofdmreceiver::Reset()
+void multichannelrx::Reset()
 {
     // reset all objects
     unsigned int i;
@@ -224,7 +224,7 @@ void ofdmreceiver::Reset()
 }
 
 
-void ofdmreceiver::receive_thread()
+void multichannelrx::receive_thread()
 {
     //uhd::set_thread_priority_safe();
     double seconds_in_future = 2.0;
@@ -293,7 +293,7 @@ void ofdmreceiver::receive_thread()
 
 }
 
-inline void ofdmreceiver::sychronize(std::complex<float> * _x, const int len, const int channel_index)
+inline void multichannelrx::sychronize(std::complex<float> * _x, const int len, const int channel_index)
 {
     ofdmflexframesync_execute(framesync[channel_index], _x, len);
 }
