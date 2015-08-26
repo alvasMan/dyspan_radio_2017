@@ -5,6 +5,10 @@
 #include <uhd/usrp/multi_usrp.hpp>
 #include <uhd/convert.hpp>
 #include <uhd/types/device_addr.hpp>
+#include <uhd/utils/thread_priority.hpp>
+#include <uhd/utils/safe_main.hpp>
+#include <uhd/usrp/multi_usrp.hpp>
+#include <uhd/types/tune_request.hpp>
 #include <boost/ptr_container/ptr_vector.hpp>
 #include "aligned_allocator.h"
 #include "channels.h"
