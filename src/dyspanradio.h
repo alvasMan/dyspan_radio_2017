@@ -3,6 +3,8 @@
 
 #include <boost/thread.hpp>
 #include <uhd/usrp/multi_usrp.hpp>
+#include <uhd/convert.hpp>
+#include <uhd/types/device_addr.hpp>
 #include <boost/ptr_container/ptr_vector.hpp>
 #include "aligned_allocator.h"
 #include "channels.h"
