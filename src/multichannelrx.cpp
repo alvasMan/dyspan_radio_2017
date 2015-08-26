@@ -242,6 +242,7 @@ void multichannelrx::receive_thread()
 
     //meta-data will be filled in by recv()
     uhd::rx_metadata_t md;
+    bool overflow_message = true;
 
     //allocate buffers to receive with samples (one buffer per channel)
     const size_t samps_per_buff = rx_streamer_->get_max_num_samps();
@@ -270,19 +271,31 @@ void multichannelrx::receive_thread()
             timeout = 0.1;
 
             //handle the error code
-            if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) break;
+            if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) {
+                std::cout << boost::format("Timeout while streaming") << std::endl;
+                break;
+            }
+            if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW){
+                if (overflow_message){
+                    overflow_message = false;
+                    std::cerr << boost::format("Got an overflow indication, please reduce sample rate.");
+                }
+                continue;
+            }
             if (md.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE){
                 throw std::runtime_error(str(boost::format(
-                    "Receiver error %s"
-                ) % md.strerror()));
+                                                 "Unexpected error code 0x%x"
+                                                 ) % md.error_code));
             }
 
             if (debug_) std::cout << boost::format(
                 "Received packet: %u samples, %u full secs, %f frac secs"
             ) % num_rx_samps % md.time_spec.get_full_secs() % md.time_spec.get_frac_secs() << std::endl;
 
-            const int index = 0;
-            sychronize(&buffs[index].front(), num_rx_samps, index);
+            // TODO: make this multi-threaded
+            for (int i = 0; i < num_channels_; i++) {
+                sychronize(&buffs[i].front(), num_rx_samps, i);
+            }
         }
     }
     catch(boost::thread_interrupted)
