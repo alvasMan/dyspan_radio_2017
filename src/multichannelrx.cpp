@@ -1,8 +1,3 @@
-
-//
-// multichannelrx.cc
-//
-
 #include <math.h>
 #include <iostream>
 #include <stdio.h>
@@ -11,8 +6,8 @@
 #include <complex>
 #include <vector>
 #include <liquid/liquid.h>
-
-
+#include <boost/lexical_cast.hpp>
+#include <boost/algorithm/string.hpp>
 #include "multichannelrx.h"
 
 #define BST_DEBUG 0
@@ -83,6 +78,7 @@ int multichannelrx::callback(unsigned char *  _header,
 
 // default constructor
 multichannelrx::multichannelrx(const std::string args,
+               const std::string subdev,
                const int num_channels,
                const double f_center,
                const double channel_bandwidth,
@@ -94,19 +90,10 @@ multichannelrx::multichannelrx(const std::string args,
                unsigned char * p,            // OFDM: subcarrier allocation
                bool debug) :
     DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len, debug),
-    rx_to_mix_buffer_(THREAD_BUFFER_SIZE),
-    mix_to_chan_buffer_(THREAD_BUFFER_SIZE),
-    buffer_factory_(5000, 100),
     total_frames_(0),
     last_seq_no_(0),
     lost_frames_(0)
 {
-    num_sampled_chans_ = num_channels_;
-    if (num_channels_ == 4 && channel_bandwidth == 5e6) {
-        std::cout << "Increasing number of channels to 5 to match full USRP sample rate." << std::endl;
-        num_sampled_chans_++;
-    }
-
     // create callbacks
     userdata  = (void **)             malloc(num_sampled_chans_ * sizeof(void *));
     callbacks = (framesync_callback*) malloc(num_sampled_chans_ * sizeof(framesync_callback));
@@ -124,50 +111,73 @@ multichannelrx::multichannelrx(const std::string args,
 #endif
     }
 
-    // design custom filterbank channelizer
-    unsigned int m  = 7;        // prototype filter delay
-    float As        = 60.0f;    // stop-band attenuation
-    channelizer = firpfbch_crcf_create_kaiser(LIQUID_ANALYZER, num_sampled_chans_, m, As);
+    Reset();
 
-    // create NCO to center spectrum
-    float offset = -0.5f*(float)(num_sampled_chans_-1) / (float)num_sampled_chans_ * M_PI;
-    nco = nco_crcf_create(LIQUID_VCO);
-    nco_crcf_set_frequency(nco, offset);
+    std::string channel_list("0,1");
 
     //create a usrp device
     std::cout << std::endl;
     std::cout << boost::format("Creating the usrp device with: %s...") % args << std::endl;
     usrp_rx = uhd::usrp::multi_usrp::make(args);
+
+    //always select the subdevice first, the channel mapping affects the other settings
+    if (subdev != "")
+        usrp_rx->set_rx_subdev_spec(subdev); //sets across all mboards
+
     std::cout << boost::format("Using Device: %s") % usrp_rx->get_pp_string() << std::endl;
 
-    // channelizer input/output arrays
-    max_spp_ = usrp_rx->get_device()->get_max_recv_samps_per_packet();
+    //set the rx sample rate (sets across all channels)
+    std::cout << boost::format("Setting RX Rate: %f Msps...") % (channel_bandwidth/1e6) << std::endl;
+    usrp_rx->set_rx_rate(channel_bandwidth);
+    std::cout << boost::format("Actual RX Rate: %f Msps...") % (usrp_rx->get_rx_rate()/1e6) << std::endl << std::endl;
 
-    // create neccesary buffer objects
-    for (int i = 0; i < num_channels_; i++) {
-        chan_to_sync_buffers_.push_back(new Buffer<ItemPtr>(THREAD_BUFFER_SIZE));
-    }
-    // computer actual RF rate
-    double rx_rf_rate = num_sampled_chans_ * channel_bandwidth;
-
-    // reset base station transmitter
-    Reset();
-
-    // configure receiver parameters
-    usrp_rx->set_rx_rate(rx_rf_rate);
-    usrp_rx->set_rx_freq(f_center_);
+    // set the RX gain
     usrp_rx->set_rx_gain(rx_gain_uhd);
+
+    // set LO to center frequency
+    uhd::tune_result_t result = usrp_rx->set_rx_freq(f_center_);
+    if (debug_) {
+        std::cout << result.to_pp_string() << std::endl;
+    }
+
+    // configure DSP channels
+    for (int i = 0; i < channels_.size(); i++) {
+        // construct tuning request
+        uhd::tune_request_t request;
+        // don't touch RF part
+        request.rf_freq_policy = uhd::tune_request_t::POLICY_NONE;
+        request.rf_freq = 0;
+        // only tune DSP frequency
+        request.dsp_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
+        request.dsp_freq = channels_.at(i).dsp_freq;
+        uhd::tune_result_t result = usrp_rx->set_rx_freq(request, i);
+        std::cout << result.to_pp_string() << std::endl;
+    }
+
+    std::cout << boost::format("Setting device timestamp to 0...") << std::endl;
+    usrp_rx->set_time_now(uhd::time_spec_t(0.0));
+
+    //detect which channels to use
+    std::vector<std::string> channel_strings;
+    std::vector<size_t> channel_nums;
+    boost::split(channel_strings, channel_list, boost::is_any_of("\"',"));
+    for(size_t ch = 0; ch < channel_strings.size(); ch++){
+        size_t chan = boost::lexical_cast<int>(channel_strings[ch]);
+        if(chan >= usrp_rx->get_rx_num_channels()){
+            throw std::runtime_error("Invalid channel(s) specified.");
+        }
+        else channel_nums.push_back(boost::lexical_cast<int>(channel_strings[ch]));
+    }
+
+    //create a receive streamer
+    uhd::stream_args_t stream_args("fc32"); //complex floats
+    stream_args.channels = channel_nums;
+    rx_streamer_ = usrp_rx->get_rx_stream(stream_args);
 }
 
 // destructor
 multichannelrx::~multichannelrx()
 {
-    // destroy NCO
-    nco_crcf_destroy(nco);
-
-    // destroy channelizer
-    firpfbch_crcf_destroy(channelizer);
-
     // destroy frame synchronizers
     unsigned int i;
     for (i=0; i<num_channels_; i++) {
@@ -194,13 +204,13 @@ void multichannelrx::start(void)
 {
     // start threads
     threads_.push_back( new boost::thread( boost::bind( &multichannelrx::receive_thread, this ) ) );
-    threads_.push_back( new boost::thread( boost::bind( &multichannelrx::mixdown_thread, this ) ) );
-    threads_.push_back( new boost::thread( boost::bind( &multichannelrx::channelizer_thread, this ) ) );
 
+#if 0
     // start a synchronizer thread for each channel
     for (int i = 0; i < chan_to_sync_buffers_.size(); i++) {
-        threads_.push_back( new boost::thread( boost::bind( &multichannelrx::synchronizer_thread, this, boost::ref(chan_to_sync_buffers_[i]), i) ) );
+        threads_.push_back( new boost::thread( boost::bind( &ofdmreceiver::synchronizer_thread, this, boost::ref(chan_to_sync_buffers_[i]), i) ) );
     }
+#endif
 }
 
 
@@ -211,64 +221,81 @@ void multichannelrx::Reset()
     unsigned int i;
     for (i=0; i<num_channels_; i++)
         ofdmflexframesync_reset(framesync[i]);
-
-    firpfbch_crcf_reset(channelizer);
-
-    // reset write index of channelizer buffer
-    buffer_index = 0;
 }
 
 
-void multichannelrx::receive_thread(void)
+void multichannelrx::receive_thread()
 {
-    //create a receive streamer
-    std::string wire_format("sc16");
-    std::string cpu_format("fc32");
-    uhd::stream_args_t stream_args(cpu_format, wire_format);
-    uhd::rx_streamer::sptr rx_stream = usrp_rx->get_rx_stream(stream_args);
+    //uhd::set_thread_priority_safe();
+    double seconds_in_future = 2.0;
 
     //setup streaming
-    std::cout << std::endl;
-    std::cout << boost::format("Begin streaming now ..") << std::endl;
-    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-    stream_cmd.num_samps = 0; // continuous
-    stream_cmd.stream_now = true;
-    stream_cmd.time_spec = uhd::time_spec_t();
-    usrp_rx->issue_stream_cmd(stream_cmd);
+    std::cout << boost::format("Using a sample rate %f Msps on %u channels")
+                 % (usrp_rx->get_rx_rate()/1e6) % rx_streamer_->get_num_channels() << std::endl;
+    std::cout << boost::format("Begin streaming in %f seconds") % seconds_in_future << std::endl;
+
+    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE);
+    stream_cmd.num_samps = 0;
+    stream_cmd.stream_now = false;
+    stream_cmd.time_spec = uhd::time_spec_t(seconds_in_future);
+    rx_streamer_->issue_stream_cmd(stream_cmd); //tells all channels to stream
 
     //meta-data will be filled in by recv()
-    uhd::rx_metadata_t metadata;
+    uhd::rx_metadata_t md;
     bool overflow_message = true;
+
+    //allocate buffers to receive with samples (one buffer per channel)
+    const size_t samps_per_buff = rx_streamer_->get_max_num_samps();
+    std::vector<std::vector<std::complex<float> > > buffs(
+        usrp_rx->get_rx_num_channels(), std::vector<std::complex<float> >(samps_per_buff)
+    );
+
+    //create a vector of pointers to point to each of the channel buffers
+    std::vector<std::complex<float> *> buff_ptrs;
+    for (size_t i = 0; i < buffs.size(); i++)
+        buff_ptrs.push_back(&buffs[i].front());
+
+    //the first call to recv() will block this many seconds before receiving
+    double timeout = seconds_in_future + 0.1; //timeout (delay before receive + padding)
 
     try {
         while (true) {
             boost::this_thread::interruption_point();
 
-            ItemPtr buffer = buffer_factory_.get_new();
-            size_t num_rx_samps = rx_stream->recv(&buffer->data.front(), max_spp_, metadata, 3.0);
-            buffer->len = num_rx_samps;
+            //receive a single packet
+            size_t num_rx_samps = rx_streamer_->recv(
+                buff_ptrs, samps_per_buff, md, timeout
+            );
+
+            //use a small timeout for subsequent packets
+            timeout = 0.1;
 
             //handle the error code
-            if (metadata.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) {
+            if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) {
                 std::cout << boost::format("Timeout while streaming") << std::endl;
                 break;
             }
-            if (metadata.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW){
+            if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW){
                 if (overflow_message){
                     overflow_message = false;
                     std::cerr << boost::format("Got an overflow indication, please reduce sample rate.");
                 }
                 continue;
             }
-            if (metadata.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE){
+            if (md.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE){
                 throw std::runtime_error(str(boost::format(
                                                  "Unexpected error code 0x%x"
-                                                 ) % metadata.error_code));
+                                                 ) % md.error_code));
             }
 
-            // push on queue for next processing step
-            rx_to_mix_buffer_.pushBack(buffer);
-            //mix_to_chan_buffer_.pushBack(element);
+            if (debug_) std::cout << boost::format(
+                "Received packet: %u samples, %u full secs, %f frac secs"
+            ) % num_rx_samps % md.time_spec.get_full_secs() % md.time_spec.get_frac_secs() << std::endl;
+
+            // TODO: make this multi-threaded
+            for (int i = 0; i < num_channels_; i++) {
+                sychronize(&buffs[i].front(), num_rx_samps, i);
+            }
         }
     }
     catch(boost::thread_interrupted)
@@ -278,107 +305,7 @@ void multichannelrx::receive_thread(void)
     }
 }
 
-
-
-void multichannelrx::mixdown_thread(void)
+inline void multichannelrx::sychronize(std::complex<float> * _x, const int len, const int channel_index)
 {
-    try {
-        while (true) {
-            boost::this_thread::interruption_point();
-
-            ItemPtr item;
-            rx_to_mix_buffer_.popFront(item);
-
-            // do the hard work here
-            item->len = mix_down(&item->data.front(), item->len);
-
-            mix_to_chan_buffer_.pushBack(item);
-        }
-    }
-    catch(boost::thread_interrupted)
-    {
-        std::cout << "Down-mixing thread interrupted." << std::endl;
-    }
-}
-
-
-
-void multichannelrx::channelizer_thread(void)
-{
-    try {
-        while (true) {
-            boost::this_thread::interruption_point();
-
-            ItemPtr buffer;
-            mix_to_chan_buffer_.popFront(buffer);
-
-            // do the hard work here
-            channelize(&buffer->data.front(), buffer->len);
-
-            // add sync buffer to queue of all channels
-            for (auto &i : chan_to_sync_buffers_) {
-                i.pushBack(buffer);
-            }
-        }
-    }
-    catch(boost::thread_interrupted)
-    {
-        std::cout << "Channelizer thread interrupted." << std::endl;
-    }
-}
-
-
-void multichannelrx::synchronizer_thread(Buffer<ItemPtr> &buffer, const int channel_index)
-{
-    try {
-        while (true) {
-            boost::this_thread::interruption_point();
-
-            ItemPtr item;
-            buffer.popFront(item);
-
-            // do the hard work here, run OFDM sychronizer ..
-            sychronize(&item->data.front(), item->len, channel_index);
-        }
-    }
-    catch(boost::thread_interrupted)
-    {
-        std::cout << "Synchronizer thread for channel " << channel_index << " interrupted." << std::endl;
-    }
-}
-
-int multichannelrx::mix_down(std::complex<float> * _x, unsigned int _num_samples)
-{
-    int counter = 0;
-
-    // buffer_index will be the channel number
-    for (int i = 0; i < _num_samples; i++) {
-        // mix signal down and put resulting sample into channelizer input buffer
-        nco_crcf_mix_down(nco, _x[i], &_x[counter * num_sampled_chans_ + buffer_index]);
-        nco_crcf_step(nco);
-
-        buffer_index++;
-        if (buffer_index == num_sampled_chans_) {
-            // reset index
-            buffer_index = 0;
-            counter++;
-        }
-    }
-    return counter;
-}
-
-
-void multichannelrx::channelize(std::complex<float> * _y, unsigned int counter)
-{
-    // execute filterbank channelizer as analyzer ..
-    for (int i = 0; i < counter; i++) {
-        firpfbch_crcf_analyzer_execute(channelizer, &_y[i * num_sampled_chans_], &_y[i * num_sampled_chans_]);
-    }
-}
-
-void multichannelrx::sychronize(std::complex<float> * _x, const int len, const int channel_index)
-{
-    for (int i = 0; i < len; i++) {
-        ofdmflexframesync_execute(framesync[channel_index], &_x[i * num_sampled_chans_ + channel_index], 1);
-    }
+    ofdmflexframesync_execute(framesync[channel_index], _x, len);
 }

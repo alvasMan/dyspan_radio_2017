@@ -1,5 +1,7 @@
-#ifndef OFDMRECEIVER_H
-#define OFDMRECEIVER_H
+#ifndef MULTICHANNELRX_H
+#define MULTICHANNELRX_H
+
+// This class is based on liquid-usrp's multichannelrx class
 
 #include "dyspanradio.h"
 #include "Buffer.h"
@@ -14,15 +16,12 @@
 #define MULTITHREAD 1
 #define THREAD_BUFFER_SIZE 20
 
-#define CPU_FORMAT "fc32"
-
 using namespace moodycamel;
 
-class multichannelrx : public DyspanRadio {
+class multichannelrx_pfb : public DyspanRadio {
 public:
     // default constructor
-    multichannelrx(const std::string args,
-                   const std::string subdev,
+    multichannelrx_pfb(const std::string args,
                    const int num_channels,
                    const double f_center,
                    const double channel_bandwidth,
@@ -35,7 +34,7 @@ public:
                    bool debug);
 
     // destructor
-    ~multichannelrx();
+    ~multichannelrx_pfb();
 
     void start();
     void stop();
@@ -54,13 +53,28 @@ public:
                  framesyncstats_s _stats,
                  void *           _userdata);
 
+    // push samples into base station receiver
+
+
 private:
     // ...
     void receive_thread();
+    void mixdown_thread();
+    void channelizer_thread();
     void synchronizer_thread(BlockingReaderWriterQueue<ItemPtr> &queue, const int channel_index);
+
+    void mix_down(std::complex<float> * _x, unsigned int _num_samples);
+    void channelize(std::complex<float> * _y, unsigned int counter);
     void sychronize(std::complex<float> * _x, const int len, const int channel_index);
 
+
+
+    // finite impulse response polyphase filterbank channelizer
+    firpfbch_crcf channelizer;      // channelizer size is 2*num_channels
+    unsigned int buffer_index;      // input index
+
     size_t num_sampled_chans_;
+    size_t max_spp_;
 
     // statistics
     uint32_t total_frames_;
@@ -76,9 +90,10 @@ private:
     ofdmflexframesync * framesync;  // array of frame generator objects
     void ** userdata;               // array of userdata pointers
     framesync_callback * callbacks; // array of callback functions
+    nco_crcf nco;                   // frequency-centering NCO
 
     uhd::usrp::multi_usrp::sptr usrp_rx;
-    uhd::rx_streamer::sptr rx_streamer_;
 };
 
-#endif // OFDMRECEIVER_H
+#endif // MULTICHANNELRX_H
+

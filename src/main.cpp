@@ -1,6 +1,4 @@
-#include <uhd/utils/thread_priority.hpp>
-#include <uhd/utils/safe_main.hpp>
-#include <uhd/usrp/multi_usrp.hpp>
+
 #include <boost/program_options.hpp>
 #include <boost/format.hpp>
 #include <boost/thread.hpp>
@@ -8,11 +6,11 @@
 #include <fstream>
 #include <complex>
 #include <csignal>
-#include <uhd/types/tune_request.hpp>
-#include <boost/filesystem.hpp>
 
+#include <boost/filesystem.hpp>
 #include "ofdmtransceiver.h"
 #include "multichannelrx.h"
+#include "multichannelrx_pfb.h"
 
 using namespace boost;
 namespace po = boost::program_options;
@@ -31,7 +29,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     uhd::set_thread_priority_safe();
 
     //variables to be set by po
-    bool is_tx;
+    std::string mode;
     bool debug;
     std::string args, type, threshold, wirefmt;
     double seconds_in_future;
@@ -41,6 +39,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     size_t num_total_packets, packets_per_second;
     size_t tx_buffer_size;
     size_t num_channels;
+    std::string subdev;
     double channel_bandwidth, channel_rate, freq, rx_gain, tx_gain_soft, tx_gain_uhd;
     float ampl;
 
@@ -50,7 +49,8 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     desc.add_options()
         ("help", "help message")
         ("args", po::value<std::string>(&args)->default_value(""), "single uhd device address args")
-        ("tx", po::value<bool>(&is_tx)->default_value(true), "Whether to run as transmitter")
+        ("subdev", po::value<std::string>(&subdev)->default_value(""), "Subdev specification")
+        ("mode", po::value<std::string>(&mode)->default_value("tx"), "Mode selection (tx/rx/rx_pfb)")
         ("secs", po::value<double>(&seconds_in_future)->default_value(1.5), "number of seconds in the future to receive")
         ("type", po::value<std::string>(&type)->default_value("short"), "sample type: double, float, or short")
         ("nsamps", po::value<size_t>(&total_num_samps)->default_value(10000), "total number of samples to receive")
@@ -92,11 +92,14 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
 
     // create radio
     boost::shared_ptr<DyspanRadio> radio;
-    if (is_tx)
+    if (mode == "tx")
         radio.reset(new OfdmTransceiver(args, num_channels, freq, channel_bandwidth, channel_rate, tx_gain_soft, tx_gain_uhd, rx_gain, debug));
+    else if (mode == "rx")
+        radio.reset(new multichannelrx(args, subdev, num_channels, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p, debug));
+    else if (mode == "rx_pfb")
+        radio.reset(new multichannelrx_pfb(args, num_channels, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p, debug));
     else
-        radio.reset(new multichannelrx(args, num_channels, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p, debug));
-
+        throw std::runtime_error("Invalid mode specified.");
 
     // delay start a bit ..
     boost::this_thread::sleep(boost::posix_time::seconds(1));

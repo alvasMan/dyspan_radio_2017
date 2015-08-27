@@ -6,12 +6,14 @@ file(GLOB sources
     main.cpp
     ofdmtransceiver.cpp
     multichannelrx.cpp
+    multichannelrx_pfb.cpp
     EnergyDetector.cpp)
 
 file(GLOB headers
     dyspanradio.h
     ofdmtransceiver.h
     multichannelrx.h
+    multichannelrx_pfb.h
     EnergyDetector.h
     channels.h
     Buffer.h
