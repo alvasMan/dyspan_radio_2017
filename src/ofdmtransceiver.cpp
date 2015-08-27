@@ -73,7 +73,7 @@ OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels,
     //set_rx_antenna("J1");
 
     // setting up the energy detector (number of averages,window step size,fftsize)
-    e_detec.set_parameters(60, num_channels, 1024);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
+    e_detec.set_parameters(50, num_channels, 512);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
 }
 
 
@@ -88,12 +88,13 @@ OfdmTransceiver::~OfdmTransceiver()
 //
 void OfdmTransceiver::run(void)
 {
-    // start threads
+    // start transmission threads
     threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::modulation_function, this ) ) );
-    threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::receive_function, this ) ) );
+    threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );  
 
     // either start random transmit function or normal one ..
-  threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );
+  //start sensing thread
+  threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::receive_function, this ) ) );
   //  threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
 }
 
@@ -216,11 +217,11 @@ void OfdmTransceiver::random_transmit_function(void)
                     //set_tx_freq(2.5e9);
                     //boost::this_thread::sleep(boost::posix_time::milliseconds(500));
                  //   yes = false;
-                    a++;
-                    if(a == 4)
-                        a=0;
+                   // a++;
+                   // if(a == 4)
+                   //     a=0;
                     if(yes){
-                        reconfigure_usrp(1);
+                        reconfigure_usrp(2);
                         yes = false;
                     }
                 //}
@@ -237,16 +238,36 @@ void OfdmTransceiver::random_transmit_function(void)
 void OfdmTransceiver::reconfigure_usrp(const int num)
 {
     // construct tuning request
+    current_channel = num;
+    int internal_num;
+    
+    if(num == 0)
+        internal_num = 3;
+    if(num == 1)
+        internal_num = 1;
+    if(num == 2)
+        internal_num = 0;
+    if(num == 3)
+        internal_num = 2;
+    
+    
+    
+    
+    
     uhd::tune_request_t request;
     // don't touch RF part
     request.rf_freq_policy = uhd::tune_request_t::POLICY_NONE;
     request.rf_freq = 0;
     // only tune DSP frequency
     request.dsp_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
-    request.dsp_freq = channels_.at(num).dsp_freq;
+    request.dsp_freq = channels_.at(internal_num).dsp_freq;
     request.args = uhd::device_addr_t("mode_n=integer");
     uhd::tune_result_t result = usrp_tx->set_tx_freq(request);
-
+    
+    
+    
+    
+    
     if (debug_) {
         std::cout << result.to_pp_string() << std::endl;
     }
@@ -361,21 +382,33 @@ void OfdmTransceiver::receive_function(void)
             double tstamp;
             std::vector<float> ch_power;
             e_detec.pop_result(tstamp, ch_power);// ch_power is your sensing results, free channels will appear as a 0
-            int numfree = 0;
-
+            process_sensing(ch_power);
+            
+            
+            if(sensing_calibration)
+            {
+                
+                ///Jonathans stuff here
+            }
+            
+            
+            
+            
             // print power levels for each channel
 #ifdef DEBUG_MODE
             tnow = time(0);
             // print power levels for each channel
             if (difftime(tnow,tlast) > 0.01) {
                 std::cout << "Energy: " << print_vector_dB(ch_power);
+                
                 std::cout << "p(Detection): " << e_detec.noise_filter->print_ch_pdetec();
-                std::cout << "noise floor: ";
-                for (int i = 0; i < ch_power.size(); i++) {
-                    float dB_value = 10*log10(e_detec.noise_filter->ch_noise_floor(i)), detec_rate = e_detec.noise_filter->ch_detec_rate(i);
-                    std::cout << boost::format("%d: %1.4f dB\t") % i % dB_value;
-                }
-                std::cout << std::endl;
+               // std::cout << "noise floor: ";
+               // for (int i = 0; i < ch_power.size(); i++) {
+              //      float dB_value = 10*log10(e_detec.noise_filter->ch_noise_floor(i)), detec_rate = e_detec.noise_filter->ch_detec_rate(i);
+              //      std::cout << boost::format("%d: %1.4f dB\t") % i % dB_value;
+              //  }
+                //std::cout << std::endl;
+                  
                 tlast = tnow;
             }
 #endif
@@ -410,6 +443,47 @@ void OfdmTransceiver::receive_function(void)
     {
         std::cout << "Receive thread interrupted." << std::endl;
     }
+}
+
+void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
+{
+    int numfree = 0;
+    bool proceed = false;
+   // std::vector<int> notfree;
+    for(int i = 0; i < ChPowers.size();i++)
+    {
+        if(ChPowers[i] == 0)
+            numfree++;
+        else if(i == current_channel)
+            proceed =true;
+        
+    }
+    if((numfree == (ChPowers.size() -1)) && (proceed))
+    {
+        std::cout << "CHAAAAAAAAAAANGE PLACES!" << std::endl;
+      //  if(current_channel == 0)
+       //     next_channel = 2;
+       // if(current_channel == 1)
+        //    next_channel = 0;
+        //if(current_channel == 2)
+        //    next_channel = 3;
+        //if(current_channel == 3)
+         //   next_channel = 1;
+        
+// channel map will be defined by learning code        
+        std::map<int,int> channel_map;
+        channel_map[0] = 2;
+        channel_map[1] = 0;
+        channel_map[2] = 3;
+        channel_map[3] = 1;
+                
+                
+        
+             reconfigure_usrp(channel_map[current_channel]);
+           // find_next_channel(); LUT based on Jonathans learning;
+    }
+    
+    
 }
 
 

@@ -18,6 +18,21 @@ void EnergyDetector::set_parameters(uint16_t _avg_win_size, uint16_t num_channel
         bin_mask[i] = floor(((i + nBins/2) % nBins) * inv_bins_per_channel);
     }
     
+    std::cout << "Gonna change the bin mask: [";
+    int nBins2 = nBins / (4*Nch), state = 0, count = 0;
+    for(int i = 0; i < nBins; ++i) {
+        if(state == 0 || state ==3)
+            bin_mask[i] = -1;
+        if(count++ == nBins2) {
+            state++;
+            if(state == 4)
+                state = 0;
+            count = 0;
+        }
+        std::cout << bin_mask[i] << ", ";
+    }
+    std::cout << "]\n";
+    
     // Cancel DC Offset
     bin_mask[nBins-1] = -1;
     bin_mask[0] = -1;
@@ -75,7 +90,7 @@ void EnergyDetector::setup() {
     		break;
     	}
     } while(dist > 0.0001);*/
-    float thr = 2; // 3 dB
+    float thr = pow(10,15/10);//2; // 3 dB
     std::cout << "Calculated threshold: " << 10*log10(thr) << " dB\n";
 
 

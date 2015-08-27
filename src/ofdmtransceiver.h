@@ -82,7 +82,10 @@ private:
     unsigned int cp_len;            // cyclic prefix length
     unsigned int taper_len;         // taper length
     ofdmflexframegenprops_s fgprops;// frame generator properties
-
+    unsigned int  current_channel;
+    unsigned int next_channel;
+    bool sensing_calibration;
+    bool txrx_calibration;
     // transmitter objects
     ofdmflexframegen fg;            // frame generator object
     std::complex<float> * fgbuffer; // frame generator output buffer [size: M + cp_len x 1]
@@ -105,7 +108,7 @@ private:
     void modulation_function();
     void receive_function();
     void reconfigure_usrp(const int num);
-
+    void process_sensing(std::vector<float> ChPowers);
     // RF objects and properties
     uhd::usrp::multi_usrp::sptr usrp_tx;
     uhd::usrp::multi_usrp::sptr usrp_rx;
