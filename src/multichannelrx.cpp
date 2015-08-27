@@ -17,6 +17,7 @@ static bool verbose = true;
 // global callback function
 namespace multichannelrxdetail
 {
+
 int gCallback( unsigned char *  _header,
                int              _header_valid,
                unsigned char *  _payload,
@@ -25,7 +26,7 @@ int gCallback( unsigned char *  _header,
                framesyncstats_s _stats,
                void *           _userdata)
 {
-  static_cast<multichannelrx*>(_userdata)->callback(_header,
+  static_cast<multichannelrx*>(static_cast<CustomUserdata*>(_userdata)->callback)->callback(_header,
      _header_valid,
      _payload,
      _payload_len,
@@ -43,8 +44,10 @@ int multichannelrx::callback(unsigned char *  _header,
              framesyncstats_s _stats,
              void *           _userdata)
 {
+    CustomUserdata *data = static_cast<CustomUserdata*>(_userdata);
+
     if (verbose) {
-        std::cout << boost::format("***** rssi=%7.2fdB evm=%7.2fdB, ") % _stats.rssi % _stats.evm;
+        std::cout << boost::format("***** CH %d rssi=%7.2fdB evm=%7.2fdB, ") % data->channel % _stats.rssi % _stats.evm;
         if (_header_valid) {
             uint32_t seq_no = (_header[0] << 24 | _header[1] << 16 | _header[2] << 8 | _header[3]);
 
@@ -95,15 +98,20 @@ multichannelrx::multichannelrx(const std::string args,
     lost_frames_(0)
 {
     // create callbacks
-    userdata  = (void **)             malloc(num_sampled_chans_ * sizeof(void *));
-    callbacks = (framesync_callback*) malloc(num_sampled_chans_ * sizeof(framesync_callback));
+    userdata  = (void **)             malloc(num_channels_ * sizeof(void *));
+    callbacks = (framesync_callback*) malloc(num_channels_ * sizeof(framesync_callback));
+
     for (int i = 0; i < num_channels_; i++) {
+        // allocate memory for custom data as well
+        CustomUserdata* data = (CustomUserdata*) malloc(sizeof(CustomUserdata));
+        data->callback = this;
+        data->channel = i;
+        userdata[i] = data;
         callbacks[i] = multichannelrxdetail::gCallback;
-        userdata[i] = this;
     }
 
     // create frame synchronizers
-    framesync = (ofdmflexframesync*)  malloc(num_sampled_chans_ * sizeof(ofdmflexframesync));
+    framesync = (ofdmflexframesync*)  malloc(num_channels_ * sizeof(ofdmflexframesync));
     for (int i = 0; i < num_channels_; i++) {
         framesync[i] = ofdmflexframesync_create(M_, cp_len_, taper_len_, p, callbacks[i], userdata[i]);
 #if BST_DEBUG
@@ -194,6 +202,8 @@ multichannelrx::~multichannelrx()
         ofdmflexframesync_destroy(framesync[i]);
     }
     free(framesync);
+    for (int i = 0; i < num_channels_; i++)
+        free(userdata[i]);
     free(userdata);
     free(callbacks);
 

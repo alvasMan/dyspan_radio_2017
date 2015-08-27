@@ -16,6 +16,11 @@
 
 #define CPU_FORMAT "fc32"
 
+typedef struct {
+    void* callback;
+    int channel;
+} CustomUserdata;
+
 using namespace moodycamel;
 
 class multichannelrx : public DyspanRadio {
@@ -59,8 +64,6 @@ private:
     void receive_thread();
     void synchronizer_thread(Buffer<ItemPtr> &queue, const int channel_index);
     void sychronize(std::complex<float> * _x, const int len, const int channel_index);
-
-    size_t num_sampled_chans_;
 
     // statistics
     uint32_t total_frames_;
