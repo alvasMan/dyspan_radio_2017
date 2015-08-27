@@ -60,7 +60,7 @@ int multichannelrx::callback(unsigned char *  _header,
                 lost_frames_ += (seq_no - last_seq_no_ - 1);
                 last_seq_no_ = seq_no;
             }
-            total_frames_++;
+            rx_frames_++;
 
             std::cout << boost::format("seqno: %6u (%6u lost), ") % seq_no % lost_frames_;
             if (_payload_valid) {
@@ -93,7 +93,7 @@ multichannelrx::multichannelrx(const std::string args,
                unsigned char * p,            // OFDM: subcarrier allocation
                bool debug) :
     DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len, debug),
-    total_frames_(0),
+    rx_frames_(0),
     last_seq_no_(0),
     lost_frames_(0)
 {
@@ -207,11 +207,13 @@ multichannelrx::~multichannelrx()
     free(userdata);
     free(callbacks);
 
-    std::cout << "Total frames received: " << total_frames_ << std::endl;
+    uint32_t total_frames = rx_frames_ + lost_frames_;
+    std::cout << "Received frames received: " << rx_frames_ << std::endl;
     std::cout << "Lost frames: " << lost_frames_ << std::endl;
-    if (total_frames_ > 0) {
-        float fer = static_cast<float>(lost_frames_) / static_cast<float>(total_frames_);
-        std::cout << boost::str(boost::format("Frame error rate: %.2f") % fer) << std::endl;
+    if (total_frames > 0) {
+        float fer = static_cast<float>(lost_frames_) / static_cast<float>(total_frames);
+        fer *= 100;
+        std::cout << boost::str(boost::format("Frame error rate: %.2f%") % fer) << std::endl;
     }
 }
 

@@ -66,7 +66,7 @@ private:
     void sychronize(std::complex<float> * _x, const int len, const int channel_index);
 
     // statistics
-    uint32_t total_frames_;
+    uint32_t rx_frames_;
     uint32_t lost_frames_;
     uint32_t last_seq_no_;
 
