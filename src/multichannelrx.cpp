@@ -170,9 +170,14 @@ multichannelrx::multichannelrx(const std::string args,
     }
 
     //create a receive streamer
-    uhd::stream_args_t stream_args("fc32"); //complex floats
+    uhd::stream_args_t stream_args(CPU_FORMAT);
     stream_args.channels = channel_nums;
     rx_streamer_ = usrp_rx->get_rx_stream(stream_args);
+
+    // create neccesary buffer objects
+    for (int i = 0; i < num_channels_; i++) {
+        sync_queue_.push_back(new Buffer<ItemPtr>(THREAD_BUFFER_SIZE));
+    }
 }
 
 // destructor
@@ -205,12 +210,10 @@ void multichannelrx::start(void)
     // start threads
     threads_.push_back( new boost::thread( boost::bind( &multichannelrx::receive_thread, this ) ) );
 
-#if 0
     // start a synchronizer thread for each channel
-    for (int i = 0; i < chan_to_sync_buffers_.size(); i++) {
-        threads_.push_back( new boost::thread( boost::bind( &ofdmreceiver::synchronizer_thread, this, boost::ref(chan_to_sync_buffers_[i]), i) ) );
+    for (int i = 0; i < sync_queue_.size(); i++) {
+        threads_.push_back( new boost::thread( boost::bind( &multichannelrx::synchronizer_thread, this, boost::ref(sync_queue_[i]), i) ) );
     }
-#endif
 }
 
 
@@ -246,14 +249,6 @@ void multichannelrx::receive_thread()
 
     //allocate buffers to receive with samples (one buffer per channel)
     const size_t samps_per_buff = rx_streamer_->get_max_num_samps();
-    std::vector<std::vector<std::complex<float> > > buffs(
-        usrp_rx->get_rx_num_channels(), std::vector<std::complex<float> >(samps_per_buff)
-    );
-
-    //create a vector of pointers to point to each of the channel buffers
-    std::vector<std::complex<float> *> buff_ptrs;
-    for (size_t i = 0; i < buffs.size(); i++)
-        buff_ptrs.push_back(&buffs[i].front());
 
     //the first call to recv() will block this many seconds before receiving
     double timeout = seconds_in_future + 0.1; //timeout (delay before receive + padding)
@@ -262,18 +257,32 @@ void multichannelrx::receive_thread()
         while (true) {
             boost::this_thread::interruption_point();
 
+            // allocate fresh buffers to receive (one buffer per channel)
+            std::vector<ItemPtr> buffs;
+            std::vector<std::complex<float> *> buff_ptrs;
+            for (int i = 0; i < num_channels_; i++) {
+                ItemPtr item = buffer_factory_.get_new();
+                buffs.push_back(item);
+                buff_ptrs.push_back(&item->data.front());
+            }
+
             //receive a single packet
             size_t num_rx_samps = rx_streamer_->recv(
                 buff_ptrs, samps_per_buff, md, timeout
             );
 
-            //use a small timeout for subsequent packets
+            // update number of received samples
+            for (int i = 0; i < buffs.size(); i++) {
+                buffs[i]->len = num_rx_samps;
+            }
+
+            // use a small timeout for subsequent packets
             timeout = 0.1;
 
-            //handle the error code
+            // handle the error code
             if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) {
                 std::cout << boost::format("Timeout while streaming") << std::endl;
-                break;
+                continue;
             }
             if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW){
                 if (overflow_message){
@@ -292,9 +301,11 @@ void multichannelrx::receive_thread()
                 "Received packet: %u samples, %u full secs, %f frac secs"
             ) % num_rx_samps % md.time_spec.get_full_secs() % md.time_spec.get_frac_secs() << std::endl;
 
-            // TODO: make this multi-threaded
-            for (int i = 0; i < num_channels_; i++) {
-                sychronize(&buffs[i].front(), num_rx_samps, i);
+
+            // push buffer for each channel on the synchronizer thread's queue
+            assert(sync_queue_.size() == buffs.size());
+            for (int i = 0; i < buffs.size(); i++) {
+                sync_queue_.at(i).pushBack(buffs[i]);
             }
         }
     }
@@ -302,6 +313,25 @@ void multichannelrx::receive_thread()
     {
         std::cout << "Receive thread interrupted." << std::endl;
         usrp_rx->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
+    }
+}
+
+void multichannelrx::synchronizer_thread(Buffer<ItemPtr> &queue, const int channel_index)
+{
+    try {
+        while (true) {
+            boost::this_thread::interruption_point();
+
+            ItemPtr item;
+            queue.popFront(item);
+
+            // do the hard work here, run OFDM sychronizer ..
+            sychronize(&item->data.front(), item->len, channel_index);
+        }
+    }
+    catch(boost::thread_interrupted)
+    {
+        std::cout << "Synchronizer thread for channel " << channel_index << " interrupted." << std::endl;
     }
 }
 

@@ -57,7 +57,7 @@ public:
 private:
     // ...
     void receive_thread();
-    void synchronizer_thread(BlockingReaderWriterQueue<ItemPtr> &queue, const int channel_index);
+    void synchronizer_thread(Buffer<ItemPtr> &queue, const int channel_index);
     void sychronize(std::complex<float> * _x, const int len, const int channel_index);
 
     size_t num_sampled_chans_;
@@ -68,9 +68,7 @@ private:
     uint32_t last_seq_no_;
 
     BufferFactory<BufferItem> buffer_factory_;
-    BlockingReaderWriterQueue<ItemPtr> rx_to_mix_buffer_;
-    BlockingReaderWriterQueue<ItemPtr> mix_to_chan_buffer_;
-    boost::ptr_vector<BlockingReaderWriterQueue<ItemPtr> > chan_to_sync_buffers_;
+    boost::ptr_vector<Buffer<ItemPtr> > sync_queue_;
 
     // objects
     ofdmflexframesync * framesync;  // array of frame generator objects
