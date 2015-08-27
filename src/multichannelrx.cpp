@@ -208,12 +208,12 @@ multichannelrx::~multichannelrx()
     free(callbacks);
 
     uint32_t total_frames = rx_frames_ + lost_frames_;
-    std::cout << "Received frames received: " << rx_frames_ << std::endl;
+    std::cout << "Received frames: " << rx_frames_ << std::endl;
     std::cout << "Lost frames: " << lost_frames_ << std::endl;
     if (total_frames > 0) {
         float fer = static_cast<float>(lost_frames_) / static_cast<float>(total_frames);
         fer *= 100;
-        std::cout << boost::str(boost::format("Frame error rate: %.2f%") % fer) << std::endl;
+        std::cout << boost::str(boost::format("Frame error rate: %.2f%%") % fer) << std::endl;
     }
 }
 
