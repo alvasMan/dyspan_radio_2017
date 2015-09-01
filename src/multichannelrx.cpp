@@ -121,71 +121,85 @@ multichannelrx::multichannelrx(const std::string args,
 
     Reset();
 
-    std::string channel_list("0,1");
-
-    //create a usrp device
+    // create a usrp device
     std::cout << std::endl;
     std::cout << boost::format("Creating the usrp device with: %s...") % args << std::endl;
     usrp_rx = uhd::usrp::multi_usrp::make(args);
 
-    //always select the subdevice first, the channel mapping affects the other settings
-    if (subdev != "")
+    // always select the subdevice first, the channel mapping affects the other settings
+    if (not subdev.empty()) {
         usrp_rx->set_rx_subdev_spec(subdev); //sets across all mboards
+    }
 
     std::cout << boost::format("Using Device: %s") % usrp_rx->get_pp_string() << std::endl;
 
-    //set the rx sample rate (sets across all channels)
+    // sanity checks
+    assert(num_channels_ == channels_.size());
+    if (num_channels_ > usrp_rx->get_rx_num_channels()) {
+        throw std::runtime_error("Invalid channel(s) specified.");
+    }
+
+    // first perform all configurations that apply across all channels
+    // set the rx sample rate
     std::cout << boost::format("Setting RX Rate: %f Msps...") % (channel_bandwidth/1e6) << std::endl;
     usrp_rx->set_rx_rate(channel_bandwidth);
     std::cout << boost::format("Actual RX Rate: %f Msps...") % (usrp_rx->get_rx_rate()/1e6) << std::endl << std::endl;
 
-    // set the RX gain
-    usrp_rx->set_rx_gain(rx_gain_uhd);
+    // check for motherboards and set sync mode to mimo if 2 USRPs are found
+    if (usrp_rx->get_num_mboards() == 2) {
+        std::cout << boost::format("Configure receiver in MIMO mode...") << std::endl;
 
-    // set LO to center frequency
-    uhd::tune_result_t result = usrp_rx->set_rx_freq(f_center_);
-    if (debug_) {
-        std::cout << result.to_pp_string() << std::endl;
+        //make mboard 1 a slave over the MIMO Cable
+        usrp_rx->set_clock_source("mimo", 1);
+        usrp_rx->set_time_source("mimo", 1);
+
+        //set time on the master (mboard 0)
+        usrp_rx->set_time_now(uhd::time_spec_t(0.0), 0);
+
+        //sleep a bit while the slave locks its time to the master
+        boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+
+        // set the RX gain for on first and third channel (for first and second USRP)
+        usrp_rx->set_rx_gain(rx_gain_uhd, 0);
+        usrp_rx->set_rx_gain(rx_gain_uhd, 2);
+    } else {
+        usrp_rx->set_time_now(uhd::time_spec_t(0.0));
+        usrp_rx->set_rx_gain(rx_gain_uhd);
+    }
+
+    // set antenna port for each channel
+    // TODO: this needs to be changed for B210 or other daughterboard, make it a parameter?
+    const std::string antenna("J1");
+    for (int i = 0; i < channels_.size(); i++) {
+        usrp_rx->set_rx_antenna(antenna, i);
+        std::cout << boost::format("Using RX antenna %s on channel %d") % usrp_rx->get_rx_antenna(i) % i << std::endl;
     }
 
     // configure DSP channels
+    std::vector<size_t> channel_nums;
     for (int i = 0; i < channels_.size(); i++) {
         // construct tuning request
         uhd::tune_request_t request;
-        // don't touch RF part
-        request.rf_freq_policy = uhd::tune_request_t::POLICY_NONE;
-        request.rf_freq = 0;
+        // don't touch RF part for every second channel (we have two DSP channels in each FPGA)
+        request.rf_freq_policy = (i % 2 == 0) ? uhd::tune_request_t::POLICY_MANUAL : uhd::tune_request_t::POLICY_NONE;
+        request.rf_freq = channels_.at(i).rf_freq;
         // only tune DSP frequency
         request.dsp_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
         request.dsp_freq = channels_.at(i).dsp_freq;
         uhd::tune_result_t result = usrp_rx->set_rx_freq(request, i);
         std::cout << result.to_pp_string() << std::endl;
+
+        // add channel to channel map
+        channel_nums.push_back(boost::lexical_cast<int>(i));
+
+        // create neccesary buffer objects
+        sync_queue_.push_back(new Buffer<ItemPtr>(THREAD_BUFFER_SIZE));
     }
 
-    std::cout << boost::format("Setting device timestamp to 0...") << std::endl;
-    usrp_rx->set_time_now(uhd::time_spec_t(0.0));
-
-    //detect which channels to use
-    std::vector<std::string> channel_strings;
-    std::vector<size_t> channel_nums;
-    boost::split(channel_strings, channel_list, boost::is_any_of("\"',"));
-    for(size_t ch = 0; ch < channel_strings.size(); ch++){
-        size_t chan = boost::lexical_cast<int>(channel_strings[ch]);
-        if(chan >= usrp_rx->get_rx_num_channels()){
-            throw std::runtime_error("Invalid channel(s) specified.");
-        }
-        else channel_nums.push_back(boost::lexical_cast<int>(channel_strings[ch]));
-    }
-
-    //create a receive streamer
+    // finally, create a receive streamer
     uhd::stream_args_t stream_args(CPU_FORMAT);
     stream_args.channels = channel_nums;
     rx_streamer_ = usrp_rx->get_rx_stream(stream_args);
-
-    // create neccesary buffer objects
-    for (int i = 0; i < num_channels_; i++) {
-        sync_queue_.push_back(new Buffer<ItemPtr>(THREAD_BUFFER_SIZE));
-    }
 }
 
 // destructor
@@ -249,7 +263,7 @@ void multichannelrx::receive_thread()
                  % (usrp_rx->get_rx_rate()/1e6) % rx_streamer_->get_num_channels() << std::endl;
     std::cout << boost::format("Begin streaming in %f seconds") % seconds_in_future << std::endl;
 
-    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE);
+    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     stream_cmd.num_samps = 0;
     stream_cmd.stream_now = false;
     stream_cmd.time_spec = uhd::time_spec_t(seconds_in_future);
@@ -294,7 +308,7 @@ void multichannelrx::receive_thread()
             // handle the error code
             if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) {
                 std::cout << boost::format("Timeout while streaming") << std::endl;
-                continue;
+                break;
             }
             if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW){
                 if (overflow_message){
