@@ -50,9 +50,12 @@ int multichannelrx::callback(unsigned char *  _header,
         std::cout << boost::format("***** CH %d rssi=%7.2fdB evm=%7.2fdB, ") % data->channel % _stats.rssi % _stats.evm;
         if (_header_valid) {
             uint32_t seq_no = (_header[0] << 24 | _header[1] << 16 | _header[2] << 8 | _header[3]);
+            std::cout << boost::format("seqno: %6u (%6u lost), ") % seq_no % lost_frames_;
 
-            // do the stats ..
-            {
+            if (_payload_valid) {
+                std::cout << boost::format("payload size: %d") % _payload_len;
+
+                // do the stats ..
                 boost::lock_guard<boost::mutex> lock(mutex_);
                 if (last_seq_no_ == 0) {
                     std::cout << boost::format("Setting first seqno: %6u") % seq_no << std::endl;
@@ -63,11 +66,6 @@ int multichannelrx::callback(unsigned char *  _header,
                     last_seq_no_ = seq_no;
                 }
                 rx_frames_++;
-            }
-
-            std::cout << boost::format("seqno: %6u (%6u lost), ") % seq_no % lost_frames_;
-            if (_payload_valid) {
-                std::cout << boost::format("payload size: %d") % _payload_len;
             } else {
                 std::cout << boost::format("PAYLOAD INVALID");
             }
