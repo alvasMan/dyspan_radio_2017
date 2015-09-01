@@ -342,6 +342,7 @@ void multichannelrx::receive_thread()
     }
 }
 
+
 void multichannelrx::synchronizer_thread(Buffer<ItemPtr> &queue, const int channel_index)
 {
     try {
