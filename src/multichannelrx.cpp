@@ -52,15 +52,18 @@ int multichannelrx::callback(unsigned char *  _header,
             uint32_t seq_no = (_header[0] << 24 | _header[1] << 16 | _header[2] << 8 | _header[3]);
 
             // do the stats ..
-            if (last_seq_no_ == 0) {
-                std::cout << boost::format("Setting first seqno: %6u") % seq_no << std::endl;
-                last_seq_no_ = seq_no;
-            } else {
-                // count lost frames
-                lost_frames_ += (seq_no - last_seq_no_ - 1);
-                last_seq_no_ = seq_no;
+            {
+                boost::lock_guard<boost::mutex> lock(mutex_);
+                if (last_seq_no_ == 0) {
+                    std::cout << boost::format("Setting first seqno: %6u") % seq_no << std::endl;
+                    last_seq_no_ = seq_no;
+                } else {
+                    // count lost frames
+                    lost_frames_ += (seq_no - last_seq_no_ - 1);
+                    last_seq_no_ = seq_no;
+                }
+                rx_frames_++;
             }
-            rx_frames_++;
 
             std::cout << boost::format("seqno: %6u (%6u lost), ") % seq_no % lost_frames_;
             if (_payload_valid) {

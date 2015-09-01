@@ -69,6 +69,7 @@ private:
     uint32_t rx_frames_;
     uint32_t lost_frames_;
     uint32_t last_seq_no_;
+    boost::mutex mutex_;
 
     BufferFactory<BufferItem> buffer_factory_;
     boost::ptr_vector<Buffer<ItemPtr> > sync_queue_;
