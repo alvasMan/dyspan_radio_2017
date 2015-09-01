@@ -117,7 +117,7 @@ void OfdmTransceiver::modulation_function(void)
         int payload_len = 1000;
         unsigned char header[8];
         unsigned char payload[payload_len];
-
+        boost::this_thread::sleep(boost::posix_time::seconds(2));
         while (true)
         {
             boost::this_thread::interruption_point();
@@ -461,16 +461,10 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
     if((numfree == (ChPowers.size() -1)) && (proceed))
     {
         std::cout << "CHAAAAAAAAAAANGE PLACES!" << std::endl;
-      //  if(current_channel == 0)
-       //     next_channel = 2;
-       // if(current_channel == 1)
-        //    next_channel = 0;
-        //if(current_channel == 2)
-        //    next_channel = 3;
-        //if(current_channel == 3)
-         //   next_channel = 1;
+
         
-// channel map will be defined by learning code        
+        
+        // channel map will be defined by learning code        
         std::map<int,int> channel_map;
         channel_map[0] = 2;
         channel_map[1] = 0;

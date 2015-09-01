@@ -34,6 +34,32 @@ struct val_stats {
     }
 };
 
+struct exp_stats {
+    double val_sum;
+    double alpha;
+    uint32_t val_count;
+    
+    exp_stats()
+    {
+        alpha = 0.05;
+        reset();
+    }
+    inline void push(float val) {
+        if(val_count == 0)
+            val_sum = val;
+        else
+            val_sum = (1-alpha)*val_sum + alpha*val;
+        ++val_count;
+    }
+    inline float get_avg() {
+        return val_sum;
+    }
+    inline void reset() {
+        val_sum = 0;
+        val_count = 0;
+    }
+};
+
 struct rate_stats {
     uint32_t val_sum;
     uint32_t val_count;
@@ -175,7 +201,7 @@ struct sort_idx_op {
  */
 class NoiseFilter {
     uint16_t Nch;
-    std::vector<val_stats> noise_ch_pwr_stats;
+    std::vector<exp_stats> noise_ch_pwr_stats;
     unsigned int min_noise_count;
     
     float thres;

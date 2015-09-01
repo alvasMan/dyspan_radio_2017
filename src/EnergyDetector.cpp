@@ -182,7 +182,7 @@ NoiseFilter::NoiseFilter(uint16_t _Nch, float _thres) : Nch(_Nch), thres(_thres)
     //	tmp_sort_idx[i] = i;
     //}
 #ifdef NOISE_STATS
-    noise_ch_pwr_stats.resize(Nch,val_stats());
+    noise_ch_pwr_stats.resize(Nch,exp_stats());
     noise_hits_stats.resize(Nch,rate_stats());
 #endif
     min_noise_count = 2;
