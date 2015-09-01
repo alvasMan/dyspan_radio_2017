@@ -51,14 +51,28 @@ public:
             throw 0;
         }
 
-        // initialize channels, add two in each iteration
-        assert(num_channels_ % 2 == 0);
-        for (int i = 0; i < num_channels_; i += 2) {
-            double offset = i / 2 * channel_bandwidth_ + channel_bandwidth_ / 2;
-            // add left neighbor
-            channels_.push_back({"Channel" + std::to_string(i), f_center_ + offset, channel_bandwidth_, f_center_, +offset, channel_rate});
-            // add right neighbor
-            channels_.push_back({"Channel" + std::to_string(i + 1), f_center + offset, channel_bandwidth, f_center, -offset, channel_rate});
+        // this is a special case for the 4x 5MHz receiver using two N210s
+        if (channel_bandwidth == 5e6 && num_channels_ == 4) {
+            // this initializes 4 channels such that the first two have the same rf_freq and the last two.
+            // this makes sure that each N210 is tuned to two channels with the LO sitting between them
+            std::cout << boost::str(boost::format("Configuring channels for 4x 5MHz using two N210s")) << std::endl;
+            double offset = channel_bandwidth / 2;
+            double rf_freq = f_center - channel_bandwidth;
+            channels_.push_back({"Channel0", f_center_ + offset, channel_bandwidth_, rf_freq, +offset, channel_rate});
+            channels_.push_back({"Channel1", f_center_ + offset, channel_bandwidth_, rf_freq, -offset, channel_rate});
+
+            rf_freq = f_center + channel_bandwidth;
+            channels_.push_back({"Channel2", f_center_ + offset, channel_bandwidth_, rf_freq, +offset, channel_rate});
+            channels_.push_back({"Channel3", f_center_ + offset, channel_bandwidth_, rf_freq, -offset, channel_rate});
+        } else {
+            // initialize channels, add two in each iteration
+            for (int i = 0; i < num_channels_; i += 2) {
+                double offset = i / 2 * channel_bandwidth_ + channel_bandwidth_ / 2;
+                // add left neighbor
+                channels_.push_back({"Channel" + std::to_string(i), f_center_ + offset, channel_bandwidth_, f_center_, +offset, channel_rate});
+                // add right neighbor
+                channels_.push_back({"Channel" + std::to_string(i + 1), f_center + offset, channel_bandwidth, f_center, -offset, channel_rate});
+            }
         }
         // TODO: check that all channels have the same center frequency for faster tuning
     }
