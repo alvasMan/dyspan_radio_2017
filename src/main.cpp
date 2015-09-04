@@ -42,7 +42,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     double channel_bandwidth, channel_rate, freq, rx_gain, tx_gain_soft, tx_gain_uhd;
     float ampl;
     
-    
+    bool learning;
     //setup the program options
     po::options_description desc("Allowed options");
     desc.add_options()
@@ -59,13 +59,14 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("num_channels", po::value<size_t>(&num_channels)->default_value(4), "Number of channels (must be multiple of two)")
         ("channel_bandwidth", po::value<double>(&channel_bandwidth)->default_value(5000e3), "Bandwidth of each individual channel")
         ("channel_rate", po::value<double>(&channel_rate)->default_value(5000e3), "Transmission rate in each individual channel")
-        ("freq",po::value<double>(&freq)->default_value(2412500000),"Sets center frequency")//2.4475e9
+        ("freq",po::value<double>(&freq)->default_value(2412500000),"Sets center frequency")//2.4475e9   2412500000
         ("rxgain",po::value<double>(&rx_gain)->default_value(40),"Sets UHD receive gain")
-        ("txgain_soft",po::value<double>(&tx_gain_soft)->default_value(-30),"Sets software transmit gain")
-        ("txgain_uhd",po::value<double>(&tx_gain_uhd)->default_value(80),"Sets UHD transmit gain")
+        ("txgain_soft",po::value<double>(&tx_gain_soft)->default_value(-20),"Sets software transmit gain")
+        ("txgain_uhd",po::value<double>(&tx_gain_uhd)->default_value(82),"Sets UHD transmit gain")
         ("txbufsize",po::value<size_t>(&tx_buffer_size)->default_value(10),"How many frames in Tx buffer")
         ("threshold", po::value<std::string>(&threshold)->default_value("-75"), "RSSI threshold in dBm")
         ("wirefmt", po::value<std::string>(&wirefmt)->default_value("sc16"), "wire format (sc8 or sc16)")
+        ("learning", po::value<bool>(&learning)->default_value(false), "learning on or off")
         ("dilv", "specify to disable inner-loop verbose")
     ;
     
@@ -87,7 +88,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     int taper_len = 4;
     unsigned char * p = NULL;   // default subcarrier allocation
     // create transceiver
-    OfdmTransceiver trx(args, num_channels, freq, channel_bandwidth, channel_rate, tx_gain_soft, tx_gain_uhd, rx_gain);
+    OfdmTransceiver trx(args, num_channels, freq, channel_bandwidth, channel_rate, tx_gain_soft, tx_gain_uhd, rx_gain,learning);
 
     // delay start a bit ..
     boost::this_thread::sleep(boost::posix_time::seconds(1));

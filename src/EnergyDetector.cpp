@@ -12,7 +12,9 @@ void EnergyDetector::set_parameters(uint16_t _avg_win_size, uint16_t num_channel
     nBins = fftsize;
     
     // Define the bin mask
+    
     bin_mask.resize(nBins);
+    
     float inv_bins_per_channel = (float)Nch / nBins; // 1/bins_per_channel
     for(int i = 0; i < nBins; i++) {
         bin_mask[i] = floor(((i + nBins/2) % nBins) * inv_bins_per_channel);
@@ -32,7 +34,66 @@ void EnergyDetector::set_parameters(uint16_t _avg_win_size, uint16_t num_channel
         std::cout << bin_mask[i] << ", ";
     }
     std::cout << "]\n";
+   
+    // Cancel DC Offset
+    bin_mask[nBins-1] = -1;
+    bin_mask[0] = -1;
+    bin_mask[1] = -1;
     
+    setup();
+}
+void EnergyDetector::set_parameters(uint16_t _avg_win_size, uint16_t num_channels, uint16_t fftsize, double bin_mask_per) {
+    mavg_size = _avg_win_size;
+    Nch = num_channels;
+    nBins = fftsize;
+     bin_mask.resize(nBins);
+     
+     
+    // Define the bin mask
+    double inv_bin_mask = (1 - bin_mask_per)/2;
+    int a;
+    int half_off_ch = inv_bin_mask*(nBins/Nch);
+   
+    std::fill(bin_mask.begin(),bin_mask.end(),-1); 
+    
+    for(int i = 0; i< nBins; i++)
+    {
+       a = i/(nBins/Nch);
+
+        if (i > half_off_ch+((nBins/Nch)*a)  && i < ((nBins/Nch)-half_off_ch)+((nBins/Nch)*a))
+        bin_mask[i] = a;
+
+    }
+    
+    
+    
+    //float inv_bins_per_channel = (float)Nch / nBins; // 1/bins_per_channel
+    //for(int i = 0; i < nBins; i++) {
+   //     bin_mask[i] = floor(((i + nBins/2) % nBins) * inv_bins_per_channel);
+   // }
+    
+    
+    std::cout << "Bin mask: [" ;
+    for(int i = 0; i < bin_mask.size() - 1; ++i)
+        cout << bin_mask[i] << ", ";
+    cout << bin_mask[bin_mask.size()-1] << "]\n";
+    /*
+    std::cout << "Gonna change the bin mask: [";
+    int nBins2 = nBins / (4*Nch), state = 0, count = 0;
+    for(int i = 0; i < nBins; ++i) {
+        if(state == 0 || state ==3)
+            bin_mask[i] = -1;
+        if(count++ == nBins2) {
+            state++;
+            if(state == 4)
+                state = 0;
+            count = 0;
+        }
+        std::cout << bin_mask[i] << ", ";
+    }
+      */
+    std::cout << "]\n";
+   
     // Cancel DC Offset
     bin_mask[nBins-1] = -1;
     bin_mask[0] = -1;
@@ -95,7 +156,7 @@ void EnergyDetector::setup() {
 
 
     // check: http://www.boost.org/doc/libs/1_35_0/libs/math/doc/sf_and_dist/html/math_toolkit/dist/dist_ref/nmp.html#math.dist.quantile
-    noise_filter = new NoiseFilter(Nch, thr);
+    noise_filter = new NoiseFilter2(Nch, 0.0001); //new NoiseFilter(Nch, thr)
 }
 
 void EnergyDetector::destroy() {
@@ -157,7 +218,7 @@ void EnergyDetector::process(double tstamp) {
             //    std::cout << "error val: " << err;
             ch_pwr[j] = ch_pwr_ma[j].get_avg();
         }
-        noise_filter->filter(ch_pwr);
+        //noise_filter->filter(ch_pwr);
         results.push_back(std::pair<double, vector<float> >(tstamp, ch_pwr));
         mavg_count = 0;
     }
@@ -277,6 +338,7 @@ TOA_FIT TOASequence::push_if_fits(double TOA) {
 DwellTimeEstimator::DwellTimeEstimator(uint16_t _Nch, double _max_dwelltime, float _time_percent_thres)
 : Nch(_Nch), max_dwelltime(_max_dwelltime), cur_ch(-1), transition_tstamp_cache(3) {
     time_thres = _time_percent_thres;
+    
 }
 
 void DwellTimeEstimator::set_cur_ch(double tstamp, uint16_t idx) {

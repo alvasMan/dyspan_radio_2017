@@ -12,6 +12,7 @@
 #include "Buffer.h"
 #include "channels.h"
 #include "EnergyDetector.h"
+#include "NoiseFilter2.h"
 
 typedef std::vector<std::complex<float> > CplxFVec;
 
@@ -26,10 +27,11 @@ public:
                     const double channel_rate,
                     const float tx_gain_soft,
                     const float tx_gain_uhd,
-                    const float rx_gain_uhd);
+                    const float rx_gain_uhd,
+                    const bool learning);
 
     // destructor
-    ~OfdmTransceiver();
+   virtual ~OfdmTransceiver();
 
     //
     // transmitter methods
@@ -57,7 +59,7 @@ public:
     void reset_rx();
     void start_rx();
     void stop_rx();
-
+    std::pair<double,bool> DwellEst(DwellTimeEstimator &Dwell, double &previous_dwelltime, int &dwell_counter, int steady_state, double steady_state_Th);
     //
     // additional methods
     //
@@ -76,7 +78,7 @@ private:
     std::vector< ChannelConfig > channels_;
     boost::ptr_vector<boost::thread> threads_;
     bool debug_;             // is debugging enabled?
-
+    bool learning;
     // OFDM properties
     unsigned int M;                 // number of subcarriers
     unsigned int cp_len;            // cyclic prefix length
@@ -108,6 +110,7 @@ private:
     void modulation_function();
     void receive_function();
     void reconfigure_usrp(const int num);
+    std::pair<bool,double> dwelltimer();
     void process_sensing(std::vector<float> ChPowers);
     // RF objects and properties
     uhd::usrp::multi_usrp::sptr usrp_tx;
