@@ -23,6 +23,7 @@ public:
     // default constructor
     multichannelrx_pfb(const std::string args,
                    const int num_channels,
+                   const size_t numtrx,
                    const double f_center,
                    const double channel_bandwidth,
                    const double channel_rate,

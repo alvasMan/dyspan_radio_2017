@@ -12,10 +12,10 @@
 //  _p              :   OFDM: subcarrier allocation
 //  _callback       :   frame synchronizer callback function
 //  _userdata       :   user-defined data structure
-OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels, const double f_center, const double channel_bandwidth, const double channel_rate, const float tx_gain_soft, const float tx_gain_uhd, const float rx_gain_uhd, const bool debug, const bool use_challenge_db) :
-    DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, 48, 6, 4, debug, use_challenge_db),
+OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels, const size_t numtrx, const double f_center, const double channel_bandwidth, const double channel_rate, const float tx_gain_soft, const float tx_gain_uhd, const float rx_gain_uhd, const bool debug, const bool use_challenge_db) :
+    DyspanRadio(num_channels, numtrx, f_center, channel_bandwidth, channel_rate, 48, 6, 4, debug, use_challenge_db),
     seq_no_(0),
-    payload_len_(500)
+    payload_len_(999)
 {
     assert(payload_len_ <= MAX_PAYLOAD_LEN);
 
@@ -255,23 +255,18 @@ void OfdmTransceiver::transmit_packet()
         uhd::device::SEND_MODE_FULL_BUFF
     );
 
-    // send a few extra samples to the device
+    // send a few extra samples and EOB to the device
     // NOTE: this seems necessary to preserve last OFDM symbol in
     //       frame from corruption
+    metadata_tx.start_of_burst = false;
+    metadata_tx.end_of_burst   = true;
+    CplxFVec dummy(NUM_PADDING_NULL_SAMPLES);
     usrp_tx->get_device()->send(
-        &buffer->front(), buffer->size(),
+        &dummy.front(), dummy.size(),
         metadata_tx,
         uhd::io_type_t::COMPLEX_FLOAT32,
         uhd::device::SEND_MODE_FULL_BUFF
     );
-
-    // send a mini EOB packet
-    metadata_tx.start_of_burst = false;
-    metadata_tx.end_of_burst   = true;
-
-    usrp_tx->get_device()->send("", 0, metadata_tx,
-        uhd::io_type_t::COMPLEX_FLOAT32,
-        uhd::device::SEND_MODE_FULL_BUFF);
 }
 
 

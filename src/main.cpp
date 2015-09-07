@@ -34,6 +34,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     bool use_challenge_db;
     std::string args, type, threshold, wirefmt;
     double seconds_in_future;
+    size_t numtrx;
     size_t total_num_samps;
     size_t samps_per_packet;
     size_t spb;
@@ -52,7 +53,8 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("args", po::value<std::string>(&args)->default_value(""), "single uhd device address args")
         ("subdev", po::value<std::string>(&subdev)->default_value(""), "Subdev specification")
         ("mode", po::value<std::string>(&mode)->default_value("tx"), "Mode selection (tx/rx/rx_pfb)")
-        ("challenge", po::value<bool>(&use_challenge_db)->default_value("false"), "Whether to connect and use challenge database")
+        ("numtrx", po::value<size_t>(&numtrx)->default_value(1), "Number of transceivers")
+        ("challenge", po::value<bool>(&use_challenge_db)->default_value(false), "Whether to connect and use challenge database")
         ("secs", po::value<double>(&seconds_in_future)->default_value(1.5), "number of seconds in the future to receive")
         ("type", po::value<std::string>(&type)->default_value("short"), "sample type: double, float, or short")
         ("nsamps", po::value<size_t>(&total_num_samps)->default_value(10000), "total number of samples to receive")
@@ -95,11 +97,11 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     // create radio
     boost::shared_ptr<DyspanRadio> radio;
     if (mode == "tx")
-        radio.reset(new OfdmTransceiver(args, num_channels, freq, channel_bandwidth, channel_rate, tx_gain_soft, tx_gain_uhd, rx_gain, debug, use_challenge_db));
+        radio.reset(new OfdmTransceiver(args, num_channels, numtrx, freq, channel_bandwidth, channel_rate, tx_gain_soft, tx_gain_uhd, rx_gain, debug, use_challenge_db));
     else if (mode == "rx")
-        radio.reset(new multichannelrx(args, subdev, num_channels, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p, debug, use_challenge_db));
+        radio.reset(new multichannelrx(args, subdev, num_channels, numtrx, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p, debug, use_challenge_db));
     else if (mode == "rx_pfb")
-        radio.reset(new multichannelrx_pfb(args, num_channels, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p, debug, use_challenge_db));
+        radio.reset(new multichannelrx_pfb(args, num_channels, numtrx, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p, debug, use_challenge_db));
     else
         throw std::runtime_error("Invalid mode specified.");
 

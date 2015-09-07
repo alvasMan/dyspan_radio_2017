@@ -17,6 +17,7 @@
 typedef std::vector<std::complex<float> > CplxFVec;
 typedef std::vector<std::complex<float>, aligned_allocator<__m128, sizeof(__m128)> > ACplxFVec;
 
+#define NUM_PADDING_NULL_SAMPLES 100
 #define MAX_PAYLOAD_LEN 1500
 #define CHALLENGE_DB_IP "127.0.0.1"
 
@@ -24,6 +25,7 @@ class DyspanRadio
 {
 public:
     DyspanRadio(const int num_channels,
+                const size_t num_trx,
                 const double f_center,
                 const double channel_bandwidth,
                 const double channel_rate,
@@ -34,6 +36,7 @@ public:
                 bool use_challenge_db) :
         radio_id_(-2),
         num_channels_(num_channels),
+        num_trx_(num_trx),
         f_center_(f_center),
         channel_bandwidth_(channel_bandwidth),
         channel_rate_(channel_rate),
@@ -59,7 +62,7 @@ public:
         }
 
         // this is a special case for the 4x 5MHz receiver using two N210s
-        if (channel_bandwidth == 5e6 && num_channels_ == 4) {
+        if (channel_bandwidth == 5e6 && num_channels_ == 4 && num_trx_ == 2) {
             // this initializes 4 channels such that the first two have the same rf_freq and the last two.
             // this makes sure that each N210 is tuned to two channels with the LO sitting between them
             std::cout << boost::str(boost::format("Configuring channels for 4x 5MHz using two N210s")) << std::endl;
@@ -101,6 +104,7 @@ protected:
     // generic properties
     double f_center_;
     int num_channels_;
+    size_t num_trx_;                   // number of transceivers (RF frontends)
     double channel_bandwidth_;
     double channel_rate_;
     std::vector< ChannelConfig > channels_;

@@ -82,6 +82,7 @@ int multichannelrx_pfb::callback(unsigned char *  _header,
 // default constructor
 multichannelrx_pfb::multichannelrx_pfb(const std::string args,
                const int num_channels,
+               const size_t numtrx,
                const double f_center,
                const double channel_bandwidth,
                const double channel_rate,
@@ -92,7 +93,7 @@ multichannelrx_pfb::multichannelrx_pfb(const std::string args,
                unsigned char * p,            // OFDM: subcarrier allocation
                bool debug,
                bool use_challenge_db) :
-    DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len, debug, use_challenge_db),
+    DyspanRadio(num_channels, numtrx, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len, debug, use_challenge_db),
     rx_to_mix_buffer_(THREAD_BUFFER_SIZE),
     mix_to_chan_buffer_(THREAD_BUFFER_SIZE),
     buffer_factory_(100, 100),
