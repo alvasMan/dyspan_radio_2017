@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+extern "C" {
+
 #define NUM_ELEMENTS_BASE 1000
 #define NUM_BUFFERS 10
 
@@ -23,5 +25,7 @@ spectrum_eror_t spectrum_waitForState(spectrum* ctx, uint32_t wantedState, int32
 double spectrum_getThroughput(spectrum* ctx, uint8_t radioNumber, int durationMs);
 double spectrum_getProvidedThroughput(spectrum* ctx, uint8_t radioNumber, int durationMs);
 void spectrum_getStatusMessage(spectrum* ctx, spectrum_eror_t error, char* output, uint32_t len);
+
+}
 
 #endif /* SPECTRUM_H_ */
