@@ -49,7 +49,7 @@ learning = _learning;
     usrp_tx->set_tx_subdev_spec(std::string("A:B")); 
     std::cout << boost::format("Using Device: %s") % usrp_tx->get_pp_string() << std::endl;
     usrp_rx = uhd::usrp::multi_usrp::make(std::string("master_clock_rate=20e6"));
-    usrp_rx->set_rx_subdev_spec(std::string("A:B"));
+    usrp_rx->set_rx_subdev_spec(std::string("A:A"));
     
        // std::cout << boost::format("number of channels ::: %s") % usrp_rx->get_rx_num_channels() << std::endl;
 
@@ -77,7 +77,8 @@ learning = _learning;
     //set_rx_antenna("J1");
 
     // setting up the energy detector (number of averages,window step size,fftsize)
-    e_detec.set_parameters(50, num_channels, 512, 0.5);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
+    //e_detec.set_parameters(50, num_channels, 512);
+    e_detec.set_parameters(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
 }
 
 
@@ -219,7 +220,7 @@ void OfdmTransceiver::random_transmit_function(void)
             // get random channel
             //int num = rand() % channels_.size();
            // reconfigure_usrp(num);
-            for (int i = 0; i < 2; i++)
+            //for (int i = 0; i < 2; i++)
                 transmit_packet();
 
                     if(yes){
@@ -481,25 +482,25 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
     int numfree = 0;
     bool proceed = false;
    // std::vector<int> notfree;
-    std::vector<float> ChPowersdB = ChPowers;
-    for(float &f : ChPowersdB)
-        f = 10*log10(f);
-    std::cout << "noise floor: [" << 10*log10(e_detec.noise_filter->ch_noise_floor(0)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(1)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(2)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(3)) << "]\n";
-    std::cout << "sig energy: [" << 10*log10(e_detec.noise_filter->ch_sig_power(0)) << ", " << 10*log10(e_detec.noise_filter->ch_sig_power(1)) << ", " << 10*log10(e_detec.noise_filter->ch_sig_power(2)) << ", " << 10*log10(e_detec.noise_filter->ch_sig_power(3)) << "]\n";
-    std::cout << "cur energy: [" << ChPowersdB[0] << "," << ChPowersdB[1] << "," << ChPowersdB[2] << "," << ChPowersdB[3] << "], cur ch: " <<  current_channel << "\n";
-    e_detec.noise_filter->min_limit = -65;//1e-9;
-    ChPowers[current_channel] = e_detec.noise_filter->min_limit - 1;
-    e_detec.noise_filter->filter(ChPowersdB);
+    //ChPowers[current_channel] = 0;
+    //std::cout << "noise floor: [" << e_detec.noise_filter->ch_noise_floor(0) << ", " << e_detec.noise_filter->ch_noise_floor(1) << ", " << e_detec.noise_filter->ch_noise_floor(2) << ", " << e_detec.noise_filter->ch_noise_floor(3) << "]\n";
+    //std::cout << "noise floor: [" << 10*log10(e_detec.noise_filter->ch_noise_floor(0)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(1)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(2)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(3)) << "]\n";
+    //std::cout << "cur energy: [" << 10*log10(ChPowers[0]) << "," << 10*log10(ChPowers[1]) << "," << 10*log10(ChPowers[2]) << "," << 10*log10(ChPowers[3]) << "], cur ch: " <<  current_channel << "\n";
+    e_detec.noise_filter->filter(ChPowers);
     for(int i = 0; i < ChPowers.size();i++)
     {
         if(ChPowers[i] == 0)
             numfree++;
-        //else if(i == current_channel)
-        //    proceed =true;
+        else if(i == current_channel)
+            proceed =true;
         
     }
-    if((numfree == (ChPowers.size())))// && (proceed))
+    if((numfree == ChPowers.size() - 1) && (proceed)) //|| numfree == ChPowers.size())
     {
+        //std::cout << "cur energy: [" << 10*log10(ChPowers[0]) << "," << 10*log10(ChPowers[1]) << "," << 10*log10(ChPowers[2]) << "," << 10*log10(ChPowers[3]) << "], cur ch: " <<  current_channel << "\n";
+        //std::cout << "noise floor: [" << e_detec.noise_filter->ch_noise_floor(0) << ", " << e_detec.noise_filter->ch_noise_floor(1) << ", " << e_detec.noise_filter->ch_noise_floor(2) << ", " << e_detec.noise_filter->ch_noise_floor(3) << "]\n";
+        //std::cout << "sig energy: [" << e_detec.noise_filter->ch_sig_power(0) << ", " << e_detec.noise_filter->ch_sig_power(1) << ", " << e_detec.noise_filter->ch_sig_power(2) << ", " << e_detec.noise_filter->ch_sig_power(3) << "]\n";
+    
         std::cout << "CHAAAAAAAAAAANGE PLACES!" << std::endl;
 
         
@@ -513,7 +514,7 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
                 
                 
         
-             //reconfigure_usrp(channel_map[current_channel]);
+        reconfigure_usrp(channel_map[current_channel]);
            // find_next_channel(); LUT based on Jonathans learning;
     }
     

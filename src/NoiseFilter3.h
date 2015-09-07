@@ -5,20 +5,20 @@
  * Created on August 31, 2015, 5:05 PM
  */
 
-#ifndef NOISEFILTER2_H
-#define	NOISEFILTER2_H
+#ifndef NOISEFILTER3_H
+#define	NOISEFILTER3_H
 
-#include "KHMO.h"
+#include "KHMO2.h"
 #include "stats.h"
 #include <boost/format.hpp>
 #include <sstream>
 
-class NoiseFilter2 
+class NoiseFilter3 
 {
 public:
-    NoiseFilter2(uint16_t _Nch, float _alpha = 0.001, float _thres = 8) : Nch(_Nch), min_limit(1e-9) // thres is in dB!
+    NoiseFilter3(uint16_t _Nch, float _alpha = 0.001, float _thres = 7) : Nch(_Nch), min_limit(1e-9) // thres is in dB!
     {
-        clusterizers.assign(Nch, KHMO(2, 3, _alpha, pow(10,_thres/10)));
+        clusterizers.assign(Nch, KHMO2(2, 2, _alpha, _thres));
         noise_hits_stats.resize(Nch,rate_stats());
     }
     void filter(std::vector<float> &ch_pwr)
@@ -27,8 +27,11 @@ public:
         size_t clus_idx, noise_idx;
         for (register uint16_t i = 0; i < Nch; i++)
         {
+            double dB_val = 10*log10(ch_pwr[i]);
             if(ch_pwr[i] > min_limit)               // cut off the NaN crap to not skew average
-                clus_idx = clusterizers[i].push(ch_pwr[i]);
+            {
+                clus_idx = clusterizers[i].push(dB_val);
+            }
             else
             {
                 ch_pwr[i] = 0;
@@ -36,6 +39,8 @@ public:
             }
             
             noise_idx = ch_noise_floor_idx(i);
+            //if(clus_idx == noise_idx && 7 < (dB_val - ch_noise_floor(i)))
+            //    clus_idx = (clus_idx + 1) % 2;
             
             if(clus_idx == noise_idx)    // if the new sample is just noise
             {
@@ -74,21 +79,21 @@ public:
     inline float ch_noise_floor(uint16_t idx) 
     {
         return (clusterizers[idx].clusters.size() > 0) ? std::min_element(clusterizers[idx].clusters.begin(), clusterizers[idx].clusters.end(), 
-        [](const KHMO::KHMOCluster &a, const KHMO::KHMOCluster &b){
+        [](const KHMO2::KHMOCluster &a, const KHMO2::KHMOCluster &b){
             return a.mk < b.mk;
-        })->mk : 0.0;
+        })->mk : -90;
     }
     inline float ch_sig_power(uint16_t idx) 
     {
         return (clusterizers[idx].clusters.size() > 0) ? std::max_element(clusterizers[idx].clusters.begin(), clusterizers[idx].clusters.end(), 
-        [](const KHMO::KHMOCluster &a, const KHMO::KHMOCluster &b){
+        [](const KHMO2::KHMOCluster &a, const KHMO2::KHMOCluster &b){
             return a.mk < b.mk;
-        })->mk : 0.0;
+        })->mk : -90;
     }
     inline int ch_noise_floor_idx(uint16_t idx)
     {
         return (clusterizers[idx].clusters.size() > 0) ? std::distance(clusterizers[idx].clusters.begin(), std::min_element(clusterizers[idx].clusters.begin(), clusterizers[idx].clusters.end(), 
-        [](const KHMO::KHMOCluster &a, const KHMO::KHMOCluster &b){
+        [](const KHMO2::KHMOCluster &a, const KHMO2::KHMOCluster &b){
             return a.mk < b.mk;
         })) : -1;
     }
@@ -106,7 +111,7 @@ public:
         return ss.str();
     }
     
-    std::vector<KHMO> clusterizers;
+    std::vector<KHMO2> clusterizers;
     double min_limit;
 private:
     uint16_t Nch;
@@ -114,4 +119,4 @@ private:
     std::vector<rate_stats> noise_hits_stats;
 };
 
-#endif	/* NOISEFILTER2_H */
+#endif	/* NOISEFILTER3_H */

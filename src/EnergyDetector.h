@@ -9,6 +9,7 @@
 #include <boost/math/distributions/poisson.hpp>
 #include <sstream>
 #include "NoiseFilter2.h"
+#include "NoiseFilter3.h"
 
 
 typedef std::complex<float> Cplx;
@@ -36,7 +37,7 @@ class EnergyDetector {
     
     
 public:
-    NoiseFilter2 *noise_filter;
+    NoiseFilter *noise_filter;
     Cplx* fftBins;                       ///< Allocated using fftwf_malloc (SIMD aligned)
     uint16_t nBins;
     

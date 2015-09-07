@@ -5,14 +5,14 @@
  * Created on August 31, 2015, 11:46 AM
  */
 
-#ifndef KHMO_H
-#define	KHMO_H
+#ifndef KHMO2_H
+#define	KHMO2_H
 
 #include <vector>
 #include <cmath>
 #include <iostream>
 
-class KHMO
+class KHMO2
 {
 private:
 
@@ -37,7 +37,7 @@ public:
         }
     };
 
-    KHMO(int _K, int _p, double _alpha = 0.01, double _dist_thres = 0) : p(_p), K(_K), dist(K), dist_thres(_dist_thres)
+    KHMO2(int _K, int _p, double _alpha = 0.01, double _dist_thres = 0) : p(_p), K(_K), dist(K), dist_thres(_dist_thres)
     {
         clusters.reserve(_K);
         pK_precomputed = (double) p*K;
@@ -55,7 +55,7 @@ public:
                 k_min = k;
         }
         if (clusters.size() < K && (clusters.size() == 0 || 
-                ((x_i > clusters[k_min].mk) ? x_i > dist_thres * clusters[k_min].mk : dist_thres * x_i < clusters[k_min].mk)))            // Initializes clusters by order of arrival. THey have to be sufficiently distant from each other
+                ((x_i > clusters[k_min].mk) ? x_i > (dist_thres + clusters[k_min].mk) : (dist_thres + x_i) < clusters[k_min].mk)))            // Initializes clusters by order of arrival. THey have to be sufficiently distant from each other
         {
             clusters.push_back(x_i);
             k_min = clusters.size() - 1;
@@ -106,4 +106,4 @@ public:
     std::vector<double> dist;
 };
 
-#endif	/* KHMO_H */
+#endif	/* KHMO2_H */

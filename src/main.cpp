@@ -60,8 +60,8 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("channel_bandwidth", po::value<double>(&channel_bandwidth)->default_value(5000e3), "Bandwidth of each individual channel")
         ("channel_rate", po::value<double>(&channel_rate)->default_value(5000e3), "Transmission rate in each individual channel")
         ("freq",po::value<double>(&freq)->default_value(2412500000),"Sets center frequency")//2.4475e9   2412500000
-        ("rxgain",po::value<double>(&rx_gain)->default_value(40),"Sets UHD receive gain")
-        ("txgain_soft",po::value<double>(&tx_gain_soft)->default_value(-20),"Sets software transmit gain")
+        ("rxgain",po::value<double>(&rx_gain)->default_value(50),"Sets UHD receive gain")
+        ("txgain_soft",po::value<double>(&tx_gain_soft)->default_value(-28),"Sets software transmit gain")
         ("txgain_uhd",po::value<double>(&tx_gain_uhd)->default_value(82),"Sets UHD transmit gain")
         ("txbufsize",po::value<size_t>(&tx_buffer_size)->default_value(10),"How many frames in Tx buffer")
         ("threshold", po::value<std::string>(&threshold)->default_value("-75"), "RSSI threshold in dBm")

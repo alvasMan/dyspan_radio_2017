@@ -60,8 +60,8 @@ void EnergyDetector::set_parameters(uint16_t _avg_win_size, uint16_t num_channel
     {
        a = i/(nBins/Nch);
 
-        if (i > half_off_ch+((nBins/Nch)*a)  && i < ((nBins/Nch)-half_off_ch)+((nBins/Nch)*a))
-        bin_mask[i] = a;
+        if (i >= half_off_ch+((nBins/Nch)*a)  && i < ((nBins/Nch)-half_off_ch)+((nBins/Nch)*a))
+        bin_mask[i] = (a + Nch/2) % Nch;
 
     }
     
@@ -156,7 +156,7 @@ void EnergyDetector::setup() {
 
 
     // check: http://www.boost.org/doc/libs/1_35_0/libs/math/doc/sf_and_dist/html/math_toolkit/dist/dist_ref/nmp.html#math.dist.quantile
-    noise_filter = new NoiseFilter2(Nch, 0.0001); //new NoiseFilter(Nch, thr)
+    noise_filter = new NoiseFilter(Nch, thr);//new NoiseFilter3(Nch, 0.001); //new NoiseFilter(Nch, thr)
 }
 
 void EnergyDetector::destroy() {
