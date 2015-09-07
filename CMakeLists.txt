@@ -15,21 +15,15 @@ LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules")
 INCLUDE(CheckIncludeFileCXX)
 
 
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11" )
+########################################################################
+# Set up compiler flags for debug and release builds
+########################################################################
 
-########################################################################
-# Set up compiler flags for producing vectorized code if possible
-########################################################################
-#SET(VECTORIZATION 0)
-IF(VECTORIZATION)
-  IF( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
-    MESSAGE(STATUS "Using experimental compiler flags.")
-      SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3 -pipe -march=native -mtune=native -ffast-math -funsafe-math-optimizations -frename-registers -funroll-loops -ftree-vectorize -ftree-vectorizer-verbose=1 -Wall" )
-  ELSE()
-    MESSAGE(STATUS "Vectorization only supported on x86_64 architecture. Using default flags.")
-  ENDIF( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" ) 
-ENDIF()
+set(CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}")
+SET(CMAKE_CXX_FLAGS_DEBUG "-O0 -g" )
+SET(CMAKE_CXX_FLAGS_RELEASE "-O2 -pipe -march=native -mtune=native -ffast-math -std=c++11" )
 #-std=c++11 -O3 -mavx2
+#-O3 -pipe -march=native -mtune=native -ffast-math -funsafe-math-optimizations -frename-registers -funroll-loops -ftree-vectorize -ftree-vectorizer-verbose=1 -Wall
 
 ########################################################################
 # Setup UHD/Liquid/FFTW
@@ -72,7 +66,7 @@ SET(Boost_ADDITIONAL_VERSIONS
 FIND_PACKAGE(Boost 1.46 COMPONENTS ${BOOST_REQUIRED_COMPONENTS})
 
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
-LINK_DIRECTORIES(${Boost_LIBRARY_DIRS})
+LINK_DIRECTORIES(${Boost_LIBRARY_DIRS} ${CMAKE_SOURCE_DIR}/clientlib)
 
 MESSAGE(STATUS "Boost include directories: ${Boost_INCLUDE_DIRS}")
 MESSAGE(STATUS "Boost library directories: ${Boost_LIBRARY_DIRS}")
@@ -80,4 +74,3 @@ MESSAGE(STATUS "Boost libraries: ${Boost_LIBRARIES}")
 
 # Adding source directory
 ADD_SUBDIRECTORY(src)
-

@@ -12,9 +12,13 @@
 #include <boost/ptr_container/ptr_vector.hpp>
 #include "aligned_allocator.h"
 #include "channels.h"
+#include "packetLib.h"
 
 typedef std::vector<std::complex<float> > CplxFVec;
 typedef std::vector<std::complex<float>, aligned_allocator<__m128, sizeof(__m128)> > ACplxFVec;
+
+#define MAX_PAYLOAD_LEN 1500
+#define CHALLENGE_DB_IP "127.0.0.1"
 
 class DyspanRadio
 {
@@ -26,7 +30,9 @@ public:
                 unsigned int M,
                 unsigned int cp_len,
                 unsigned int taper_len,
-                bool debug) :
+                bool debug,
+                bool use_challenge_db) :
+        radio_id_(-2),
         num_channels_(num_channels),
         f_center_(f_center),
         channel_bandwidth_(channel_bandwidth),
@@ -34,7 +40,8 @@ public:
         M_(M),
         cp_len_(cp_len),
         taper_len_(taper_len),
-        debug_(debug)
+        debug_(debug),
+        use_challenge_db_(use_challenge_db)
     {
         // validate input
         if (num_channels < 1) {
@@ -98,6 +105,9 @@ protected:
     double channel_rate_;
     std::vector< ChannelConfig > channels_;
     bool debug_;
+    bool use_challenge_db_;
+    int radio_id_;
+    char error_buffer[32];          // buffer to hold error messages from challenge server
 
     // OFDM properties
     unsigned int M_;                 // number of subcarriers
@@ -105,7 +115,6 @@ protected:
     unsigned int taper_len_;         // taper length
 
     boost::ptr_vector<boost::thread> threads_;
-
 };
 
 #endif // DYPANRADIO_H

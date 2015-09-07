@@ -66,6 +66,28 @@ int multichannelrx::callback(unsigned char *  _header,
                     last_seq_no_ = seq_no;
                 }
                 rx_frames_++;
+
+                // pass received frame to challenge DB
+                if (use_challenge_db_) {
+                    unsigned char payload[MAX_PAYLOAD_LEN];
+                    spectrum_eror_t ret = spectrum_putPacket(rx_, payload, ret);
+                    spectrum_errorToText(rx_, ret, error_buffer, sizeof(error_buffer));
+                    std::cout << boost::format("RX putPacket: %s") % error_buffer << std::endl;
+                    if (ret < 0) {
+                        throw std::runtime_error("Couldn't connect to challenge database");
+                    }
+
+                    // output performance for every n-th received frame
+                    if (seq_no % num_channels_ == 0) {
+                        std::cout << boost::format("PU: %.02f bps / %.02f bps") %
+                                     spectrum_getThroughput(rx_, 0, -1) %
+                                     spectrum_getProvidedThroughput(rx_, 0, -1) << std::endl;
+
+                        std::cout << boost::format("SU: %.02f bps / %.02f bps") %
+                                     spectrum_getThroughput(rx_, radio_id_, -1) %
+                                     spectrum_getProvidedThroughput(rx_, radio_id_, -1) << std::endl;
+                    }
+                }
             } else {
                 std::cout << boost::format("PAYLOAD INVALID");
             }
@@ -92,8 +114,9 @@ multichannelrx::multichannelrx(const std::string args,
                unsigned int    cp_len,       // OFDM: cyclic prefix length
                unsigned int    taper_len,    // OFDM: taper prefix length
                unsigned char * p,            // OFDM: subcarrier allocation
-               bool debug) :
-    DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len, debug),
+               const bool debug,
+               const bool use_challenge_db) :
+    DyspanRadio(num_channels, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len, debug, use_challenge_db),
     rx_frames_(0),
     last_seq_no_(0),
     lost_frames_(0)
@@ -121,6 +144,26 @@ multichannelrx::multichannelrx(const std::string args,
     }
 
     Reset();
+
+    if (use_challenge_db_) {
+        // create and connect to challenge database
+        rx_ = spectrum_init(0);
+        spectrum_eror_t ret = spectrum_connect(rx_, CHALLENGE_DB_IP, 5002, 0, 0);
+        spectrum_errorToText(rx_, ret, error_buffer, sizeof(error_buffer));
+        std::cout << boost::format("RX connect: %s") % error_buffer << std::endl;
+        if (ret < 0) {
+            throw std::runtime_error("Couldn't connect to challenge database");
+        }
+
+        // get radio number
+        radio_id_ = spectrum_getRadioNumber(rx_);
+        std::cout << boost::format("RX radio number: %d") % radio_id_ << std::endl;
+
+        // wait for the start of stage 3 (here you get penalized for interference).
+        // The testing database starts in this state so this will instantly return.
+        spectrum_waitForState(rx_, 3, -1);
+        std::cout << boost::format("Stage 3 has started.") << std::endl;
+    }
 
     // create a usrp device
     std::cout << std::endl;
@@ -207,8 +250,7 @@ multichannelrx::multichannelrx(const std::string args,
 multichannelrx::~multichannelrx()
 {
     // destroy frame synchronizers
-    unsigned int i;
-    for (i=0; i<num_channels_; i++) {
+    for (int i = 0; i < num_channels_; i++) {
 #if BST_DEBUG
         char filename[64];
         sprintf(filename,"framesync_channel%u.m", i);
@@ -221,6 +263,10 @@ multichannelrx::~multichannelrx()
         free(userdata[i]);
     free(userdata);
     free(callbacks);
+
+    // disconnect and destroy handle to challenge DB
+    if (rx_)
+        spectrum_delete(rx_);
 
     uint32_t total_frames = rx_frames_ + lost_frames_;
     std::cout << "Received frames: " << rx_frames_ << std::endl;

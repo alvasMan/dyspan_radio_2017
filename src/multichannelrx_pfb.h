@@ -31,7 +31,8 @@ public:
                    unsigned int    cp_len,       // OFDM: cyclic prefix length
                    unsigned int    taper_len,    // OFDM: taper prefix length
                    unsigned char * p,            // OFDM: subcarrier allocation
-                   bool debug);
+                   bool debug,
+                   bool use_challenge_db);
 
     // destructor
     ~multichannelrx_pfb();

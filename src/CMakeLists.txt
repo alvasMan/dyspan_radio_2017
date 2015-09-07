@@ -17,8 +17,9 @@ file(GLOB headers
     EnergyDetector.h
     channels.h
     Buffer.h
-    buffer_factory.h)
+    buffer_factory.h
+    packetLib.h)
 
 ADD_EXECUTABLE(dyspanradio ${sources} ${headers})
-
-TARGET_LINK_LIBRARIES(dyspanradio ${FFTW3F_LIBRARIES} ${UHD_LIBRARIES} ${Boost_LIBRARIES} ${LIQUIDDSP_LIBRARIES})
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,--unresolved-symbols=ignore-in-object-files")
+TARGET_LINK_LIBRARIES(dyspanradio packet ${FFTW3F_LIBRARIES} ${UHD_LIBRARIES} ${Boost_LIBRARIES} ${LIQUIDDSP_LIBRARIES})

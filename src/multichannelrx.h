@@ -37,7 +37,8 @@ public:
                    unsigned int    cp_len,       // OFDM: cyclic prefix length
                    unsigned int    taper_len,    // OFDM: taper prefix length
                    unsigned char * p,            // OFDM: subcarrier allocation
-                   bool debug);
+                   const bool debug,
+                   const bool use_challenge_db);
 
     // destructor
     ~multichannelrx();
@@ -78,6 +79,7 @@ private:
     ofdmflexframesync * framesync;  // array of frame generator objects
     void ** userdata;               // array of userdata pointers
     framesync_callback * callbacks; // array of callback functions
+    spectrum* rx_;                  // handle to the challenge database
 
     uhd::usrp::multi_usrp::sptr usrp_rx;
     uhd::rx_streamer::sptr rx_streamer_;

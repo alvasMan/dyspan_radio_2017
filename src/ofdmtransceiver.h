@@ -4,11 +4,8 @@
 // This class is based on liquid-usrp's ofdmtxrx class.
 
 #include <complex>
-
-
 #include <boost/ptr_container/ptr_deque.hpp>
 #include <liquid/liquid.h>
-
 #include "dyspanradio.h"
 #include "Buffer.h"
 #include "channels.h"
@@ -26,7 +23,8 @@ public:
                     const float tx_gain_soft,
                     const float tx_gain_uhd,
                     const float rx_gain_uhd,
-                    const bool debug);
+                    const bool debug,
+                    const bool use_challenge_db);
 
     // destructor
     ~OfdmTransceiver();
@@ -65,10 +63,14 @@ private:
     ofdmflexframegen fg;            // frame generator object
     std::complex<float> * fgbuffer; // frame generator output buffer [size: M + cp_len x 1]
     //boost::scoped_ptr<CplxFVec> fgbuffer; // TODO: Convert to smart ptr
+    spectrum* tx_;                  // handle to the challenge database
+    int payload_len_;               // the actual payload length used for transmission
 
     unsigned int fgbuffer_len;      // length of frame generator buffer (is the size of a single OFDM symbol)
     float tx_gain;                  // soft transmit gain (linear)
     uint32_t seq_no_;
+
+
 
     //boost::ptr_deque<CplxFVec> frame_buffer;
     Buffer<boost::shared_ptr<CplxFVec> > frame_buffer;
