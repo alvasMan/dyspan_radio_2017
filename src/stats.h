@@ -121,17 +121,38 @@ public:
         if(idx >= size()) idx = 0;
     }
     inline T get_avg() { return pwr_sum / (float)size(); }
-    inline T get_refreshed_avg() {
-        return std::accumulate(buf.begin(), buf.end(), 0.0) / (float)size();
-    }
-    inline void refresh() {
-        T old_pwr_sum = pwr_sum;
+    inline void refresh() 
+    {
         pwr_sum = std::accumulate(buf.begin(), buf.end(), 0.0);
-        T test = std::abs(old_pwr_sum - pwr_sum)/pwr_sum;
-        if(test < 0.001) refresh_period += buf.size();
-        else if(test > 0.1)  refresh_period = buf.size();
+        //T old_pwr_sum = pwr_sum;
+        //pwr_sum = std::accumulate(buf.begin(), buf.end(), 0.0);
+        //T test = std::abs(old_pwr_sum - pwr_sum)/pwr_sum;
+        //if(test < 0.001) refresh_period += buf.size();
+        //else if(test > 0.1)  refresh_period = buf.size();
         count_refresh = 0;
     }
+};
+
+class MovingWindowMax {
+public:
+    MovingWindowMax(uint32_t size) {resize(size);}
+    inline void resize(uint32_t size) {buf.resize(size, 0); max_val_idx = 0; idx = 0;}
+    inline uint32_t size() {return buf.size();}
+    inline void push(double val) 
+    {
+        buf[idx] = val;
+        if(buf[max_val_idx] < val)
+            max_val_idx = idx;
+        if(++idx >= size()) idx = 0;
+    }
+    inline double max()
+    {
+        return buf[max_val_idx];
+    }
+private:
+    std::vector<double> buf;
+    uint32_t idx;
+    uint32_t max_val_idx;
 };
 
 #endif	/* STATS_H */

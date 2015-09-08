@@ -11,8 +11,8 @@
 #include <uhd/usrp/multi_usrp.hpp>
 #include "Buffer.h"
 #include "channels.h"
+#include "EnergyDetector2.h"
 #include "EnergyDetector.h"
-#include "NoiseFilter2.h"
 
 typedef std::vector<std::complex<float> > CplxFVec;
 
@@ -101,7 +101,7 @@ private:
     Buffer<boost::shared_ptr<CplxFVec> > frame_buffer;
 
     // receiver objects
-    EnergyDetector e_detec;
+    EnergyDetector2 e_detec;
     uhd::time_spec_t timestamp_;
 
     // member functions

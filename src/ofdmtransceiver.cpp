@@ -78,7 +78,7 @@ learning = _learning;
 
     // setting up the energy detector (number of averages,window step size,fftsize)
     //e_detec.set_parameters(50, num_channels, 512);
-    e_detec.set_parameters(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
+    e_detec.set_parameters(16, 512, 4, 0.4, 0.4);//(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
 }
 
 
@@ -350,7 +350,7 @@ void OfdmTransceiver::receive_function(void)
     //bool c = false;
     bool have_tdwell = false;
     double t_dwell;
-        DwellTimeEstimator Dwell(4, 0.5, 0.001);
+    DwellTimeEstimator Dwell(4, 0.5, 0.001);
     double previous_dwelltime =  0.5;
     try {
 
@@ -390,7 +390,7 @@ void OfdmTransceiver::receive_function(void)
             double tstamp;
             std::vector<float> ch_power;
             e_detec.pop_result(tstamp, ch_power);// ch_power is your sensing results, free channels will appear as a 0
-            process_sensing(ch_power);
+           process_sensing(ch_power);
             
             if(learning && !have_tdwell)
             {
@@ -480,22 +480,18 @@ void OfdmTransceiver::receive_function(void)
 void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
 {
     int numfree = 0;
-    bool proceed = false;
-   // std::vector<int> notfree;
-    //ChPowers[current_channel] = 0;
+    // std::vector<int> notfree;
+    ChPowers[current_channel] = 0;
     //std::cout << "noise floor: [" << e_detec.noise_filter->ch_noise_floor(0) << ", " << e_detec.noise_filter->ch_noise_floor(1) << ", " << e_detec.noise_filter->ch_noise_floor(2) << ", " << e_detec.noise_filter->ch_noise_floor(3) << "]\n";
     //std::cout << "noise floor: [" << 10*log10(e_detec.noise_filter->ch_noise_floor(0)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(1)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(2)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(3)) << "]\n";
     //std::cout << "cur energy: [" << 10*log10(ChPowers[0]) << "," << 10*log10(ChPowers[1]) << "," << 10*log10(ChPowers[2]) << "," << 10*log10(ChPowers[3]) << "], cur ch: " <<  current_channel << "\n";
     e_detec.noise_filter->filter(ChPowers);
-    for(int i = 0; i < ChPowers.size();i++)
+    for(int i = 0; i < ChPowers.size(); i++)
     {
         if(ChPowers[i] == 0)
             numfree++;
-        else if(i == current_channel)
-            proceed =true;
-        
     }
-    if((numfree == ChPowers.size() - 1) && (proceed)) //|| numfree == ChPowers.size())
+    if(numfree == ChPowers.size()) //|| numfree == ChPowers.size())
     {
         //std::cout << "cur energy: [" << 10*log10(ChPowers[0]) << "," << 10*log10(ChPowers[1]) << "," << 10*log10(ChPowers[2]) << "," << 10*log10(ChPowers[3]) << "], cur ch: " <<  current_channel << "\n";
         //std::cout << "noise floor: [" << e_detec.noise_filter->ch_noise_floor(0) << ", " << e_detec.noise_filter->ch_noise_floor(1) << ", " << e_detec.noise_filter->ch_noise_floor(2) << ", " << e_detec.noise_filter->ch_noise_floor(3) << "]\n";

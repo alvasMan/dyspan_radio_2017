@@ -70,9 +70,9 @@ public:
     double estimated_noise_floor()
     {
         double sum = 0;
-        for(const auto&ch : clusterizers)
+        for(int i = 0; i < clusterizers.size(); ++i)
         {
-            sum += std::min(ch.clusters[0].mk, ch.clusters[1].mk);
+            sum += ch_noise_floor(i);
         }
         return sum / Nch;
     }
