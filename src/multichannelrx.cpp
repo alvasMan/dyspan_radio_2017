@@ -12,8 +12,6 @@
 
 #define BST_DEBUG 0
 
-static bool verbose = true;
-
 // global callback function
 namespace multichannelrxdetail
 {
@@ -46,55 +44,60 @@ int multichannelrx::callback(unsigned char *  _header,
 {
     CustomUserdata *data = static_cast<CustomUserdata*>(_userdata);
 
-    if (verbose) {
+
+    if (debug_)
         std::cout << boost::format("***** CH %d rssi=%7.2fdB evm=%7.2fdB, ") % data->channel % _stats.rssi % _stats.evm;
-        if (_header_valid) {
-            uint32_t seq_no = (_header[0] << 24 | _header[1] << 16 | _header[2] << 8 | _header[3]);
+    if (_header_valid) {
+        uint32_t seq_no = (_header[0] << 24 | _header[1] << 16 | _header[2] << 8 | _header[3]);
+        if (debug_)
             std::cout << boost::format("seqno: %6u (%6u lost), ") % seq_no % lost_frames_;
 
-            if (_payload_valid) {
-                std::cout << boost::format("payload size: %d") % _payload_len;
+        if (_payload_valid) {
+            if (debug_)
+                std::cout << boost::format("payload size: %d") % _payload_len << std::endl;
 
-                // do the stats ..
-                boost::lock_guard<boost::mutex> lock(mutex_);
-                if (last_seq_no_ == 0) {
-                    std::cout << boost::format("Setting first seqno: %6u") % seq_no << std::endl;
-                    last_seq_no_ = seq_no;
-                } else {
-                    // count lost frames
-                    lost_frames_ += (seq_no - last_seq_no_ - 1);
-                    last_seq_no_ = seq_no;
-                }
-                rx_frames_++;
-
-                // pass received frame to challenge DB
-                if (use_challenge_db_) {
-                    unsigned char payload[MAX_PAYLOAD_LEN];
-                    spectrum_eror_t ret = spectrum_putPacket(rx_, payload, ret);
-                    spectrum_errorToText(rx_, ret, error_buffer, sizeof(error_buffer));
-                    std::cout << boost::format("RX putPacket: %s") % error_buffer << std::endl;
-                    if (ret < 0) {
-                        throw std::runtime_error("Couldn't connect to challenge database");
-                    }
-
-                    // output performance for every n-th received frame
-                    if (seq_no % num_channels_ == 0) {
-                        std::cout << boost::format("PU: %.02f bps / %.02f bps") %
-                                     spectrum_getThroughput(rx_, 0, -1) %
-                                     spectrum_getProvidedThroughput(rx_, 0, -1) << std::endl;
-
-                        std::cout << boost::format("SU: %.02f bps / %.02f bps") %
-                                     spectrum_getThroughput(rx_, radio_id_, -1) %
-                                     spectrum_getProvidedThroughput(rx_, radio_id_, -1) << std::endl;
-                    }
-                }
+            // do the stats ..
+            boost::lock_guard<boost::mutex> lock(mutex_);
+            if (last_seq_no_ == 0) {
+                std::cout << boost::format("Setting first seqno: %6u") % seq_no << std::endl;
+                last_seq_no_ = seq_no;
             } else {
-                std::cout << boost::format("PAYLOAD INVALID");
+                // count lost frames
+                lost_frames_ += (seq_no - last_seq_no_ - 1);
+                last_seq_no_ = seq_no;
+            }
+            rx_frames_++;
+
+            // pass received frame to challenge DB
+            if (use_challenge_db_) {
+                assert(_payload_len <= 1500); // maximum size of the client libarary
+                spectrum_eror_t ret = spectrum_putPacket(rx_, _payload, _payload_len);
+                spectrum_errorToText(rx_, ret, error_buffer, sizeof(error_buffer));
+                if (ret < 0) {
+                    std::cout << boost::format("RX putPacket: %s") % error_buffer << std::endl;
+                    throw std::runtime_error("Couldn't connect to challenge database");
+                }
+
+                // output performance for every n-th received frame
+                if (debug_ && (seq_no % num_channels_ == 0)) {
+                    std::cout << boost::format("PU: %.02f bps / %.02f bps") %
+                                 spectrum_getThroughput(rx_, 0, -1) %
+                                 spectrum_getProvidedThroughput(rx_, 0, -1) << std::endl;
+
+                    double throughput = spectrum_getThroughput(rx_, radio_id_, -1) / 1e6;
+                    double provided = spectrum_getProvidedThroughput(rx_, radio_id_, -1) / 1e6;
+                    double ratio = 100 * throughput / provided;
+                    std::cout << boost::format("SU: %.02f Mbps / %.02f Mbps (%.02f%%)") %
+                                 throughput %
+                                 provided %
+                                 ratio << std::endl;
+                }
             }
         } else {
-            std::cout << boost::format("HEADER INVALID");
+            std::cout << boost::format("PAYLOAD INVALID") << std::endl;;
         }
-        std::cout << std::endl;
+    } else {
+        std::cout << boost::format("HEADER INVALID") << std::endl;;
     }
     return 0;
 }
@@ -371,10 +374,11 @@ void multichannelrx::receive_thread()
                                                  ) % md.error_code));
             }
 
+#if 0
             if (debug_) std::cout << boost::format(
                 "Received packet: %u samples, %u full secs, %f frac secs"
             ) % num_rx_samps % md.time_spec.get_full_secs() % md.time_spec.get_frac_secs() << std::endl;
-
+#endif
 
             // push buffer for each channel on the synchronizer thread's queue
             assert(sync_queue_.size() == buffs.size());
