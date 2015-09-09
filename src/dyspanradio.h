@@ -18,7 +18,7 @@ typedef std::vector<std::complex<float> > CplxFVec;
 typedef std::vector<std::complex<float>, aligned_allocator<__m128, sizeof(__m128)> > ACplxFVec;
 
 #define NUM_PADDING_NULL_SAMPLES 100
-#define MAX_PAYLOAD_LEN 1500
+#define MAX_PAYLOAD_LEN 2500
 #define CHALLENGE_DB_IP "127.0.0.1"
 
 class DyspanRadio

@@ -15,7 +15,7 @@
 OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels, const size_t numtrx, const double f_center, const double channel_bandwidth, const double channel_rate, const float tx_gain_soft, const float tx_gain_uhd, const float rx_gain_uhd, const bool debug, const bool use_challenge_db) :
     DyspanRadio(num_channels, numtrx, f_center, channel_bandwidth, channel_rate, 48, 6, 4, debug, use_challenge_db),
     seq_no_(0),
-    payload_len_(999)
+    payload_len_(1500)
 {
     assert(payload_len_ <= MAX_PAYLOAD_LEN);
 
@@ -57,7 +57,7 @@ OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels,
     if (use_challenge_db_) {
         // create and connect to challenge database
         tx_ = spectrum_init(0);
-        spectrum_eror_t ret = spectrum_connect(tx_, CHALLENGE_DB_IP, 5002, MAX_PAYLOAD_LEN, 1);
+        spectrum_eror_t ret = spectrum_connect(tx_, CHALLENGE_DB_IP, 5002, payload_len_, 1);
         spectrum_errorToText(tx_, ret, error_buffer, sizeof(error_buffer));
         std::cout << boost::format("TX connect: %s") % error_buffer << std::endl;
         if (ret < 0) {
@@ -105,6 +105,7 @@ void OfdmTransceiver::modulation_function(void)
     try {
         unsigned char header[8];
         unsigned char payload[MAX_PAYLOAD_LEN];
+        memset(payload, 0, MAX_PAYLOAD_LEN);
 
         while (true) {
             boost::this_thread::interruption_point();
@@ -118,25 +119,30 @@ void OfdmTransceiver::modulation_function(void)
             for (int i = 4; i < 8; i++)
                 header[i] = rand() & 0xff;
 
+            int actual_payload_len = payload_len_;
             if (use_challenge_db_) {
                 // get packet from database
+                // FIXME: payload_len must not be smaller than the size requested during init
                 spectrum_eror_t ret = spectrum_getPacket(tx_, payload, payload_len_, -1);
                 spectrum_errorToText(tx_, ret, error_buffer, sizeof(error_buffer));
-                std::cout << boost::format("Get packet: %s") % error_buffer << std::endl;
                 if (ret < 0) {
+                    std::cout << boost::format("Error: %s") % error_buffer << std::endl;
                     throw std::runtime_error("Couldn't connect to challenge database");
                 }
+                // getPacket returns actual length
+                actual_payload_len = ret;
             } else {
                 // fill with dummy payload
-                for (int i = 0; i < payload_len_; i++)
+                for (int i = 0; i < actual_payload_len; i++)
                     payload[i] = rand() & 0xff;
             }
 
             ofdmflexframegen_setprops(fg, &fgprops);
 
             // assemble frame
-            ofdmflexframegen_assemble(fg, header, payload, payload_len_);
-            if (debug_) ofdmflexframegen_print(fg);
+            ofdmflexframegen_assemble(fg, header, payload, actual_payload_len);
+            if (debug_)
+                ofdmflexframegen_print(fg);
 
             size_t num_symbols = ofdmflexframegen_getframelen(fg);
             const size_t frame_size = num_symbols * fgbuffer_len;
@@ -155,7 +161,7 @@ void OfdmTransceiver::modulation_function(void)
             frame_buffer.pushBack(usrp_buffer);
 
             if (debug_)
-                printf("tx packet id: %6u\n", seq_no_);
+                std::cout << boost::format("TX frame %6u (%d Bytes)") % seq_no_ % actual_payload_len << std::endl;
 
             seq_no_++;
         }
