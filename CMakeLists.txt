@@ -73,4 +73,5 @@ MESSAGE(STATUS "Boost library directories: ${Boost_LIBRARY_DIRS}")
 MESSAGE(STATUS "Boost libraries: ${Boost_LIBRARIES}")
 
 # Adding source directory
+ADD_SUBDIRECTORY(clientlib)
 ADD_SUBDIRECTORY(src)

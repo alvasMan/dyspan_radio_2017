@@ -20,6 +20,6 @@ file(GLOB headers
     buffer_factory.h
     packetLib.h)
 
+INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/clientlib)
 ADD_EXECUTABLE(dyspanradio ${sources} ${headers})
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,--unresolved-symbols=ignore-in-shared-libs")
-TARGET_LINK_LIBRARIES(dyspanradio packet ${FFTW3F_LIBRARIES} ${UHD_LIBRARIES} ${Boost_LIBRARIES} ${LIQUIDDSP_LIBRARIES})
+TARGET_LINK_LIBRARIES(dyspanradio clientlib ${FFTW3F_LIBRARIES} ${UHD_LIBRARIES} ${Boost_LIBRARIES} ${LIQUIDDSP_LIBRARIES})

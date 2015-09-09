@@ -12,7 +12,7 @@
 #include <boost/ptr_container/ptr_vector.hpp>
 #include "aligned_allocator.h"
 #include "channels.h"
-#include "packetLib.h"
+#include "spectrum.h"
 
 typedef std::vector<std::complex<float> > CplxFVec;
 typedef std::vector<std::complex<float>, aligned_allocator<__m128, sizeof(__m128)> > ACplxFVec;
