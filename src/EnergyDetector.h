@@ -7,96 +7,15 @@
 #include "fftw3.h"
 #include <boost/cstdint.hpp>
 #include <boost/math/distributions/poisson.hpp>
+#include <sstream>
+#include "NoiseFilter2.h"
+#include "NoiseFilter3.h"
 
 
 typedef std::complex<float> Cplx;
 typedef std::vector<std::complex<float> > CplxVec;
 typedef std::vector<std::complex<float> >::iterator CplxVecIt;
 typedef std::vector<std::complex<float> >::const_iterator CplxVecConstIt;
-
-struct val_stats {
-    double val_sum;
-    uint32_t val_count;
-    val_stats() {
-        reset();
-    }
-    inline void push(float val) {
-        val_sum += val;
-        ++val_count;
-    }
-    inline float get_avg() {
-        return val_sum / val_count;
-    }
-    inline void reset() {
-        val_sum = 0;
-        val_count = 0;
-    }
-};
-
-struct rate_stats {
-    uint32_t val_sum;
-    uint32_t val_count;
-    rate_stats() {
-        reset();
-    }
-    inline void reset() {
-        val_sum = 0;
-        val_count = 0;
-    }
-    inline void hit() {
-        ++val_sum;
-        ++val_count;
-    }
-    inline void miss() {
-        ++val_count;
-    }
-    inline float get_rate() {
-        return ((float)val_sum) / val_count;
-    }
-};
-
-template <typename T>
-class CircularBuffer {
-    std::vector<T> buf;
-    uint32_t idx;
-    uint32_t cur_size;
-
-public:
-    CircularBuffer() : idx(0) {}
-    CircularBuffer(uint32_t size) {set_size(size);}
-    inline void set_size(uint32_t size) {buf.resize(size); cur_size = 0; idx = 0;}
-    inline uint32_t size() {
-        return cur_size;
-    }
-    inline void push(const T &val) {
-        buf[idx++] = val;
-        if(idx >= buf.size()) idx = 0;
-        if(cur_size < buf.size()) ++cur_size;
-    }
-    inline const T& get_val(uint32_t pos) {
-        pos = (pos+idx) % size();
-        return buf[pos];
-    }
-};
-
-template <typename T>
-class MovingAverage {
-    std::vector<T> buf;
-    T pwr_sum;
-    uint32_t idx;
-
-public:
-    MovingAverage() {pwr_sum = 0; idx = 0;}
-    MovingAverage(uint32_t size) {set_size(size);}
-    inline void set_size(uint32_t size) {buf.resize(size, 0); pwr_sum = 0; idx = 0;}
-    inline uint32_t size() {return buf.size();}
-    inline void push(const T &val) {
-        pwr_sum += val - buf[idx];
-        buf[idx++] = val;
-        if(idx >= size()) idx = 0;
-    }
-    inline T get_avg() { return pwr_sum / (float)size(); }
-};
 
 class NoiseFilter;
 
@@ -112,7 +31,7 @@ class EnergyDetector {
     std::vector<float> tmp_ch_power;
     std::vector<float> ch_avg_coeff;
     std::vector<int> bin_mask;
-    std::vector<MovingAverage<float> > ch_pwr_ma;
+    std::vector<MovingAverage<double> > ch_pwr_ma;
 
     std::deque<std::pair<double, std::vector<float> > > results;
     
@@ -130,6 +49,7 @@ public:
 
     void set_parameters(uint16_t _avg_win_size, uint16_t num_channels, const std::vector<int> &_bin_mask);
     void set_parameters(uint16_t _avg_win_size, uint16_t num_channels, uint16_t fftsize);
+    void set_parameters(uint16_t _avg_win_size, uint16_t num_channels, uint16_t fftsize, double bin_mask_per);
     void setup();
     void destroy();
     void push_samples(const std::vector<Cplx> &vec);
@@ -160,24 +80,22 @@ struct sort_idx_op {
  */
 class NoiseFilter {
     uint16_t Nch;
-    sort_idx_op get_idx_sort_op;
-    std::vector<uint16_t> tmp_sort_idx;
-    val_stats noise_pwr_stats;
+    std::vector<exp_stats> noise_ch_pwr_stats;
     unsigned int min_noise_count;
     
     float thres;
+    bool noise_estim_mode;
     
 #ifdef NOISE_STATS
-    std::vector<val_stats> noise_ch_pwr_stats;
     std::vector<rate_stats> noise_hits_stats;
 #endif
     
     inline void filter_as_noise(std::vector<float> &ch_pwr, uint16_t idx) {
 #ifdef NOISE_STATS
-        noise_ch_pwr_stats[idx].push(ch_pwr[idx]);
         noise_hits_stats[idx].miss();
 #endif
-        noise_pwr_stats.push(ch_pwr[idx]);
+        if(noise_estim_mode == true && ch_pwr[idx] > 1e-10) // cut off some NaN crap you may get
+            noise_ch_pwr_stats[idx].push(ch_pwr[idx]);
         ch_pwr[idx] = 0;
     }
     
@@ -190,25 +108,45 @@ public:
             noise_hits_stats[i].reset();
         }
 #endif
-        noise_pwr_stats.reset();
     }
     void set_thres(float _thres) {
         thres = _thres;
         reset();
     }
     void filter(std::vector<float> &ch_pwr);
-    inline float estimated_noise_floor() {
-        return (noise_pwr_stats.val_count > 0) ? noise_pwr_stats.get_avg() : 0;
-    }
-#ifdef NOISE_STATS
+    float estimated_noise_floor();
     inline float ch_noise_floor(uint16_t idx) {
         return (noise_ch_pwr_stats[idx].val_count > 0) ? noise_ch_pwr_stats[idx].get_avg() : 0;
     }
+    void set_static_noise_floor(const std::vector<float> &noise_floor);
+#ifdef NOISE_STATS
     inline float ch_detec_rate(uint16_t idx) {
         return (noise_hits_stats[idx].val_count > 0) ? noise_hits_stats[idx].get_rate() : 0;
     }
+    std::string print_ch_pdetec() {
+        std::stringstream ss;
+        for (int i = 0; i < Nch; i++) {
+            ss << boost::format("%d: %.4f") % i % (ch_detec_rate(i) * 100) << "%\t";
+        }
+        ss << "\n";
+        return ss.str();
+    }
 #endif
 };
+
+template<typename T>
+std::string print_vector_dB(const std::vector<T> &vec) {
+    std::stringstream ss;
+    for (int i = 0; i < vec.size(); i++) {
+        ss << boost::format("%d: %1.11f dB\t") % i % (10 * log10(vec[i]));
+    }
+    ss << "\n";
+    return ss.str();
+}
+
+/////////////////////////////////////////////////////////
+//////////////// DWELL TIME ESTIMATION //////////////////
+/////////////////////////////////////////////////////////
 
 enum TOA_FIT {KBELOW, KOVER, TOA_VALID, TOA_INVALID, SEQ_REMOVAL};
 

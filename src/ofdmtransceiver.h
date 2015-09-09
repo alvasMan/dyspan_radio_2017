@@ -9,6 +9,7 @@
 #include "dyspanradio.h"
 #include "Buffer.h"
 #include "channels.h"
+#include "EnergyDetector2.h"
 #include "EnergyDetector.h"
 
 class OfdmTransceiver : public DyspanRadio
@@ -25,10 +26,10 @@ public:
                     const float tx_gain_uhd,
                     const float rx_gain_uhd,
                     const bool debug,
-                    const bool use_challenge_db);
-
+                    const bool use_challenge_db,
+                    const bool learning);
     // destructor
-    ~OfdmTransceiver();
+   virtual ~OfdmTransceiver();
 
     //
     // transmitter methods
@@ -59,7 +60,10 @@ public:
 
 private:
     ofdmflexframegenprops_s fgprops;// frame generator properties
-
+    unsigned int  current_channel;
+    unsigned int next_channel;
+    bool sensing_calibration;
+    bool txrx_calibration;
     // transmitter objects
     ofdmflexframegen fg;            // frame generator object
     std::complex<float> * fgbuffer; // frame generator output buffer [size: M + cp_len x 1]
@@ -71,13 +75,13 @@ private:
     float tx_gain;                  // soft transmit gain (linear)
     uint32_t seq_no_;
 
-
-
     //boost::ptr_deque<CplxFVec> frame_buffer;
     Buffer<boost::shared_ptr<CplxFVec> > frame_buffer;
 
     // receiver objects
-    EnergyDetector e_detec;
+    EnergyDetector2 e_detec;
+    std::pair<double,bool> DwellEst(DwellTimeEstimator &Dwell, double &previous_dwelltime, int &dwell_counter, int steady_state, double steady_state_Th);
+    bool learning;
     uhd::time_spec_t timestamp_;
 
     // member functions
@@ -86,7 +90,8 @@ private:
     void modulation_function();
     void receive_function();
     void reconfigure_usrp(const int num);
-
+    std::pair<bool,double> dwelltimer();
+    void process_sensing(std::vector<float> ChPowers);
     // RF objects and properties
     uhd::usrp::multi_usrp::sptr usrp_tx;
     uhd::usrp::multi_usrp::sptr usrp_rx;

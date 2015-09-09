@@ -7,6 +7,7 @@ file(GLOB sources
     ofdmtransceiver.cpp
     multichannelrx.cpp
     multichannelrx_pfb.cpp
+    EnergyDetector2.cpp
     EnergyDetector.cpp)
 
 file(GLOB headers
@@ -14,6 +15,7 @@ file(GLOB headers
     ofdmtransceiver.h
     multichannelrx.h
     multichannelrx_pfb.h
+    EnergyDetector2.h
     EnergyDetector.h
     channels.h
     Buffer.h

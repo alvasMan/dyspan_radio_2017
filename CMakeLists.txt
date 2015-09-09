@@ -14,11 +14,6 @@ ENABLE_TESTING()
 LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules")
 INCLUDE(CheckIncludeFileCXX)
 
-
-########################################################################
-# Set up compiler flags for debug and release builds
-########################################################################
-
 set(CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}")
 SET(CMAKE_CXX_FLAGS_DEBUG "-O0 -g" )
 SET(CMAKE_CXX_FLAGS_RELEASE "-O2 -pipe -march=native -mtune=native -ffast-math -std=c++11" )

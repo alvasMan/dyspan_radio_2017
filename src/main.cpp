@@ -44,7 +44,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     std::string subdev;
     double channel_bandwidth, channel_rate, freq, rx_gain, tx_gain_soft, tx_gain_uhd;
     float ampl;
-
+    bool learning;
 
     //setup the program options
     po::options_description desc("Allowed options");
@@ -63,17 +63,19 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("npackets", po::value<size_t>(&num_total_packets)->default_value(100), "How many packets to transmit in total")
         ("pps", po::value<size_t>(&packets_per_second)->default_value(1), "How many packets to transmit per second")
         ("ampl", po::value<float>(&ampl)->default_value(float(0.9)), "amplitude of each sample")
-        ("num_channels", po::value<size_t>(&num_channels)->default_value(2), "Number of channels (must be multiple of two)")
+        ("num_channels", po::value<size_t>(&num_channels)->default_value(4), "Number of channels (must be multiple of two)")
         ("channel_bandwidth", po::value<double>(&channel_bandwidth)->default_value(5000e3), "Bandwidth of each individual channel")
-        ("channel_rate", po::value<double>(&channel_rate)->default_value(2000e3), "Transmission rate in each individual channel")
-        ("freq",po::value<double>(&freq)->default_value(2.4475e9),"Sets center frequency")
+        ("channel_rate", po::value<double>(&channel_rate)->default_value(5000e3), "Transmission rate in each individual channel")
+        ("freq",po::value<double>(&freq)->default_value(2412500000),"Sets center frequency")
         ("rxgain",po::value<double>(&rx_gain)->default_value(15),"Sets UHD receive gain")
         ("txgain_soft",po::value<double>(&tx_gain_soft)->default_value(-12),"Sets software transmit gain")
         ("txgain_uhd",po::value<double>(&tx_gain_uhd)->default_value(10),"Sets UHD transmit gain")
         ("txbufsize",po::value<size_t>(&tx_buffer_size)->default_value(10),"How many frames in Tx buffer")
         ("threshold", po::value<std::string>(&threshold)->default_value("-75"), "RSSI threshold in dBm")
         ("wirefmt", po::value<std::string>(&wirefmt)->default_value("sc16"), "wire format (sc8 or sc16)")
+        ("learning", po::value<bool>(&learning)->default_value(false), "learning on or off")
         ("debug", po::value<bool>(&debug)->default_value(false), "Whether to print debug messages")
+        ("dilv", "specify to disable inner-loop verbose")
     ;
     
     po::variables_map vm;
@@ -87,7 +89,6 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     }
 
     std::signal(SIGINT, signal_handler);
-
     // TODO: make them a parameter
     int M = 48;
     int cp_len = 6;
@@ -97,7 +98,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     // create radio
     boost::shared_ptr<DyspanRadio> radio;
     if (mode == "tx")
-        radio.reset(new OfdmTransceiver(args, num_channels, numtrx, freq, channel_bandwidth, channel_rate, tx_gain_soft, tx_gain_uhd, rx_gain, debug, use_challenge_db));
+        radio.reset(new OfdmTransceiver(args, num_channels, numtrx, freq, channel_bandwidth, channel_rate, tx_gain_soft, tx_gain_uhd, rx_gain, debug, use_challenge_db, learning));
     else if (mode == "rx")
         radio.reset(new multichannelrx(args, subdev, num_channels, numtrx, freq, channel_bandwidth, channel_rate, rx_gain, M, cp_len, taper_len, p, debug, use_challenge_db));
     else if (mode == "rx_pfb")
