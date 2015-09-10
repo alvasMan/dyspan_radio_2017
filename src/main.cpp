@@ -59,9 +59,9 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("mod",po::value<std::string>(&params.mod)->default_value("qpsk"),"Modulation scheme")
 
         ("challenge", po::value<bool>(&params.use_db)->default_value(false), "Whether to connect and use challenge database")
-        ("dp_ip", po::value<std::string>(&params.db_ip)->default_value("127.0.0.1"), "Database IP")
-        ("dp_user", po::value<std::string>(&params.db_user)->default_value("?"), "Database user")
-        ("dp_pass", po::value<std::string>(&params.db_password)->default_value("?"), "Database password")
+        ("db_ip", po::value<std::string>(&params.db_ip)->default_value("127.0.0.1"), "Database IP")
+        ("db_user", po::value<std::string>(&params.db_user)->default_value("?"), "Database user")
+        ("db_pass", po::value<std::string>(&params.db_password)->default_value("?"), "Database password")
 
         ("learning", po::value<bool>(&params.has_learning)->default_value(false), "learning on or off")
         ("debug", po::value<bool>(&params.debug)->default_value(false), "Whether to print debug messages")
