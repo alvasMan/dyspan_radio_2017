@@ -33,11 +33,11 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     //create a usrp device
     std::cout << std::endl;
     std::cout << boost::format("Creating the usrp device with: %s...") % params_.args << std::endl;
-    usrp_tx = uhd::usrp::multi_usrp::make(std::string("master_clock_rate=20e6"));
-    usrp_tx->set_tx_subdev_spec(std::string("A:B")); 
+    usrp_tx = uhd::usrp::multi_usrp::make(params_.args);
+    usrp_tx->set_tx_subdev_spec(params_.txsubdev);
     std::cout << boost::format("Using Device: %s") % usrp_tx->get_pp_string() << std::endl;
-    usrp_rx = uhd::usrp::multi_usrp::make(std::string("master_clock_rate=20e6"));
-    usrp_rx->set_rx_subdev_spec(std::string("A:A"));
+    usrp_rx = uhd::usrp::multi_usrp::make(params_.args);
+    usrp_rx->set_rx_subdev_spec(params_.rxsubdev);
     
     // std::cout << boost::format("number of channels ::: %s") % usrp_rx->get_rx_num_channels() << std::endl;
 
@@ -569,6 +569,7 @@ void OfdmTransceiver::set_rx_freq(float _rx_freq)
 {
     usrp_rx->set_rx_freq(_rx_freq);
     std::cout << "Actual RX Frequency: " << (usrp_rx->get_rx_freq()/1e6) << " MHz" << std::endl;
+    boost::this_thread::sleep(boost::posix_time::milliseconds(500));
 
     // check LO Lock
     std::vector<std::string> sensor_names;

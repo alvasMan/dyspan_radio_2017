@@ -161,8 +161,8 @@ multichannelrx::multichannelrx(const RadioParameter params) :
     usrp_rx = uhd::usrp::multi_usrp::make(params_.args);
 
     // always select the subdevice first, the channel mapping affects the other settings
-    if (not params_.subdev.empty()) {
-        usrp_rx->set_rx_subdev_spec(params_.subdev); //sets across all mboards
+    if (not params_.rxsubdev.empty()) {
+        usrp_rx->set_rx_subdev_spec(params_.rxsubdev); //sets across all mboards
     }
 
     std::cout << boost::format("Using Device: %s") % usrp_rx->get_pp_string() << std::endl;

@@ -26,7 +26,8 @@ typedef struct
     bool debug;
     std::string mode;
     std::string args;
-    std::string subdev;
+    std::string txsubdev;
+    std::string rxsubdev;
     size_t num_trx;
     size_t num_channels;
     double f_center;

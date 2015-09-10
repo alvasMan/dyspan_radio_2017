@@ -35,8 +35,9 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help", "help message")
-        ("args", po::value<std::string>(&params.args)->default_value(""), "single uhd device address args")
-        ("subdev", po::value<std::string>(&params.subdev)->default_value(""), "Subdev specification")
+        ("args", po::value<std::string>(&params.args)->default_value("master_clock_rate=20e6"), "single uhd device address args")
+        ("txsubdev", po::value<std::string>(&params.txsubdev)->default_value("A:B"), "TX Subdev specification")
+        ("rxsubdev", po::value<std::string>(&params.rxsubdev)->default_value("A:A"), "RX Subdev specification")
         ("mode", po::value<std::string>(&params.mode)->default_value("tx"), "Mode selection (tx/rx/rx_pfb)")
         ("numtrx", po::value<size_t>(&params.num_trx)->default_value(1), "Number of transceivers")
 
@@ -55,7 +56,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("fec0",po::value<std::string>(&params.fec0)->default_value("none"),"FEC for header")
         ("fec1",po::value<std::string>(&params.fec1)->default_value("h128"),"FEC for payload")
         ("crc",po::value<std::string>(&params.crc)->default_value("crc32"),"CRC")
-        ("mod",po::value<std::string>(&params.mod)->default_value("QPSK"),"Modulation scheme")
+        ("mod",po::value<std::string>(&params.mod)->default_value("qpsk"),"Modulation scheme")
 
         ("challenge", po::value<bool>(&params.use_db)->default_value(false), "Whether to connect and use challenge database")
         ("dp_ip", po::value<std::string>(&params.db_ip)->default_value("127.0.0.1"), "Database IP")
