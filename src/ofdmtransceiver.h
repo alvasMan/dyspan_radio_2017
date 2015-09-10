@@ -16,18 +16,7 @@ class OfdmTransceiver : public DyspanRadio
 {
 public:
     // default constructor   
-    OfdmTransceiver(const std::string args,
-                    const int num_channels,
-                    const size_t numtrx,
-                    const double f_center,
-                    const double channel_bandwidth,
-                    const double channel_rate,
-                    const float tx_gain_soft,
-                    const float tx_gain_uhd,
-                    const float rx_gain_uhd,
-                    const bool debug,
-                    const bool use_challenge_db,
-                    const bool learning);
+    OfdmTransceiver(const RadioParameter params);
     // destructor
    virtual ~OfdmTransceiver();
 

@@ -26,20 +26,7 @@ using namespace moodycamel;
 class multichannelrx : public DyspanRadio {
 public:
     // default constructor
-    multichannelrx(const std::string args,
-                   const std::string subdev,
-                   const int num_channels,
-                   const size_t numtrx,
-                   const double f_center,
-                   const double channel_bandwidth,
-                   const double channel_rate,
-                   const float rx_gain_uhd,
-                   unsigned int    M,            // OFDM: number of subcarriers
-                   unsigned int    cp_len,       // OFDM: cyclic prefix length
-                   unsigned int    taper_len,    // OFDM: taper prefix length
-                   unsigned char * p,            // OFDM: subcarrier allocation
-                   const bool debug,
-                   const bool use_challenge_db);
+    multichannelrx(const RadioParameter params);
 
     // destructor
     ~multichannelrx();
@@ -49,9 +36,6 @@ public:
 
     // reset multi-channel receiver
     void Reset();
-
-    // accessor methods
-    unsigned int GetNumChannels() { return num_channels_; }
 
     int callback(unsigned char *  _header,
                  int              _header_valid,

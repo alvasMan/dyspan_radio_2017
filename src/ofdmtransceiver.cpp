@@ -10,36 +10,29 @@
 #ifdef DEBUG_MODE
 #include <ctime>
 #endif
-// default constructor
-//  _M              :   OFDM: number of subcarriers
-//  _cp_len         :   OFDM: cyclic prefix length
-//  _taper_len      :   OFDM: taper prefix length
-//  _p              :   OFDM: subcarrier allocation
-//  _callback       :   frame synchronizer callback function
-//  _userdata       :   user-defined data structure
-OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels, const size_t numtrx, const double f_center, const double channel_bandwidth, const double channel_rate, const float tx_gain_soft, const float tx_gain_uhd, const float rx_gain_uhd, const bool debug, const bool use_challenge_db, const bool _learning) :
-    DyspanRadio(num_channels, numtrx, f_center, channel_bandwidth, channel_rate, 48, 6, 4, debug, use_challenge_db),
+
+OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
+    DyspanRadio(params),
     seq_no_(0),
     payload_len_(1500)
 {
     assert(payload_len_ <= MAX_PAYLOAD_LEN);
 
     // create frame generator
-    unsigned char * p = NULL;   // subcarrier allocation (default)
     ofdmflexframegenprops_init_default(&fgprops);
-    fgprops.check           = LIQUID_CRC_32;
-    fgprops.fec0            = LIQUID_FEC_NONE;
-    fgprops.fec1            = LIQUID_FEC_HAMMING128;
-    fgprops.mod_scheme      = LIQUID_MODEM_QPSK;
-    fg = ofdmflexframegen_create(M_, cp_len_, taper_len_, p, &fgprops);
+    fgprops.check           = liquid_getopt_str2crc(params_.crc.c_str());
+    fgprops.fec0            = liquid_getopt_str2fec(params_.fec0.c_str());
+    fgprops.fec1            = liquid_getopt_str2fec(params_.fec1.c_str());
+    fgprops.mod_scheme      = liquid_getopt_str2mod(params_.mod.c_str());
+    fg = ofdmflexframegen_create(params_.M, params_.cp_len, params_.taper_len, params_.p, &fgprops);
 
     // allocate memory for frame generator output (single OFDM symbol)
-    fgbuffer_len = M_ + cp_len_;
+    fgbuffer_len = params_.M + params_.cp_len;
     fgbuffer = (std::complex<float>*) malloc(fgbuffer_len * sizeof(std::complex<float>));
 
     //create a usrp device
     std::cout << std::endl;
-    std::cout << boost::format("Creating the usrp device with: %s...") % args << std::endl;
+    std::cout << boost::format("Creating the usrp device with: %s...") % params_.args << std::endl;
     usrp_tx = uhd::usrp::multi_usrp::make(std::string("master_clock_rate=20e6"));
     usrp_tx->set_tx_subdev_spec(std::string("A:B")); 
     std::cout << boost::format("Using Device: %s") % usrp_tx->get_pp_string() << std::endl;
@@ -49,24 +42,24 @@ OfdmTransceiver::OfdmTransceiver(const std::string args, const int num_channels,
     // std::cout << boost::format("number of channels ::: %s") % usrp_rx->get_rx_num_channels() << std::endl;
 
     // initialize default tx values
-    set_tx_freq(f_center);
-    set_tx_rate(channel_rate);
-    set_tx_gain_soft(tx_gain_soft);
-    set_tx_gain_uhd(tx_gain_uhd);
+    set_tx_freq(params_.f_center);
+    set_tx_rate(params_.channel_rate);
+    set_tx_gain_soft(params_.tx_gain_soft);
+    set_tx_gain_uhd(params_.tx_gain_uhd);
 
-    double rx_rf_rate = num_channels * channel_bandwidth;
-    set_rx_freq(f_center);
+    double rx_rf_rate = params_.num_channels * params_.channel_bandwidth;
+    set_rx_freq(params_.f_center);
     set_rx_rate(rx_rf_rate);
-    set_rx_gain_uhd(rx_gain_uhd);
+    set_rx_gain_uhd(params_.rx_gain_uhd);
     //set_rx_antenna("J1");
 
     // setting up the energy detector (number of averages,window step size,fftsize)
     e_detec.set_parameters(16, 512, 4, 0.4, 0.4);//(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
 
-    if (use_challenge_db_) {
+    if (params_.use_db) {
         // create and connect to challenge database
         tx_ = spectrum_init(0);
-        spectrum_eror_t ret = spectrum_connect(tx_, CHALLENGE_DB_IP, 5002, payload_len_, 1);
+        spectrum_eror_t ret = spectrum_connect(tx_, (char*)params_.db_ip.c_str(), 5002, payload_len_, 1);
         spectrum_errorToText(tx_, ret, error_buffer, sizeof(error_buffer));
         std::cout << boost::format("TX connect: %s") % error_buffer << std::endl;
         if (ret < 0) {
@@ -136,7 +129,7 @@ void OfdmTransceiver::modulation_function(void)
                 header[i] = rand() & 0xff;
 
             int actual_payload_len = payload_len_;
-            if (use_challenge_db_) {
+            if (params_.use_db) {
                 // get packet from database
                 // FIXME: payload_len must not be smaller than the size requested during init
                 spectrum_eror_t ret = spectrum_getPacket(tx_, payload, payload_len_, -1);
@@ -157,7 +150,7 @@ void OfdmTransceiver::modulation_function(void)
 
             // assemble frame
             ofdmflexframegen_assemble(fg, header, payload, actual_payload_len);
-            if (debug_)
+            if (params_.debug)
                 ofdmflexframegen_print(fg);
 
             size_t num_symbols = ofdmflexframegen_getframelen(fg);
@@ -176,7 +169,7 @@ void OfdmTransceiver::modulation_function(void)
             assert(bytes_written == frame_size);
             frame_buffer.pushBack(usrp_buffer);
 
-            if (debug_)
+            if (params_.debug)
                 std::cout << boost::format("TX frame %6u (%d Bytes)") % seq_no_ % actual_payload_len << std::endl;
 
             seq_no_++;
@@ -282,7 +275,7 @@ void OfdmTransceiver::reconfigure_usrp(const int num)
     
     
     
-    if (debug_) {
+    if (params_.debug) {
         std::cout << result.to_pp_string() << std::endl;
     }
 }
@@ -524,7 +517,7 @@ void OfdmTransceiver::set_tx_freq(float freq)
     uhd::tune_request_t request(freq);
     uhd::tune_result_t result = usrp_tx->set_tx_freq(request);
 
-    if (debug_) {
+    if (params_.debug) {
         std::cout << result.to_pp_string() << std::endl;
     }
     std::cout << "Actual TX Frequency: " << (usrp_tx->get_tx_freq()/1e6) << " MHz" << std::endl;

@@ -44,16 +44,15 @@ int multichannelrx::callback(unsigned char *  _header,
 {
     CustomUserdata *data = static_cast<CustomUserdata*>(_userdata);
 
-
-    if (debug_)
+    if (params_.debug)
         std::cout << boost::format("***** CH %d rssi=%7.2fdB evm=%7.2fdB, ") % data->channel % _stats.rssi % _stats.evm;
     if (_header_valid) {
         uint32_t seq_no = (_header[0] << 24 | _header[1] << 16 | _header[2] << 8 | _header[3]);
-        if (debug_)
+        if (params_.debug)
             std::cout << boost::format("seqno: %6u (%6u lost), ") % seq_no % lost_frames_;
 
         if (_payload_valid) {
-            if (debug_)
+            if (params_.debug)
                 std::cout << boost::format("payload size: %d") % _payload_len << std::endl;
 
             // do the stats ..
@@ -69,7 +68,7 @@ int multichannelrx::callback(unsigned char *  _header,
             rx_frames_++;
 
             // pass received frame to challenge DB
-            if (use_challenge_db_) {
+            if (params_.use_db) {
                 assert(_payload_len <= 1500); // maximum size of the client libarary
                 spectrum_eror_t ret = spectrum_putPacket(rx_, _payload, _payload_len);
                 spectrum_errorToText(rx_, ret, error_buffer, sizeof(error_buffer));
@@ -79,7 +78,7 @@ int multichannelrx::callback(unsigned char *  _header,
                 }
 
                 // output performance for every n-th received frame
-                if (debug_ && (seq_no % num_channels_ == 0)) {
+                if (params_.debug && (seq_no % params_.num_channels == 0)) {
                     std::cout << boost::format("PU: %.02f bps / %.02f bps") %
                                  spectrum_getThroughput(rx_, 0, -1) %
                                  spectrum_getProvidedThroughput(rx_, 0, -1) << std::endl;
@@ -106,30 +105,17 @@ int multichannelrx::callback(unsigned char *  _header,
 
 
 // default constructor
-multichannelrx::multichannelrx(const std::string args,
-               const std::string subdev,
-               const int num_channels,
-               const size_t numtrx,
-               const double f_center,
-               const double channel_bandwidth,
-               const double channel_rate,
-               const float rx_gain_uhd,
-               unsigned int    M,            // OFDM: number of subcarriers
-               unsigned int    cp_len,       // OFDM: cyclic prefix length
-               unsigned int    taper_len,    // OFDM: taper prefix length
-               unsigned char * p,            // OFDM: subcarrier allocation
-               const bool debug,
-               const bool use_challenge_db) :
-    DyspanRadio(num_channels, numtrx, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len, debug, use_challenge_db),
+multichannelrx::multichannelrx(const RadioParameter params) :
+    DyspanRadio(params),
     rx_frames_(0),
     last_seq_no_(0),
     lost_frames_(0)
 {
     // create callbacks
-    userdata  = (void **)             malloc(num_channels_ * sizeof(void *));
-    callbacks = (framesync_callback*) malloc(num_channels_ * sizeof(framesync_callback));
+    userdata  = (void **)             malloc(params_.num_channels * sizeof(void *));
+    callbacks = (framesync_callback*) malloc(params_.num_channels * sizeof(framesync_callback));
 
-    for (int i = 0; i < num_channels_; i++) {
+    for (int i = 0; i < params_.num_channels; i++) {
         // allocate memory for custom data as well
         CustomUserdata* data = (CustomUserdata*) malloc(sizeof(CustomUserdata));
         data->callback = this;
@@ -139,9 +125,9 @@ multichannelrx::multichannelrx(const std::string args,
     }
 
     // create frame synchronizers
-    framesync = (ofdmflexframesync*)  malloc(num_channels_ * sizeof(ofdmflexframesync));
-    for (int i = 0; i < num_channels_; i++) {
-        framesync[i] = ofdmflexframesync_create(M_, cp_len_, taper_len_, p, callbacks[i], userdata[i]);
+    framesync = (ofdmflexframesync*)  malloc(params_.num_channels * sizeof(ofdmflexframesync));
+    for (int i = 0; i < params_.num_channels; i++) {
+        framesync[i] = ofdmflexframesync_create(params_.M, params_.cp_len, params_.taper_len, params_.p, callbacks[i], userdata[i]);
 #if BST_DEBUG
         ofdmflexframesync_debug_enable(framesync[i]);
 #endif
@@ -149,10 +135,10 @@ multichannelrx::multichannelrx(const std::string args,
 
     Reset();
 
-    if (use_challenge_db_) {
+    if (params_.use_db) {
         // create and connect to challenge database
         rx_ = spectrum_init(0);
-        spectrum_eror_t ret = spectrum_connect(rx_, CHALLENGE_DB_IP, 5002, 0, 0);
+        spectrum_eror_t ret = spectrum_connect(rx_, (char*)params_.db_ip.c_str(), 5002, 0, 0);
         spectrum_errorToText(rx_, ret, error_buffer, sizeof(error_buffer));
         std::cout << boost::format("RX connect: %s") % error_buffer << std::endl;
         if (ret < 0) {
@@ -171,26 +157,26 @@ multichannelrx::multichannelrx(const std::string args,
 
     // create a usrp device
     std::cout << std::endl;
-    std::cout << boost::format("Creating the usrp device with: %s...") % args << std::endl;
-    usrp_rx = uhd::usrp::multi_usrp::make(args);
+    std::cout << boost::format("Creating the usrp device with: %s...") % params_.args << std::endl;
+    usrp_rx = uhd::usrp::multi_usrp::make(params_.args);
 
     // always select the subdevice first, the channel mapping affects the other settings
-    if (not subdev.empty()) {
-        usrp_rx->set_rx_subdev_spec(subdev); //sets across all mboards
+    if (not params_.subdev.empty()) {
+        usrp_rx->set_rx_subdev_spec(params_.subdev); //sets across all mboards
     }
 
     std::cout << boost::format("Using Device: %s") % usrp_rx->get_pp_string() << std::endl;
 
     // sanity checks
-    assert(num_channels_ == channels_.size());
-    if (num_channels_ > usrp_rx->get_rx_num_channels()) {
+    assert(params_.num_channels == channels_.size());
+    if (params_.num_channels > usrp_rx->get_rx_num_channels()) {
         throw std::runtime_error("Invalid channel(s) specified.");
     }
 
     // first perform all configurations that apply across all channels
     // set the rx sample rate
-    std::cout << boost::format("Setting RX Rate: %f Msps...") % (channel_bandwidth/1e6) << std::endl;
-    usrp_rx->set_rx_rate(channel_bandwidth);
+    std::cout << boost::format("Setting RX Rate: %f Msps...") % (params_.channel_bandwidth/1e6) << std::endl;
+    usrp_rx->set_rx_rate(params_.channel_bandwidth);
     std::cout << boost::format("Actual RX Rate: %f Msps...") % (usrp_rx->get_rx_rate()/1e6) << std::endl << std::endl;
 
     // check for motherboards and set sync mode to mimo if 2 USRPs are found
@@ -208,11 +194,11 @@ multichannelrx::multichannelrx(const std::string args,
         boost::this_thread::sleep(boost::posix_time::milliseconds(100));
 
         // set the RX gain for on first and third channel (for first and second USRP)
-        usrp_rx->set_rx_gain(rx_gain_uhd, 0);
-        usrp_rx->set_rx_gain(rx_gain_uhd, 2);
+        usrp_rx->set_rx_gain(params_.rx_gain_uhd, 0);
+        usrp_rx->set_rx_gain(params_.rx_gain_uhd, 2);
     } else {
         usrp_rx->set_time_now(uhd::time_spec_t(0.0));
-        usrp_rx->set_rx_gain(rx_gain_uhd);
+        usrp_rx->set_rx_gain(params_.rx_gain_uhd);
     }
 
     // set antenna port for each channel
@@ -254,7 +240,7 @@ multichannelrx::multichannelrx(const std::string args,
 multichannelrx::~multichannelrx()
 {
     // destroy frame synchronizers
-    for (int i = 0; i < num_channels_; i++) {
+    for (int i = 0; i < params_.num_channels; i++) {
 #if BST_DEBUG
         char filename[64];
         sprintf(filename,"framesync_channel%u.m", i);
@@ -263,7 +249,7 @@ multichannelrx::~multichannelrx()
         ofdmflexframesync_destroy(framesync[i]);
     }
     free(framesync);
-    for (int i = 0; i < num_channels_; i++)
+    for (int i = 0; i < params_.num_channels; i++)
         free(userdata[i]);
     free(userdata);
     free(callbacks);
@@ -298,8 +284,7 @@ void multichannelrx::start(void)
 void multichannelrx::Reset()
 {
     // reset all objects
-    unsigned int i;
-    for (i=0; i<num_channels_; i++)
+    for (int i = 0; i < params_.num_channels; i++)
         ofdmflexframesync_reset(framesync[i]);
 }
 
@@ -337,7 +322,7 @@ void multichannelrx::receive_thread()
             // allocate fresh buffers to receive (one buffer per channel)
             std::vector<ItemPtr> buffs;
             std::vector<std::complex<float> *> buff_ptrs;
-            for (int i = 0; i < num_channels_; i++) {
+            for (int i = 0; i < params_.num_channels; i++) {
                 ItemPtr item = buffer_factory_.get_new();
                 buffs.push_back(item);
                 buff_ptrs.push_back(&item->data.front());

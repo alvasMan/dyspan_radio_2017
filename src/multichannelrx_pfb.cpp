@@ -80,20 +80,8 @@ int multichannelrx_pfb::callback(unsigned char *  _header,
 
 
 // default constructor
-multichannelrx_pfb::multichannelrx_pfb(const std::string args,
-               const int num_channels,
-               const size_t numtrx,
-               const double f_center,
-               const double channel_bandwidth,
-               const double channel_rate,
-               const float rx_gain_uhd,
-               unsigned int    M,            // OFDM: number of subcarriers
-               unsigned int    cp_len,       // OFDM: cyclic prefix length
-               unsigned int    taper_len,    // OFDM: taper prefix length
-               unsigned char * p,            // OFDM: subcarrier allocation
-               bool debug,
-               bool use_challenge_db) :
-    DyspanRadio(num_channels, numtrx, f_center, channel_bandwidth, channel_rate, M, cp_len, taper_len, debug, use_challenge_db),
+multichannelrx_pfb::multichannelrx_pfb(const RadioParameter params) :
+    DyspanRadio(params),
     rx_to_mix_buffer_(THREAD_BUFFER_SIZE),
     mix_to_chan_buffer_(THREAD_BUFFER_SIZE),
     buffer_factory_(100, 100),
@@ -101,8 +89,8 @@ multichannelrx_pfb::multichannelrx_pfb(const std::string args,
     last_seq_no_(0),
     lost_frames_(0)
 {
-    num_sampled_chans_ = num_channels_;
-    if (num_channels_ == 4 && channel_bandwidth == 5e6) {
+    num_sampled_chans_ = params_.num_channels;
+    if (params.num_channels == 4 && params.channel_bandwidth == 5e6) {
         std::cout << "Increasing number of channels to 5 to match full USRP sample rate." << std::endl;
         num_sampled_chans_++;
     }
@@ -110,15 +98,15 @@ multichannelrx_pfb::multichannelrx_pfb(const std::string args,
     // create callbacks
     userdata  = (void **)             malloc(num_sampled_chans_ * sizeof(void *));
     callbacks = (framesync_callback*) malloc(num_sampled_chans_ * sizeof(framesync_callback));
-    for (int i = 0; i < num_channels_; i++) {
+    for (int i = 0; i < params.num_channels; i++) {
         callbacks[i] = multichannelrxpfbdetail::gCallback;
         userdata[i] = this;
     }
 
     // create frame synchronizers
     framesync = (ofdmflexframesync*)  malloc(num_sampled_chans_ * sizeof(ofdmflexframesync));
-    for (int i = 0; i < num_channels_; i++) {
-        framesync[i] = ofdmflexframesync_create(M_, cp_len_, taper_len_, p, callbacks[i], userdata[i]);
+    for (int i = 0; i < params.num_channels; i++) {
+        framesync[i] = ofdmflexframesync_create(params_.M, params_.cp_len, params_.taper_len, params_.p, callbacks[i], userdata[i]);
 #if BST_DEBUG
         ofdmflexframesync_debug_enable(framesync[i]);
 #endif
@@ -136,27 +124,27 @@ multichannelrx_pfb::multichannelrx_pfb(const std::string args,
 
     //create a usrp device
     std::cout << std::endl;
-    std::cout << boost::format("Creating the usrp device with: %s...") % args << std::endl;
-    usrp_rx = uhd::usrp::multi_usrp::make(args);
+    std::cout << boost::format("Creating the usrp device with: %s...") % params_.args << std::endl;
+    usrp_rx = uhd::usrp::multi_usrp::make(params_.args);
     std::cout << boost::format("Using Device: %s") % usrp_rx->get_pp_string() << std::endl;
 
     // channelizer input/output arrays
     max_spp_ = usrp_rx->get_device()->get_max_recv_samps_per_packet();
 
     // create neccesary buffer objects
-    for (int i = 0; i < num_channels_; i++) {
+    for (int i = 0; i < params_.num_channels; i++) {
         chan_to_sync_buffers_.push_back(new BlockingReaderWriterQueue<ItemPtr>(THREAD_BUFFER_SIZE));
     }
     // computer actual RF rate
-    double rx_rf_rate = num_sampled_chans_ * channel_bandwidth;
+    double rx_rf_rate = num_sampled_chans_ * params_.channel_bandwidth;
 
     // reset base station transmitter
     Reset();
 
     // configure receiver parameters
     usrp_rx->set_rx_rate(rx_rf_rate);
-    usrp_rx->set_rx_freq(f_center_);
-    usrp_rx->set_rx_gain(rx_gain_uhd);
+    usrp_rx->set_rx_freq(params_.f_center);
+    usrp_rx->set_rx_gain(params_.rx_gain_uhd);
 }
 
 // destructor
@@ -170,7 +158,7 @@ multichannelrx_pfb::~multichannelrx_pfb()
 
     // destroy frame synchronizers
     unsigned int i;
-    for (i=0; i<num_channels_; i++) {
+    for (i=0; i<params_.num_channels; i++) {
 #if BST_DEBUG
         char filename[64];
         sprintf(filename,"framesync_channel%u.m", i);
@@ -209,7 +197,7 @@ void multichannelrx_pfb::Reset()
 {
     // reset all objects
     unsigned int i;
-    for (i=0; i<num_channels_; i++)
+    for (i=0; i<params_.num_channels; i++)
         ofdmflexframesync_reset(framesync[i]);
 
     firpfbch_crcf_reset(channelizer);

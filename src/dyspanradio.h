@@ -19,69 +19,81 @@ typedef std::vector<std::complex<float>, aligned_allocator<__m128, sizeof(__m128
 
 #define NUM_PADDING_NULL_SAMPLES 100
 #define MAX_PAYLOAD_LEN 2500
-#define CHALLENGE_DB_IP "127.0.0.1"
+
+typedef struct
+{
+    // generic radio parameters
+    bool debug;
+    std::string mode;
+    std::string args;
+    std::string subdev;
+    size_t num_trx;
+    size_t num_channels;
+    double f_center;
+    double channel_bandwidth;
+    double channel_rate;
+    double rx_gain_uhd;
+    double tx_gain_uhd;
+    double tx_gain_soft;
+    bool has_learning;
+
+    // OFDM parameter
+    unsigned int M;                     // number of subcarriers
+    unsigned int cp_len;                // cyclic prefix length
+    unsigned int taper_len;             // taper length
+    unsigned char* p;                   // subcarrier allocation
+    std::string fec0;
+    std::string fec1;
+    std::string crc;
+    std::string mod;
+
+    // challenge database parameters
+    bool use_db;
+    std::string db_ip;
+    std::string db_user;
+    std::string db_password;
+} RadioParameter;
+
 
 class DyspanRadio
 {
 public:
-    DyspanRadio(const int num_channels,
-                const size_t num_trx,
-                const double f_center,
-                const double channel_bandwidth,
-                const double channel_rate,
-                unsigned int M,
-                unsigned int cp_len,
-                unsigned int taper_len,
-                bool debug,
-                bool use_challenge_db) :
+    DyspanRadio(const RadioParameter params) :
         radio_id_(-2),
-        num_channels_(num_channels),
-        num_trx_(num_trx),
-        f_center_(f_center),
-        channel_bandwidth_(channel_bandwidth),
-        channel_rate_(channel_rate),
-        M_(M),
-        cp_len_(cp_len),
-        taper_len_(taper_len),
-        debug_(debug),
-        use_challenge_db_(use_challenge_db)
+        params_(params)
     {
         // validate input
-        if (num_channels < 1) {
-            fprintf(stderr,"error: multichannelrx::multichannelrx(), must have at least one channel\n");
-            throw 0;
-        } else if (M < 8) {
-            fprintf(stderr,"error: multichannelrx::multichannelrx(), number of subcarriers must be at least 8\n");
-            throw 0;
-        } else if (cp_len < 1) {
-            fprintf(stderr,"error: multichannelrx::multichannelrx(), cyclic prefix length must be at least 1\n");
-            throw 0;
-        } else if (taper_len > cp_len) {
-            fprintf(stderr,"error: multichannelrx::multichannelrx(), taper length cannot exceed cyclic prefix length\n");
-            throw 0;
+        if (params.num_channels < 1) {
+            throw std::runtime_error("error: must have at least one channel");
+        } else if (params_.M < 8) {
+            throw std::runtime_error("number of subcarriers must be at least 8");
+        } else if (params_.cp_len < 1) {
+            throw std::runtime_error("cyclic prefix length must be at least 1");
+        } else if (params_.taper_len > params_.cp_len) {
+            throw std::runtime_error("taper length cannot exceed cyclic prefix length");
         }
 
         // this is a special case for the 4x 5MHz receiver using two N210s
-        if (channel_bandwidth == 5e6 && num_channels_ == 4 && num_trx_ == 2) {
+        if (params_.channel_bandwidth == 5e6 && params_.num_channels == 4 && params_.num_trx == 2) {
             // this initializes 4 channels such that the first two have the same rf_freq and the last two.
             // this makes sure that each N210 is tuned to two channels with the LO sitting between them
             std::cout << boost::str(boost::format("Configuring channels for 4x 5MHz using two N210s")) << std::endl;
-            double offset = channel_bandwidth / 2;
-            double rf_freq = f_center - channel_bandwidth;
-            channels_.push_back({"Channel0", f_center_ + offset, channel_bandwidth_, rf_freq, +offset, channel_rate});
-            channels_.push_back({"Channel1", f_center_ + offset, channel_bandwidth_, rf_freq, -offset, channel_rate});
+            double offset = params_.channel_bandwidth / 2;
+            double rf_freq = params_.f_center - params_.channel_bandwidth;
+            channels_.push_back({"Channel0", params_.f_center + offset, params_.channel_bandwidth, rf_freq, +offset, params_.channel_rate});
+            channels_.push_back({"Channel1", params_.f_center + offset, params_.channel_bandwidth, rf_freq, -offset, params_.channel_rate});
 
-            rf_freq = f_center + channel_bandwidth;
-            channels_.push_back({"Channel2", f_center_ + offset, channel_bandwidth_, rf_freq, +offset, channel_rate});
-            channels_.push_back({"Channel3", f_center_ + offset, channel_bandwidth_, rf_freq, -offset, channel_rate});
+            rf_freq = params_.f_center + params_.channel_bandwidth;
+            channels_.push_back({"Channel2", params_.f_center + offset, params_.channel_bandwidth, rf_freq, +offset, params_.channel_rate});
+            channels_.push_back({"Channel3", params_.f_center + offset, params_.channel_bandwidth, rf_freq, -offset, params_.channel_rate});
         } else {
             // initialize channels, add two in each iteration
-            for (int i = 0; i < num_channels_; i += 2) {
-                double offset = i / 2 * channel_bandwidth_ + channel_bandwidth_ / 2;
+            for (int i = 0; i < params_.num_channels; i += 2) {
+                double offset = i / 2 * params_.channel_bandwidth + params_.channel_bandwidth / 2;
                 // add left neighbor
-                channels_.push_back({"Channel" + std::to_string(i), f_center_ + offset, channel_bandwidth_, f_center_, +offset, channel_rate});
+                channels_.push_back({"Channel" + std::to_string(i), params_.f_center + offset, params_.channel_bandwidth, params_.f_center, +offset, params_.channel_rate});
                 // add right neighbor
-                channels_.push_back({"Channel" + std::to_string(i + 1), f_center + offset, channel_bandwidth, f_center, -offset, channel_rate});
+                channels_.push_back({"Channel" + std::to_string(i + 1), params_.f_center + offset, params_.channel_bandwidth, params_.f_center, -offset, params_.channel_rate});
             }
         }
         // TODO: check that all channels have the same center frequency for faster tuning
@@ -102,21 +114,12 @@ public:
 
 protected:
     // generic properties
-    double f_center_;
-    int num_channels_;
-    size_t num_trx_;                   // number of transceivers (RF frontends)
-    double channel_bandwidth_;
-    double channel_rate_;
+    RadioParameter params_;
     std::vector< ChannelConfig > channels_;
-    bool debug_;
-    bool use_challenge_db_;
+
+    // needed for the challenge database
     int radio_id_;
     char error_buffer[32];          // buffer to hold error messages from challenge server
-
-    // OFDM properties
-    unsigned int M_;                 // number of subcarriers
-    unsigned int cp_len_;            // cyclic prefix length
-    unsigned int taper_len_;         // taper length
 
     boost::ptr_vector<boost::thread> threads_;
 };
