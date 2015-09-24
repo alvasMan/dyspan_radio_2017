@@ -52,7 +52,6 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("M",po::value<unsigned int>(&params.M)->default_value(48),"Number of subcarriers")
         ("cp_len",po::value<unsigned int>(&params.cp_len)->default_value(6),"Cyclic prefix length")
         ("taper_len",po::value<unsigned int>(&params.taper_len)->default_value(4),"Taper length")
-        ("taper_len",po::value<unsigned int>(&params.taper_len)->default_value(4),"Taper length")
         ("fec0",po::value<std::string>(&params.fec0)->default_value("none"),"FEC for header")
         ("fec1",po::value<std::string>(&params.fec1)->default_value("h128"),"FEC for payload")
         ("crc",po::value<std::string>(&params.crc)->default_value("crc32"),"CRC")
