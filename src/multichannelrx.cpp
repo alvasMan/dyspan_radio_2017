@@ -55,6 +55,13 @@ int multichannelrx::callback(unsigned char *  _header,
             if (params_.debug)
                 std::cout << boost::format("payload size: %d") % _payload_len << std::endl;
 
+            // put frame on internal buffer
+            if (params_.use_db) {
+                boost::shared_ptr<CharVec> frame( new CharVec(_payload_len) );
+                memcpy(&frame->front(), _payload, _payload_len);
+                rx_buffer_.pushBack(frame);
+            }
+
             // do the stats ..
             boost::lock_guard<boost::mutex> lock(mutex_);
             if (last_seq_no_ == 0) {
@@ -66,13 +73,6 @@ int multichannelrx::callback(unsigned char *  _header,
                 last_seq_no_ = seq_no;
             }
             rx_frames_++;
-
-            // put frame on internal buffer
-            if (params_.use_db) {
-                boost::shared_ptr<CharVec> frame( new CharVec(_payload_len) );
-                memcpy(&frame->front(), _payload, _payload_len);
-                rx_buffer_.pushBack(frame);
-            }
         } else {
             if (params_.debug)
                 std::cout << boost::format("PAYLOAD INVALID") << std::endl;;
@@ -93,7 +93,8 @@ multichannelrx::multichannelrx(const RadioParameter params) :
     rx_frames_(0),
     last_seq_no_(0),
     lost_frames_(0),
-    rx_(NULL)
+    rx_(NULL),
+    rx_buffer_(500)
 {
     // create callbacks
     userdata  = (void **)             malloc(params_.num_channels * sizeof(void *));
@@ -393,15 +394,15 @@ void multichannelrx::statistic_thread(void)
         while (true) {
             boost::this_thread::interruption_point();
             {
-                boost::lock_guard<boost::mutex> lock(mutex_);
+                //boost::lock_guard<boost::mutex> lock(mutex_);
 
                 std::cout << boost::format("Total lost frames: %d") % lost_frames_ << std::endl;
                 std::cout << boost::format("PU: %.02f bps / %.02f bps") %
-                             spectrum_getThroughput(rx_, 0, -1) %
-                             spectrum_getProvidedThroughput(rx_, 0, -1) << std::endl;
+                             spectrum_getThroughput(rx_, 0, 10) %
+                             spectrum_getProvidedThroughput(rx_, 0, 10) << std::endl;
 
-                double throughput = spectrum_getThroughput(rx_, radio_id_, -1) / 1e6;
-                double provided = spectrum_getProvidedThroughput(rx_, radio_id_, -1) / 1e6;
+                double throughput = spectrum_getThroughput(rx_, radio_id_, 10) / 1e6;
+                double provided = spectrum_getProvidedThroughput(rx_, radio_id_, 10) / 1e6;
                 double ratio = 100 * throughput / provided;
                 std::cout << boost::format("SU: %.02f Mbps / %.02f Mbps (%.02f%%)") %
                              throughput %
@@ -426,6 +427,8 @@ void multichannelrx::frame_delivery_thread(void)
 
             boost::shared_ptr<CharVec> frame;
             rx_buffer_.popFront(frame);
+
+            //std::cout << boost::format("rx_buffer_: %d/%d") % rx_buffer_.size() % rx_buffer_.capacity() << std::endl;
 
             // pass received frame to challenge DB
             assert(frame->size() <= 1500); // maximum size of the client libarary
