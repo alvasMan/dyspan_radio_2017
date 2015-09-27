@@ -13,6 +13,7 @@
 
 #define MULTITHREAD 1
 #define THREAD_BUFFER_SIZE 20
+#define STAT_INTERVAL 2
 
 #define CPU_FORMAT "fc32"
 
@@ -48,6 +49,7 @@ public:
 private:
     // ...
     void receive_thread();
+    void statistic_thread();
     void synchronizer_thread(Buffer<ItemPtr> &queue, const int channel_index);
     void sychronize(std::complex<float> * _x, const int len, const int channel_index);
 

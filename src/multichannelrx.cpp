@@ -93,10 +93,12 @@ int multichannelrx::callback(unsigned char *  _header,
                 }
             }
         } else {
-            std::cout << boost::format("PAYLOAD INVALID") << std::endl;;
+            if (params_.debug)
+                std::cout << boost::format("PAYLOAD INVALID") << std::endl;;
         }
     } else {
-        std::cout << boost::format("HEADER INVALID") << std::endl;;
+        if (params_.debug)
+            std::cout << boost::format("HEADER INVALID") << std::endl;;
     }
     return 0;
 }
@@ -109,7 +111,8 @@ multichannelrx::multichannelrx(const RadioParameter params) :
     DyspanRadio(params),
     rx_frames_(0),
     last_seq_no_(0),
-    lost_frames_(0)
+    lost_frames_(0),
+    rx_(NULL)
 {
     // create callbacks
     userdata  = (void **)             malloc(params_.num_channels * sizeof(void *));
@@ -202,10 +205,8 @@ multichannelrx::multichannelrx(const RadioParameter params) :
     }
 
     // set antenna port for each channel
-    // TODO: this needs to be changed for B210 or other daughterboard, make it a parameter?
-    const std::string antenna("J1");
     for (int i = 0; i < channels_.size(); i++) {
-        usrp_rx->set_rx_antenna(antenna, i);
+        usrp_rx->set_rx_antenna(params_.rx_antenna, i);
         std::cout << boost::format("Using RX antenna %s on channel %d") % usrp_rx->get_rx_antenna(i) % i << std::endl;
     }
 
@@ -276,6 +277,10 @@ void multichannelrx::start(void)
     // start a synchronizer thread for each channel
     for (int i = 0; i < sync_queue_.size(); i++) {
         threads_.push_back( new boost::thread( boost::bind( &multichannelrx::synchronizer_thread, this, boost::ref(sync_queue_[i]), i) ) );
+    }
+
+    if (params_.use_db) {
+        threads_.push_back( new boost::thread( boost::bind( &multichannelrx::statistic_thread, this ) ) );
     }
 }
 
@@ -396,6 +401,37 @@ void multichannelrx::synchronizer_thread(Buffer<ItemPtr> &queue, const int chann
     catch(boost::thread_interrupted)
     {
         std::cout << "Synchronizer thread for channel " << channel_index << " interrupted." << std::endl;
+    }
+}
+
+
+void multichannelrx::statistic_thread(void)
+{
+    try {
+        while (true) {
+            boost::this_thread::interruption_point();
+            {
+                boost::lock_guard<boost::mutex> lock(mutex_);
+
+                std::cout << boost::format("Total lost frames: %d") % lost_frames_ << std::endl;
+                std::cout << boost::format("PU: %.02f bps / %.02f bps") %
+                             spectrum_getThroughput(rx_, 0, -1) %
+                             spectrum_getProvidedThroughput(rx_, 0, -1) << std::endl;
+
+                double throughput = spectrum_getThroughput(rx_, radio_id_, -1) / 1e6;
+                double provided = spectrum_getProvidedThroughput(rx_, radio_id_, -1) / 1e6;
+                double ratio = 100 * throughput / provided;
+                std::cout << boost::format("SU: %.02f Mbps / %.02f Mbps (%.02f%%)") %
+                             throughput %
+                             provided %
+                             ratio << std::endl;
+            }
+            boost::this_thread::sleep(boost::posix_time::seconds(STAT_INTERVAL));
+        }
+    }
+    catch(boost::thread_interrupted)
+    {
+        std::cout << "Statistic thread for channel interrupted." << std::endl;
     }
 }
 

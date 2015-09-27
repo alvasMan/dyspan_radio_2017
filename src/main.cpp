@@ -48,6 +48,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("rxgain",po::value<double>(&params.rx_gain_uhd)->default_value(15),"Sets UHD receive gain")
         ("txgain_soft",po::value<double>(&params.tx_gain_soft)->default_value(-12),"Sets software transmit gain")
         ("txgain_uhd",po::value<double>(&params.tx_gain_uhd)->default_value(10),"Sets UHD transmit gain")
+        ("rxantenna", po::value<std::string>(&params.rx_antenna)->default_value("TX/RX"), "RX antenna to use")
 
         ("M",po::value<unsigned int>(&params.M)->default_value(48),"Number of subcarriers")
         ("cp_len",po::value<unsigned int>(&params.cp_len)->default_value(6),"Cyclic prefix length")
