@@ -5,6 +5,9 @@
 #include "Buffer.h"
 #include "buffer_factory.h"
 #include "readerwriterqueue.h"
+#include <boost/accumulators/accumulators.hpp>
+#include <boost/accumulators/statistics/mean.hpp>
+#include <boost/accumulators/statistics/stats.hpp>
 #include <vector>
 #include <map>
 #include <liquid/liquid.h>
@@ -23,6 +26,9 @@ typedef struct {
 } CustomUserdata;
 
 using namespace moodycamel;
+using namespace  boost::accumulators;
+
+typedef accumulator_set<float, stats<tag::mean> > acc_mean;
 
 class multichannelrx : public DyspanRadio {
 public:
@@ -58,6 +64,7 @@ private:
     uint32_t rx_frames_;
     uint32_t lost_frames_;
     uint32_t last_seq_no_;
+    acc_mean evm_;
     boost::mutex mutex_;
 
     BufferFactory<BufferItem> buffer_factory_;

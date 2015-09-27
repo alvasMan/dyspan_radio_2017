@@ -44,6 +44,8 @@ int multichannelrx::callback(unsigned char *  _header,
 {
     CustomUserdata *data = static_cast<CustomUserdata*>(_userdata);
 
+    evm_(_stats.evm);
+
     if (params_.debug)
         std::cout << boost::format("***** CH %d rssi=%7.2fdB evm=%7.2fdB, ") % data->channel % _stats.rssi % _stats.evm;
     if (_header_valid) {
@@ -240,15 +242,6 @@ multichannelrx::~multichannelrx()
     // disconnect and destroy handle to challenge DB
     if (rx_)
         spectrum_delete(rx_);
-
-    uint32_t total_frames = rx_frames_ + lost_frames_;
-    std::cout << "Received frames: " << rx_frames_ << std::endl;
-    std::cout << "Lost frames: " << lost_frames_ << std::endl;
-    if (total_frames > 0) {
-        float fer = static_cast<float>(lost_frames_) / static_cast<float>(total_frames);
-        fer *= 100;
-        std::cout << boost::str(boost::format("Frame error rate: %.2f%%") % fer) << std::endl;
-    }
 }
 
 void multichannelrx::start(void)
@@ -262,9 +255,7 @@ void multichannelrx::start(void)
         threads_.push_back( new boost::thread( boost::bind( &multichannelrx::synchronizer_thread, this, boost::ref(sync_queue_[i]), i) ) );
     }
 
-    if (params_.use_db) {
-        threads_.push_back( new boost::thread( boost::bind( &multichannelrx::statistic_thread, this ) ) );
-    }
+    threads_.push_back( new boost::thread( boost::bind( &multichannelrx::statistic_thread, this ) ) );
 }
 
 
@@ -394,9 +385,22 @@ void multichannelrx::statistic_thread(void)
         while (true) {
             boost::this_thread::interruption_point();
             {
-                //boost::lock_guard<boost::mutex> lock(mutex_);
+                boost::lock_guard<boost::mutex> lock(mutex_);
 
-                std::cout << boost::format("Total lost frames: %d") % lost_frames_ << std::endl;
+                uint32_t total_frames = rx_frames_ + lost_frames_;
+                float fer = 0.0;
+                if (total_frames > 0) {
+                    fer = static_cast<float>(lost_frames_) / static_cast<float>(total_frames);
+                    fer *= 100;
+                }
+                std::cout << boost::str(boost::format("RX: %6d Lost: %6d FER: %.2f%% EVM: %.2f%%") % rx_frames_ % lost_frames_ % fer % mean(evm_)) << std::endl;
+
+                rx_frames_ = 0;
+                lost_frames_ = 0;
+                evm_ = acc_mean();
+            }
+
+            if (params_.use_db) {
                 std::cout << boost::format("PU: %.02f bps / %.02f bps") %
                              spectrum_getThroughput(rx_, 0, 10) %
                              spectrum_getProvidedThroughput(rx_, 0, 10) << std::endl;
@@ -409,7 +413,8 @@ void multichannelrx::statistic_thread(void)
                              provided %
                              ratio << std::endl;
             }
-            boost::this_thread::sleep(boost::posix_time::seconds(STAT_INTERVAL));
+
+            boost::this_thread::sleep(boost::posix_time::seconds(params_.stat_interval));
         }
     }
     catch(boost::thread_interrupted)

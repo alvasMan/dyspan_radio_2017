@@ -39,6 +39,7 @@ typedef struct
     double tx_gain_soft;
     std::string rx_antenna;
     bool has_learning;
+    unsigned int stat_interval;
 
     // OFDM parameter
     unsigned int M;                     // number of subcarriers
