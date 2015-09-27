@@ -15,6 +15,7 @@
 #include "spectrum.h"
 
 typedef std::vector<std::complex<float> > CplxFVec;
+typedef std::vector<unsigned char> CharVec;
 typedef std::vector<std::complex<float>, aligned_allocator<__m128, sizeof(__m128)> > ACplxFVec;
 
 #define NUM_PADDING_NULL_SAMPLES 100

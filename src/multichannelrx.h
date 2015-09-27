@@ -50,6 +50,7 @@ private:
     // ...
     void receive_thread();
     void statistic_thread();
+    void frame_delivery_thread();
     void synchronizer_thread(Buffer<ItemPtr> &queue, const int channel_index);
     void sychronize(std::complex<float> * _x, const int len, const int channel_index);
 
@@ -61,6 +62,7 @@ private:
 
     BufferFactory<BufferItem> buffer_factory_;
     boost::ptr_vector<Buffer<ItemPtr> > sync_queue_;
+    Buffer<boost::shared_ptr<CharVec> > rx_buffer_;
 
     // objects
     ofdmflexframesync * framesync;  // array of frame generator objects

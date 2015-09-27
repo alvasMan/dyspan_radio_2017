@@ -67,30 +67,11 @@ int multichannelrx::callback(unsigned char *  _header,
             }
             rx_frames_++;
 
-            // pass received frame to challenge DB
+            // put frame on internal buffer
             if (params_.use_db) {
-                assert(_payload_len <= 1500); // maximum size of the client libarary
-                spectrum_eror_t ret = spectrum_putPacket(rx_, _payload, _payload_len);
-                spectrum_errorToText(rx_, ret, error_buffer, sizeof(error_buffer));
-                if (ret < 0) {
-                    std::cout << boost::format("RX putPacket: %s") % error_buffer << std::endl;
-                    throw std::runtime_error("Couldn't connect to challenge database");
-                }
-
-                // output performance for every n-th received frame
-                if (params_.debug && (seq_no % params_.num_channels == 0)) {
-                    std::cout << boost::format("PU: %.02f bps / %.02f bps") %
-                                 spectrum_getThroughput(rx_, 0, -1) %
-                                 spectrum_getProvidedThroughput(rx_, 0, -1) << std::endl;
-
-                    double throughput = spectrum_getThroughput(rx_, radio_id_, -1) / 1e6;
-                    double provided = spectrum_getProvidedThroughput(rx_, radio_id_, -1) / 1e6;
-                    double ratio = 100 * throughput / provided;
-                    std::cout << boost::format("SU: %.02f Mbps / %.02f Mbps (%.02f%%)") %
-                                 throughput %
-                                 provided %
-                                 ratio << std::endl;
-                }
+                boost::shared_ptr<CharVec> frame( new CharVec(_payload_len) );
+                memcpy(&frame->front(), _payload, _payload_len);
+                rx_buffer_.pushBack(frame);
             }
         } else {
             if (params_.debug)
@@ -273,6 +254,7 @@ void multichannelrx::start(void)
 {
     // start threads
     threads_.push_back( new boost::thread( boost::bind( &multichannelrx::receive_thread, this ) ) );
+    threads_.push_back( new boost::thread( boost::bind( &multichannelrx::frame_delivery_thread, this ) ) );
 
     // start a synchronizer thread for each channel
     for (int i = 0; i < sync_queue_.size(); i++) {
@@ -432,6 +414,32 @@ void multichannelrx::statistic_thread(void)
     catch(boost::thread_interrupted)
     {
         std::cout << "Statistic thread for channel interrupted." << std::endl;
+    }
+}
+
+
+void multichannelrx::frame_delivery_thread(void)
+{
+    try {
+        while (true) {
+            boost::this_thread::interruption_point();
+
+            boost::shared_ptr<CharVec> frame;
+            rx_buffer_.popFront(frame);
+
+            // pass received frame to challenge DB
+            assert(frame->size() <= 1500); // maximum size of the client libarary
+            spectrum_eror_t ret = spectrum_putPacket(rx_, &frame->front(), frame->size());
+            spectrum_errorToText(rx_, ret, error_buffer, sizeof(error_buffer));
+            if (ret < 0) {
+                std::cout << boost::format("RX putPacket: %s") % error_buffer << std::endl;
+                throw std::runtime_error("Couldn't connect to challenge database");
+            }
+        }
+    }
+    catch(boost::thread_interrupted)
+    {
+        std::cout << "Frame delivery thread for channel interrupted." << std::endl;
     }
 }
 
