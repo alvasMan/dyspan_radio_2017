@@ -1,37 +1,31 @@
 /**
- * \file utility/BoundedBuffer.h
- * \version 1.0
  *
  * \section COPYRIGHT
  *
- * Copyright 2012-2013 The Iris Project Developers. See the
- * COPYRIGHT file at the top-level directory of this distribution
- * and at http://www.softwareradiosystems.com/iris/copyright.html.
+ * Copyright 2015  Andre Puschmann, Francisco Paisana, Justin Tallon
  *
  * \section LICENSE
  *
- * This file is part of the Iris Project.
+ * This file is part of dyspanradio.
  *
- * Iris is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
+ * dyspanradio is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of
  * the License, or (at your option) any later version.
  *
- * Iris is distributed in the hope that it will be useful,
+ * dyspanradio is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * A copy of the GNU Lesser General Public License can be found in
+ * A copy of the GNU Affero General Public License can be found in
  * the LICENSE file in the top-level directory of this distribution
  * and at http://www.gnu.org/licenses/.
  *
- * \section DESCRIPTION
- *
- * A datastructure that implements a thread-safe queue with fixed
- * size. It is similar to StackDataBuffer but is a template class.
- *
  */
+
+
+// This class is used from Iris' buffer class
 
 #ifndef BUFFER_H
 #define BUFFER_H
