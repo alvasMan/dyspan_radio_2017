@@ -44,7 +44,9 @@ public:
     // default constructor   
     OfdmTransceiver(const RadioParameter params);
     // destructor
-   virtual ~OfdmTransceiver();
+    virtual ~OfdmTransceiver();
+
+    void set_channel(uint32_t channel);
 
     //
     // transmitter methods
@@ -75,7 +77,7 @@ public:
 
 private:
     ofdmflexframegenprops_s fgprops;// frame generator properties
-    unsigned int  current_channel;
+    unsigned int current_channel;
     unsigned int next_channel;
     bool sensing_calibration;
     bool txrx_calibration;

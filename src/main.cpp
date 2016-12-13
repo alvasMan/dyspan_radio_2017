@@ -42,11 +42,42 @@ namespace po = boost::program_options;
 using namespace std;
 
 static bool stop_signal_called = false;
+static int key = 0;
+static int last_key = 0;
 
 static void signal_handler(int signum)
 {
     std::cout << "Terminating .." << std::endl;
     stop_signal_called = true;
+}
+
+int read_key()
+{
+  char input[128];
+
+  fd_set set;
+  FD_ZERO(&set);
+  FD_SET(0, &set);
+
+  struct timeval to;
+  to.tv_sec = 0;
+  to.tv_usec = 0;
+
+  int n = select(1, &set, NULL, NULL, &to);
+  if (n == 1) {
+    // stdin ready
+    if (fgets(input, sizeof(input), stdin)) {
+      last_key = key;
+      key = atoi(input);
+    }
+    return 0;
+  } else if (n < 0) {
+    // error
+    perror("select");
+    return -1;
+  } else {
+    return 0;
+  }
 }
 
 
@@ -128,7 +159,13 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
 
     // sleep until end ..
     while (not stop_signal_called) {
-        boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+      read_key();
+      if (key != last_key) {
+        boost::shared_ptr<OfdmTransceiver> tx = boost::dynamic_pointer_cast<OfdmTransceiver>(radio);
+        if (tx != NULL)
+          tx->set_channel(key);
+      }
+      boost::this_thread::sleep(boost::posix_time::milliseconds(100));
     }
     radio->stop();
     std::cout << std::endl << "Done!" << std::endl << std::endl;

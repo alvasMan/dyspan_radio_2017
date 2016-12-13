@@ -117,18 +117,15 @@ OfdmTransceiver::~OfdmTransceiver()
 void OfdmTransceiver::start(void)
 {
     // start transmission threads
-   //if(!learning_phase)
-   // {
-    if(!learning)
-    {
-    threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::modulation_function, this ) ) );
-    threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );  
+    if(!learning) {
+      // either start random transmit function or normal one ..
+      threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::modulation_function, this ) ) );
+      threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );
+      //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
     }
-    //  }
-    // either start random transmit function or normal one ..
-  //start sensing thread
+
+    // start sensing thread
     threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::receive_function, this ) ) );
-  //  threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
 }
 
 
@@ -241,24 +238,18 @@ void OfdmTransceiver::transmit_function(void)
 void OfdmTransceiver::random_transmit_function(void)
 {
     try {
-        bool yes = true;
-        int a = 0;
-        while (true) {
-            boost::this_thread::interruption_point();
+      while (true) {
+        boost::this_thread::interruption_point();
             
-            // get random channel
-            //int num = rand() % channels_.size();
-           // reconfigure_usrp(num);
-            //for (int i = 0; i < 2; i++)
-                transmit_packet();
-
-                    if(yes){
-                        reconfigure_usrp(2);
-                        yes = false;
-                    }
-                //}
-            //boost::this_thread::sleep(boost::posix_time::milliseconds(500));
+        // get random channel
+        if (next_channel == 9) {
+          int num = rand() % channels_.size();
+          reconfigure_usrp(num);
         }
+
+        transmit_packet();
+        // boost::this_thread::sleep(boost::posix_time::milliseconds(500));
+      }
     }
     catch(boost::thread_interrupted)
     {
@@ -282,10 +273,6 @@ void OfdmTransceiver::reconfigure_usrp(const int num)
     if(num == 3)
         internal_num = 2;
     
-    
-    
-    
-    
     uhd::tune_request_t request;
     // don't touch RF part
     request.rf_freq_policy = uhd::tune_request_t::POLICY_NONE;
@@ -295,11 +282,7 @@ void OfdmTransceiver::reconfigure_usrp(const int num)
     request.dsp_freq = channels_.at(internal_num).dsp_freq;
     request.args = uhd::device_addr_t("mode_n=integer");
     uhd::tune_result_t result = usrp_tx->set_tx_freq(request);
-    
-    
-    
-    
-    
+
     if (params_.debug) {
         std::cout << result.to_pp_string() << std::endl;
     }
@@ -340,8 +323,7 @@ void OfdmTransceiver::transmit_packet()
 
 void OfdmTransceiver::receive_function(void)
 {
-    
-    #ifdef DEBUG_MODE
+#ifdef DEBUG_MODE
     time_t tnow, tlast = time(0);
 #endif
 
@@ -635,4 +617,17 @@ void OfdmTransceiver::reset_rx()
     //ofdmflexframesync_reset(fs);
 }
 
+void OfdmTransceiver::set_channel(uint32_t num)
+{
+  // channel 9 means random hopping after each packet
+  if (num == 9) {
+    std::cout << "Switching Tx mode to random hopping." << std::endl;
+    next_channel = num;
+  } else if (num < channels_.size()) {
+    std::cout << "Tuning to channel " << num << std::endl;
+    reconfigure_usrp(num);
+  } else {
+    std::cout << "Unknown channel " << num << std::endl;
+  }
+}
 

@@ -142,6 +142,8 @@ public:
         }
     }
 
+    void set_channel(uint32_t channel) {};
+
 protected:
     // generic properties
     RadioParameter params_;
