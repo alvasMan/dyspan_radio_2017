@@ -100,11 +100,17 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
         spectrum_waitForState(tx_, 3, -1);
         std::cout << boost::format("Stage 3 has started.") << std::endl;
     }
+
+    //create a transmit streamer
+    uhd::stream_args_t stream_args("fc32"); //complex floats
+    uhd::tx_streamer::sptr tmp = usrp_tx->get_tx_stream(stream_args);
+    tx_streamer = tmp;
 }
 
 
 OfdmTransceiver::~OfdmTransceiver()
 {
+    std::cout << "Transmitted " << seq_no_ << " frames." << std::endl;
     if (tx_)
         spectrum_delete(tx_);
     delete fgbuffer;
@@ -125,7 +131,10 @@ void OfdmTransceiver::start(void)
     }
 
     // start sensing thread
-    threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::receive_function, this ) ) );
+    if (params_.has_sensing) {
+      std::cout << "Starting receiver thread .." << std::endl;
+      threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::receive_function, this ) ) );
+    }
 }
 
 
@@ -206,32 +215,16 @@ void OfdmTransceiver::modulation_function(void)
 
 void OfdmTransceiver::transmit_function(void)
 {
-    try {
-
-        while (true) {
-            boost::this_thread::interruption_point();
-
-            // check if channel needs to be reconfigured
-            // send 50 packets on second channel once every 100 packets
-            static int counter = 1;
-            if (counter++ % 100 == 0) {
-                reconfigure_usrp(1);
-                for (int i = 0; i < 50; i++)
-                    transmit_packet();
-                reconfigure_usrp(0);
-                boost::this_thread::sleep(boost::posix_time::seconds(1));
-            } else {
-                // transmit frame
-                transmit_packet();
-            }
-
-
-        }
+  try {
+    boost::this_thread::interruption_point();
+    while (true) {
+      transmit_packet();
     }
-    catch(boost::thread_interrupted)
-    {
-        std::cout << "Transmit thread interrupted." << std::endl;
-    }
+  }
+  catch(boost::thread_interrupted)
+  {
+    std::cout << "Transmit thread interrupted." << std::endl;
+  }
 }
 
 
@@ -288,36 +281,65 @@ void OfdmTransceiver::reconfigure_usrp(const int num)
     }
 }
 
+
 void OfdmTransceiver::transmit_packet()
 {
-    // set up the metadata flags
-    metadata_tx.start_of_burst = false; // never SOB when continuous
-    metadata_tx.end_of_burst   = false; //
-    metadata_tx.has_time_spec  = false; // set to false to send immediately
+  boost::shared_ptr<CplxFVec> buffer;
+  frame_buffer.popFront(buffer);
 
-    boost::shared_ptr<CplxFVec> buffer;
-    frame_buffer.popFront(buffer);
+  //setup metadata for the first packet
+  uhd::tx_metadata_t md;
+  md.start_of_burst = true;
+  md.end_of_burst = false;
+  md.has_time_spec = false;
 
-    // send samples to the device
-    usrp_tx->get_device()->send(
-        &buffer->front(), buffer->size(),
-        metadata_tx,
-        uhd::io_type_t::COMPLEX_FLOAT32,
-        uhd::device::SEND_MODE_FULL_BUFF
+  //the first call to send() will block this many seconds before sending:
+  double timeout = 1.5; //std::max(0 seconds_in_future) + 0.1; //timeout (delay before transmit + padding)
+
+  const size_t spb = tx_streamer->get_max_num_samps();
+  size_t total_num_samps = buffer->size();
+  size_t num_acc_samps = 0; //number of accumulated samples
+  while(num_acc_samps < total_num_samps){
+    size_t samps_to_send = total_num_samps - num_acc_samps;
+    if (samps_to_send > spb)
+    {
+      samps_to_send = spb;
+    } else {
+      md.end_of_burst = true;
+    }
+
+    //send a single packet
+    size_t num_tx_samps = tx_streamer->send(
+      &buffer->front()+num_acc_samps, samps_to_send, md, timeout
     );
 
-    // send a few extra samples and EOB to the device
-    // NOTE: this seems necessary to preserve last OFDM symbol in
-    //       frame from corruption
-    metadata_tx.start_of_burst = false;
-    metadata_tx.end_of_burst   = true;
-    CplxFVec dummy(NUM_PADDING_NULL_SAMPLES);
-    usrp_tx->get_device()->send(
-        &dummy.front(), dummy.size(),
-        metadata_tx,
-        uhd::io_type_t::COMPLEX_FLOAT32,
-        uhd::device::SEND_MODE_FULL_BUFF
-    );
+    //do not use time spec for subsequent packets
+    md.has_time_spec = false;
+    md.start_of_burst = false;
+
+    if (num_tx_samps < samps_to_send)
+    {
+      std::cerr << "Send timeout..." << std::endl;
+    }
+    //std::cout << boost::format("Sent packet: %u samples of %u") % num_tx_samps % total_num_samps << std::endl;
+
+    num_acc_samps += num_tx_samps;
+  }
+
+#if 0
+  std::cout << std::endl << "Waiting for async burst ACK... " << std::flush;
+  uhd::async_metadata_t async_md;
+  size_t acks = 0;
+  //loop through all messages for the ACK packets (may have underflow messages in queue)
+  while (acks < channels_.size() and tx_streamer->recv_async_msg(async_md, timeout))
+  {
+    if (async_md.event_code == uhd::async_metadata_t::EVENT_CODE_BURST_ACK)
+    {
+      acks++;
+    }
+  }
+  std::cout << (acks == channels_.size() ? "success" : "fail") << std::endl;
+#endif
 }
 
 

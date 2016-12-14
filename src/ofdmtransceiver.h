@@ -113,6 +113,7 @@ private:
     uhd::usrp::multi_usrp::sptr usrp_tx;
     uhd::usrp::multi_usrp::sptr usrp_rx;
     uhd::tx_metadata_t          metadata_tx;
+    uhd::tx_streamer::sptr      tx_streamer;
 };
 
 #endif // OFDMTRANSCEIVER_H
