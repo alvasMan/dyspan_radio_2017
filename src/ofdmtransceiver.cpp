@@ -255,17 +255,20 @@ void OfdmTransceiver::reconfigure_usrp(const int num)
 {
     // construct tuning request
     current_channel = num;
-    int internal_num;
+    int internal_num = num;
     
-    if(num == 0)
+    if (channels_.size() > 1) {
+      // only do remapping for more channels
+      if(num == 0)
         internal_num = 3;
-    if(num == 1)
-        internal_num = 1;
-    if(num == 2)
-        internal_num = 0;
-    if(num == 3)
-        internal_num = 2;
-    
+      if(num == 1)
+          internal_num = 1;
+      if(num == 2)
+          internal_num = 0;
+      if(num == 3)
+          internal_num = 2;
+    }
+
     uhd::tune_request_t request;
     // don't touch RF part
     request.rf_freq_policy = uhd::tune_request_t::POLICY_NONE;
