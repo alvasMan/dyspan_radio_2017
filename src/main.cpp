@@ -122,6 +122,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
 
         ("learning", po::value<bool>(&params.has_learning)->default_value(false), "learning on or off")
         ("debug", po::value<bool>(&params.debug)->default_value(false), "Whether to print debug messages")
+        ("sensing", po::value<bool>(&params.has_sensing)->default_value(true), "Whether to start sensing thread")
         ("dilv", "specify to disable inner-loop verbose")
     ;
     

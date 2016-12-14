@@ -51,6 +51,7 @@ typedef struct
 {
     // generic radio parameters
     bool debug;
+    bool has_sensing;
     std::string mode;
     std::string args;
     std::string txsubdev;
@@ -127,6 +128,11 @@ public:
             }
         }
         // TODO: check that all channels have the same center frequency for faster tuning
+
+        // Print configuration for each of the channels
+        for (int i = 0; i < channels_.size(); i++) {
+          std::cout << boost::str(boost::format("CH %d: rf_freq=%.4f dsp_freq=%.4f GHz bw=%.4f MHz rate=%.4f MHz") % i % (channels_[i].rf_freq/1e9) % (channels_[i].dsp_freq/1e6) % (channels_[i].bandwidth/1e6) % (channels_[i].rate/1e6)) << std::endl;
+        }
     }
 
     virtual ~DyspanRadio() {}
