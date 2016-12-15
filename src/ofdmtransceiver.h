@@ -30,6 +30,7 @@
 // This class is based on liquid-usrp's ofdmtxrx class.
 
 #include <complex>
+#include <chrono>
 #include <boost/ptr_container/ptr_deque.hpp>
 #include <liquid/liquid.h>
 #include "dyspanradio.h"
@@ -41,7 +42,7 @@
 class OfdmTransceiver : public DyspanRadio
 {
 public:
-    // default constructor   
+    // default constructor
     OfdmTransceiver(const RadioParameter params);
     // destructor
     virtual ~OfdmTransceiver();
@@ -91,6 +92,7 @@ private:
     unsigned int fgbuffer_len;      // length of frame generator buffer (is the size of a single OFDM symbol)
     float tx_gain;                  // soft transmit gain (linear)
     uint32_t seq_no_;
+    std::chrono::time_point<std::chrono::system_clock> last_ch_tstamp = std::chrono::system_clock::now(); // time since last channel hop
 
     //boost::ptr_deque<CplxFVec> frame_buffer;
     Buffer<boost::shared_ptr<CplxFVec> > frame_buffer;
