@@ -106,7 +106,7 @@ private:
     void random_transmit_function(); // this is just a test function which randomly transmits on every available channel
     void modulation_function();
     void receive_function();
-    void reconfigure_usrp(const int num);
+    void reconfigure_usrp(const int num, bool tune_lo);
     std::pair<bool,double> dwelltimer();
     void process_sensing(std::vector<float> ChPowers);
     // RF objects and properties

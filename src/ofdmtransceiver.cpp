@@ -67,19 +67,25 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     // std::cout << boost::format("number of channels ::: %s") % usrp_rx->get_rx_num_channels() << std::endl;
 
     // initialize default tx values
+    double rx_rf_rate = params_.num_channels * params_.channel_bandwidth;
     set_tx_freq(params_.f_center);
     set_tx_rate(params_.channel_rate);
     set_tx_gain_soft(params_.tx_gain_soft);
     set_tx_gain_uhd(params_.tx_gain_uhd);
 
-    double rx_rf_rate = params_.num_channels * params_.channel_bandwidth;
+    // tune to first channel with setting the LO
+    assert(channels_.size() > 0);
+    reconfigure_usrp(0, true);
+
     set_rx_freq(params_.f_center);
     set_rx_rate(rx_rf_rate);
     set_rx_gain_uhd(params_.rx_gain_uhd);
     //set_rx_antenna("J1");
 
-    // setting up the energy detector (number of averages,window step size,fftsize)
-    e_detec.set_parameters(16, 512, 4, 0.4, 0.4);//(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
+    if (params_.has_sensing) {
+      // setting up the energy detector (number of averages,window step size,fftsize)
+      e_detec.set_parameters(16, 512, 4, 0.4, 0.4);//(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
+    }
 
     if (params_.use_db) {
         // create and connect to challenge database
@@ -237,7 +243,7 @@ void OfdmTransceiver::random_transmit_function(void)
         // get random channel
         if (next_channel == 9) {
           int num = rand() % channels_.size();
-          reconfigure_usrp(num);
+          reconfigure_usrp(num, false);
         }
 
         transmit_packet();
@@ -251,7 +257,7 @@ void OfdmTransceiver::random_transmit_function(void)
 }
 
 
-void OfdmTransceiver::reconfigure_usrp(const int num)
+void OfdmTransceiver::reconfigure_usrp(const int num, bool tune_lo = false)
 {
     // construct tuning request
     current_channel = num;
@@ -271,8 +277,15 @@ void OfdmTransceiver::reconfigure_usrp(const int num)
 
     uhd::tune_request_t request;
     // don't touch RF part
-    request.rf_freq_policy = uhd::tune_request_t::POLICY_NONE;
-    request.rf_freq = 0;
+
+    if (tune_lo) {
+      request.rf_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
+      request.rf_freq = channels_.at(internal_num).rf_freq;
+    } else {
+      request.rf_freq_policy = uhd::tune_request_t::POLICY_NONE;
+      request.rf_freq = 0;
+    }
+
     // only tune DSP frequency
     request.dsp_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
     request.dsp_freq = channels_.at(internal_num).dsp_freq;
