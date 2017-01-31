@@ -68,6 +68,16 @@ public:
         ret.set(this, buf[r_idx]);
     }
 
+    bool try_get_rdataset(rdataset<T>& ret)
+    {
+        boost::mutex::scoped_lock lock(m_mutex);
+        if(n_written == 0)
+            return false;
+        r_idx = (r_idx + 1) % buf.size();
+        ret.set(this, buf[r_idx]);
+        return true;
+    }
+    
     void get_wdataset(wdataset<T>& ret)
     {
         boost::mutex::scoped_lock lock(m_mutex);

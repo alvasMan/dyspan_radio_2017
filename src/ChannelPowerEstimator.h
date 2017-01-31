@@ -96,7 +96,7 @@ public:
     }
     inline uint16_t fft_size() const {return nBins;}
     void pop_result(buffer_utils::rdataset<ChPowers> &d);   // WARNING: with no move semantics I have to use shared_ptr to avoid mem leaks
-    bool try_pop_result(double &tstamp, std::vector<float> &vec);
+    bool try_pop_result(buffer_utils::rdataset<ChPowers> &d);
 };
 
 #endif

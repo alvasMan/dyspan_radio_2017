@@ -100,7 +100,6 @@ private:
     // receiver objects
     ChannelPowerEstimator e_detec;
     //std::pair<double,bool> DwellEst(DwellTimeEstimator &Dwell, double &previous_dwelltime, int &dwell_counter, int steady_state, double steady_state_Th);
-    bool learning;
     uhd::time_spec_t timestamp_;
 
     // member functions

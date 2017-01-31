@@ -83,14 +83,16 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     set_rx_gain_uhd(params_.rx_gain_uhd);
     //set_rx_antenna("J1");
 
-    if (params_.has_sensing) 
+    if (params_.has_sensing)
     {
         // setting up the energy detector (number of averages over time,fft size, number of channels)
         e_detec.set_parameters(1, 512, 4);
+        
         //e_detec.set_parameters(16, 512, 4, 0.4, 0.4);//(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
     }
 
-    if (params_.use_db) {
+    if (params_.use_db) 
+    {
         // create and connect to challenge database
         tx_ = spectrum_init(0);
         spectrum_eror_t ret = spectrum_connect(tx_, (char*)params_.db_ip.c_str(), 5002, payload_len_, 1);
@@ -131,19 +133,20 @@ OfdmTransceiver::~OfdmTransceiver()
 //
 void OfdmTransceiver::start(void)
 {
-    // start transmission threads, only if we are not in learning mode
-    if(learning==false) {
-      // either start random transmit function or normal one ..
-      threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::modulation_function, this ) ) );
-      threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );
-      //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
+    // start transmission threads, only if tx is enabled
+    // NOTE: non tx enabled mode is still useful for us to extract IQ samples
+    if(params_.tx_enabled)
+    {
+        // either start random transmit function or normal one ..
+        threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::modulation_function, this ) ) );
+        threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );
+        //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
     }
 
     // start sensing thread
-    if (params_.has_sensing) 
+    if (params_.has_sensing)
     {
         std::cout << "Starting sensing threads..." << std::endl;
-        //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::receive_function, this ) ) );
         sensing_function();
     }
 }
@@ -171,7 +174,8 @@ void OfdmTransceiver::modulation_function(void)
                 header[i] = rand() & 0xff;
 
             int actual_payload_len = payload_len_;
-            if (params_.use_db) {
+            if (params_.use_db) 
+            {
                 // get packet from database
                 // FIXME: payload_len must not be smaller than the size requested during init
                 spectrum_eror_t ret = spectrum_getPacket(tx_, payload, payload_len_, -1);

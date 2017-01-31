@@ -177,17 +177,18 @@ void ChannelPowerEstimator::process(double tstamp) {
     }
 }
 
-bool ChannelPowerEstimator::try_pop_result(double &tstamp, std::vector<float> &vec)
+bool ChannelPowerEstimator::try_pop_result(buffer_utils::rdataset<ChPowers> &d)
 {
-    if(result_exists())
-    {
-        buffer_utils::rdataset<ChPowers> d;
-        results.get_rdataset(d);
-        vec = d().second; // NOTE: should I copy?
-        tstamp = d().first;
-        return true;
-    }
-    return false;
+    return results.try_get_rdataset(d);
+//    if(result_exists())
+//    {
+//        buffer_utils::rdataset<ChPowers> d;
+//        results.get_rdataset(d);
+//        vec = d().second; // NOTE: should I copy?
+//        tstamp = d().first;
+//        return true;
+//    }
+//    return false;
 }
 
 void ChannelPowerEstimator::pop_result(buffer_utils::rdataset<ChPowers> &d)

@@ -65,7 +65,7 @@ typedef struct
     double tx_gain_uhd;
     double tx_gain_soft;
     std::string rx_antenna;
-    bool has_learning;
+    bool tx_enabled;
     unsigned int stat_interval;
 
     // OFDM parameter
