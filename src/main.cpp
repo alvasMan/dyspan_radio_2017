@@ -121,6 +121,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("db_pass", po::value<std::string>(&params.db_password)->default_value("?"), "Database password")
 
         ("learning", po::value<bool>(&params.has_learning)->default_value(false), "learning on or off")
+        ("dynamic-mod", po::value<bool>(&params.dynamic_mod)->default_value(false), "dynamic_modulation on")
         ("debug", po::value<bool>(&params.debug)->default_value(false), "Whether to print debug messages")
         ("sensing", po::value<bool>(&params.has_sensing)->default_value(true), "Whether to start sensing thread")
         ("dilv", "specify to disable inner-loop verbose")
@@ -129,6 +130,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
+
 
     //print the help message
     if (vm.count("help")){

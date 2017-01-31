@@ -83,6 +83,10 @@ typedef struct
     std::string db_ip;
     std::string db_user;
     std::string db_password;
+
+    // use dynamic mcs adaptation
+    bool dynamic_mod;
+
 } RadioParameter;
 
 
