@@ -14,7 +14,7 @@ void SpectrogramGenerator::setup_rx_chain(uhd::usrp::multi_usrp::sptr utx)
     std::string wire_format("sc16");
     std::string cpu_format("fc32");
     uhd::stream_args_t stream_args(cpu_format, wire_format);
-    uhd::rx_streamer::sptr rx_stream = usrp_tx->get_rx_stream(stream_args);
+    rx_stream = usrp_tx->get_rx_stream(stream_args);
 }
 
 void SpectrogramGenerator::start()
@@ -82,8 +82,9 @@ void launch_spectrogram_generator(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelP
         {
             boost::this_thread::interruption_point();
 
-            // receive data from USRP
-            s.recv_fft_pwrs();
+            // receive data from USRP and place it in the buffer
+            if(s.recv_fft_pwrs()==false)
+                break;
         }
     }
     catch(boost::thread_interrupted)

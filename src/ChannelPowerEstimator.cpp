@@ -190,10 +190,7 @@ bool ChannelPowerEstimator::try_pop_result(double &tstamp, std::vector<float> &v
     return false;
 }
 
-void ChannelPowerEstimator::pop_result(double &tstamp, std::vector<float> &vec)
+void ChannelPowerEstimator::pop_result(buffer_utils::rdataset<ChPowers> &d)
 {
-    buffer_utils::rdataset<ChPowers> d;
     results.get_rdataset(d);
-    vec = d().second; // NOTE: should I copy?
-    tstamp = d().first;
 }

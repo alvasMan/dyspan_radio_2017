@@ -131,8 +131,8 @@ OfdmTransceiver::~OfdmTransceiver()
 //
 void OfdmTransceiver::start(void)
 {
-    // start transmission threads
-    if(!learning) {
+    // start transmission threads, only if we are not in learning mode
+    if(learning==false) {
       // either start random transmit function or normal one ..
       threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::modulation_function, this ) ) );
       threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );
@@ -142,9 +142,9 @@ void OfdmTransceiver::start(void)
     // start sensing thread
     if (params_.has_sensing) 
     {
-      std::cout << "Starting sensing threads..." << std::endl;
-      //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::receive_function, this ) ) );
-      sensing_function();
+        std::cout << "Starting sensing threads..." << std::endl;
+        //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::receive_function, this ) ) );
+        sensing_function();
     }
 }
 
@@ -222,7 +222,6 @@ void OfdmTransceiver::modulation_function(void)
         std::cout << "Modulation thread interrupted." << std::endl;
     }
 }
-
 
 void OfdmTransceiver::transmit_function(void)
 {
@@ -346,184 +345,33 @@ void OfdmTransceiver::transmit_packet()
 
     num_acc_samps += num_tx_samps;
   }
-
-#if 0
-  std::cout << std::endl << "Waiting for async burst ACK... " << std::flush;
-  uhd::async_metadata_t async_md;
-  size_t acks = 0;
-  //loop through all messages for the ACK packets (may have underflow messages in queue)
-  while (acks < channels_.size() and tx_streamer->recv_async_msg(async_md, timeout))
-  {
-    if (async_md.event_code == uhd::async_metadata_t::EVENT_CODE_BURST_ACK)
-    {
-      acks++;
-    }
-  }
-  std::cout << (acks == channels_.size() ? "success" : "fail") << std::endl;
-#endif
 }
 
 void OfdmTransceiver::launch_change_places()
-{
-    
+{   
     for(;;)
     {
         boost::this_thread::interruption_point();
         
-        // get data from socket. may block
-        std::vector<float> ch_powers;
-        double tstamp;
-        e_detec.pop_result(tstamp, ch_powers);
+        // get data from socket. may block until result arrives
+        buffer_utils::rdataset<ChPowers> dset;
+        e_detec.pop_result(dset);
         
         // call the CHAAANGE PLACES
-        process_sensing(ch_powers);
+        process_sensing(dset().second);
     }
 }
 
 void OfdmTransceiver::sensing_function(void)
 {
+    // the two threads communicate through the e_detec buffer
     threads_.push_back(new boost::thread(launch_spectrogram_generator, usrp_tx, &e_detec));
     threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
 }
 
-void OfdmTransceiver::receive_function(void)
-{
-#ifdef DEBUG_MODE
-    time_t tnow, tlast = time(0);
-#endif
-
-    //create a receive streamer
-    std::string wire_format("sc16");
-    std::string cpu_format("fc32");
-    uhd::stream_args_t stream_args(cpu_format, wire_format);
-    uhd::rx_streamer::sptr rx_stream = usrp_tx->get_rx_stream(stream_args);
-
-    //setup streaming
-    std::cout << std::endl;
-    std::cout << boost::format("Begin streaming now ..") << std::endl;
-    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-    stream_cmd.num_samps = 0; // continuous
-    stream_cmd.stream_now = true;
-    stream_cmd.time_spec = uhd::time_spec_t();
-    usrp_tx->issue_stream_cmd(stream_cmd);
-
-    //meta-data will be filled in by recv()
-    uhd::rx_metadata_t metadata;
-    bool overflow_message = true;
-    int dwell_counter = 0;
-    //bool c = false;
-    bool have_tdwell = false;
-    double t_dwell;
-    //DwellTimeEstimator Dwell(4, 0.5, 0.001);
-    double previous_dwelltime =  0.5;
-    try {
-
-        while (true) {
-            boost::this_thread::interruption_point();
-
-            do {
-                std::vector<std::complex<float> > rxBuff;
-                rxBuff.resize(100);
-                //size_t num_rx_samps1 = rx_stream->recv(&rxBuff.front(), rxBuff.size(), metadata, 3.0);
-                size_t num_rx_samps = rx_stream->recv(e_detec.fftBins, e_detec.nBins, metadata, 5.0);
-
-                //handle the error code
-                if (metadata.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) {
-                    std::cout << boost::format("Timeout while streaming") << std::endl;
-                    break;
-                }
-                if (metadata.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW){
-                    if (overflow_message){
-                        overflow_message = false;
-                        std::cerr << boost::format("Got an overflow indication, please reduce sample rate.");
-                    }
-                    continue;
-                }
-                if (metadata.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE){
-                    throw std::runtime_error(str(boost::format(
-                                                     "Unexpected error code 0x%x"
-                                                     ) % metadata.error_code));
-                }
-
-                timestamp_ = metadata.time_spec;
-
-                // Always call process because we write on fftBins nBins samples from uhd (see above)
-                e_detec.process(timestamp_.get_real_secs());
-           } while(not e_detec.result_exists());
-
-            double tstamp;
-            std::vector<float> ch_power;
-            e_detec.pop_result(tstamp, ch_power);// ch_power is your sensing results, free channels will appear as a 0
-           process_sensing(ch_power);
-
-//            if(learning && !have_tdwell)
-//            {
-//                //Dwell.process(tstamp,ch_power);
-//
-////                auto  DwellPair = DwellEst(Dwell,previous_dwelltime,dwell_counter, 10000, 0.04);
-////                if(DwellPair.second)
-////                {
-////
-////                    have_tdwell = true;
-////                    t_dwell = DwellPair.first;
-////                }
-//            }
-//            if(learning && have_tdwell)
-//            {
-//            // pass chpowers and dwell time to
-//            }
-
-           // std::cout << "dwell time    :" << t_dwell << std::endl;
-
-
-
-            // print power levels for each channel
-#ifdef DEBUG_MODE
-            tnow = time(0);
-            // print power levels for each channel
-            if (difftime(tnow,tlast) > 0.01) {
-                std::cout << "Energy: " << print_range_dB(ch_power);
-
-                //std::cout << "p(Detection): " << e_detec.noise_filter->print_ch_pdetec();
-               // std::cout << "noise floor: ";
-               // for (int i = 0; i < ch_power.size(); i++) {
-              //      float dB_value = 10*log10(e_detec.noise_filter->ch_noise_floor(i)), detec_rate = e_detec.noise_filter->ch_detec_rate(i);
-              //      std::cout << boost::format("%d: %1.4f dB\t") % i % dB_value;
-              //  }
-                //std::cout << std::endl;
-
-                tlast = tnow;
-            }
-#endif
-
-
-        }
-    }
-    catch(boost::thread_interrupted)
-    {
-        std::cout << "Receive thread interrupted." << std::endl;
-    }
-}
-
 void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
 {
-    int numfree = 0;
-    // std::vector<int> notfree;
-    ChPowers[current_channel] = 0;
-    //std::cout << "noise floor: [" << e_detec.noise_filter->ch_noise_floor(0) << ", " << e_detec.noise_filter->ch_noise_floor(1) << ", " << e_detec.noise_filter->ch_noise_floor(2) << ", " << e_detec.noise_filter->ch_noise_floor(3) << "]\n";
-    //std::cout << "noise floor: [" << 10*log10(e_detec.noise_filter->ch_noise_floor(0)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(1)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(2)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(3)) << "]\n";
-    //std::cout << "cur energy: [" << 10*log10(ChPowers[0]) << "," << 10*log10(ChPowers[1]) << "," << 10*log10(ChPowers[2]) << "," << 10*log10(ChPowers[3]) << "], cur ch: " <<  current_channel << "\n";
     //e_detec.noise_filter->filter(ChPowers);
-    for(int i = 0; i < ChPowers.size(); i++)
-    {
-        if(ChPowers[i] == 0)
-            numfree++;
-    }
-    //if(numfree == ChPowers.size()) //|| numfree == ChPowers.size())
-    //{
-        //std::cout << "cur energy: [" << 10*log10(ChPowers[0]) << "," << 10*log10(ChPowers[1]) << "," << 10*log10(ChPowers[2]) << "," << 10*log10(ChPowers[3]) << "], cur ch: " <<  current_channel << "\n";
-        //std::cout << "noise floor: [" << e_detec.noise_filter->ch_noise_floor(0) << ", " << e_detec.noise_filter->ch_noise_floor(1) << ", " << e_detec.noise_filter->ch_noise_floor(2) << ", " << e_detec.noise_filter->ch_noise_floor(3) << "]\n";
-        //std::cout << "sig energy: [" << e_detec.noise_filter->ch_sig_power(0) << ", " << e_detec.noise_filter->ch_sig_power(1) << ", " << e_detec.noise_filter->ch_sig_power(2) << ", " << e_detec.noise_filter->ch_sig_power(3) << "]\n";
 
     std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-last_ch_tstamp;
     if(elapsed_seconds.count()>2)
@@ -537,10 +385,8 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
         last_ch_tstamp = std::chrono::system_clock::now();
         reconfigure_usrp(current_channel);
         reconfigure_usrp(channel_map[current_channel]);
-         // find_next_channel(); LUT based on Jonathans learning;
     }
 }
-
 
 // set transmitter frequency
 void OfdmTransceiver::set_tx_freq(float freq)
