@@ -7,16 +7,15 @@ file(GLOB sources
     ofdmtransceiver.cpp
     multichannelrx.cpp
     multichannelrx_pfb.cpp
-    EnergyDetector2.cpp
-    EnergyDetector.cpp)
+    ChannelPowerEstimator.cpp
+    sensing_components.cpp)
 
 file(GLOB headers
     dyspanradio.h
     ofdmtransceiver.h
     multichannelrx.h
     multichannelrx_pfb.h
-    EnergyDetector2.h
-    EnergyDetector.h
+    ChannelPowerEstimator.h
     channels.h
     Buffer.h
     buffer_factory.h

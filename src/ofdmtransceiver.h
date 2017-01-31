@@ -36,8 +36,8 @@
 #include "dyspanradio.h"
 #include "Buffer.h"
 #include "channels.h"
-#include "EnergyDetector2.h"
-#include "EnergyDetector.h"
+#include "ChannelPowerEstimator.h"
+#include "sensing_components.h"
 
 class OfdmTransceiver : public DyspanRadio
 {
@@ -98,8 +98,8 @@ private:
     Buffer<boost::shared_ptr<CplxFVec> > frame_buffer;
 
     // receiver objects
-    EnergyDetector2 e_detec;
-    std::pair<double,bool> DwellEst(DwellTimeEstimator &Dwell, double &previous_dwelltime, int &dwell_counter, int steady_state, double steady_state_Th);
+    ChannelPowerEstimator e_detec;
+    //std::pair<double,bool> DwellEst(DwellTimeEstimator &Dwell, double &previous_dwelltime, int &dwell_counter, int steady_state, double steady_state_Th);
     bool learning;
     uhd::time_spec_t timestamp_;
 
@@ -108,6 +108,8 @@ private:
     void random_transmit_function(); // this is just a test function which randomly transmits on every available channel
     void modulation_function();
     void receive_function();
+    void sensing_function();
+    void launch_change_places();
     void reconfigure_usrp(const int num, bool tune_lo);
     std::pair<bool,double> dwelltimer();
     void process_sensing(std::vector<float> ChPowers);

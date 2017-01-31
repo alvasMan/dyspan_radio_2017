@@ -29,6 +29,7 @@
 
 #include <iostream>
 #include <string>
+#include "general_utils.hpp"
 
 #define DEBUG_MODE
 
@@ -82,9 +83,11 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     set_rx_gain_uhd(params_.rx_gain_uhd);
     //set_rx_antenna("J1");
 
-    if (params_.has_sensing) {
-      // setting up the energy detector (number of averages,window step size,fftsize)
-      e_detec.set_parameters(16, 512, 4, 0.4, 0.4);//(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
+    if (params_.has_sensing) 
+    {
+        // setting up the energy detector (number of averages over time,fft size, number of channels)
+        e_detec.set_parameters(1, 512, 4);
+        //e_detec.set_parameters(16, 512, 4, 0.4, 0.4);//(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
     }
 
     if (params_.use_db) {
@@ -137,9 +140,11 @@ void OfdmTransceiver::start(void)
     }
 
     // start sensing thread
-    if (params_.has_sensing) {
-      std::cout << "Starting receiver thread .." << std::endl;
-      threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::receive_function, this ) ) );
+    if (params_.has_sensing) 
+    {
+      std::cout << "Starting sensing threads..." << std::endl;
+      //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::receive_function, this ) ) );
+      sensing_function();
     }
 }
 
@@ -358,6 +363,28 @@ void OfdmTransceiver::transmit_packet()
 #endif
 }
 
+void OfdmTransceiver::launch_change_places()
+{
+    
+    for(;;)
+    {
+        boost::this_thread::interruption_point();
+        
+        // get data from socket. may block
+        std::vector<float> ch_powers;
+        double tstamp;
+        e_detec.pop_result(tstamp, ch_powers);
+        
+        // call the CHAAANGE PLACES
+        process_sensing(ch_powers);
+    }
+}
+
+void OfdmTransceiver::sensing_function(void)
+{
+    threads_.push_back(new boost::thread(launch_spectrogram_generator, usrp_tx, &e_detec));
+    threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
+}
 
 void OfdmTransceiver::receive_function(void)
 {
@@ -387,7 +414,7 @@ void OfdmTransceiver::receive_function(void)
     //bool c = false;
     bool have_tdwell = false;
     double t_dwell;
-    DwellTimeEstimator Dwell(4, 0.5, 0.001);
+    //DwellTimeEstimator Dwell(4, 0.5, 0.001);
     double previous_dwelltime =  0.5;
     try {
 
@@ -429,22 +456,22 @@ void OfdmTransceiver::receive_function(void)
             e_detec.pop_result(tstamp, ch_power);// ch_power is your sensing results, free channels will appear as a 0
            process_sensing(ch_power);
 
-            if(learning && !have_tdwell)
-            {
-                Dwell.process(tstamp,ch_power);
-
-                auto  DwellPair = DwellEst(Dwell,previous_dwelltime,dwell_counter, 10000, 0.04);
-                if(DwellPair.second)
-                {
-
-                    have_tdwell = true;
-                    t_dwell = DwellPair.first;
-                }
-            }
-            if(learning && have_tdwell)
-            {
-            // pass chpowers and dwell time to
-            }
+//            if(learning && !have_tdwell)
+//            {
+//                //Dwell.process(tstamp,ch_power);
+//
+////                auto  DwellPair = DwellEst(Dwell,previous_dwelltime,dwell_counter, 10000, 0.04);
+////                if(DwellPair.second)
+////                {
+////
+////                    have_tdwell = true;
+////                    t_dwell = DwellPair.first;
+////                }
+//            }
+//            if(learning && have_tdwell)
+//            {
+//            // pass chpowers and dwell time to
+//            }
 
            // std::cout << "dwell time    :" << t_dwell << std::endl;
 
@@ -455,9 +482,9 @@ void OfdmTransceiver::receive_function(void)
             tnow = time(0);
             // print power levels for each channel
             if (difftime(tnow,tlast) > 0.01) {
-                std::cout << "Energy: " << print_vector_dB(ch_power);
+                std::cout << "Energy: " << print_range_dB(ch_power);
 
-                std::cout << "p(Detection): " << e_detec.noise_filter->print_ch_pdetec();
+                //std::cout << "p(Detection): " << e_detec.noise_filter->print_ch_pdetec();
                // std::cout << "noise floor: ";
                // for (int i = 0; i < ch_power.size(); i++) {
               //      float dB_value = 10*log10(e_detec.noise_filter->ch_noise_floor(i)), detec_rate = e_detec.noise_filter->ch_detec_rate(i);
@@ -478,42 +505,6 @@ void OfdmTransceiver::receive_function(void)
     }
 }
 
-
-   std::pair<double,bool> OfdmTransceiver::DwellEst(DwellTimeEstimator &Dwell, double &previous_dwelltime, int &dwell_counter, int steady_state, double steady_state_Th)
-   {
-
-       std::pair<double,bool> DwellOut;
-
-                double  t_dwell =  Dwell.dwelltime();
-                DwellOut.first = t_dwell;
-
-                if(pow((t_dwell-previous_dwelltime),2) < pow((t_dwell*(steady_state_Th)),2))
-                {
-                    dwell_counter++;
-                    previous_dwelltime = t_dwell;
-                }
-                else
-                {
-                    dwell_counter = 0;
-                    previous_dwelltime = t_dwell;
-                }
-                if(dwell_counter > steady_state)
-                {
-                    DwellOut.second = true;
-                    return DwellOut;
-                }
-                else
-                {
-                    DwellOut.second = false;
-                    return DwellOut;
-                }
-
-   }
-
-
-
-
-
 void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
 {
     int numfree = 0;
@@ -522,7 +513,7 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
     //std::cout << "noise floor: [" << e_detec.noise_filter->ch_noise_floor(0) << ", " << e_detec.noise_filter->ch_noise_floor(1) << ", " << e_detec.noise_filter->ch_noise_floor(2) << ", " << e_detec.noise_filter->ch_noise_floor(3) << "]\n";
     //std::cout << "noise floor: [" << 10*log10(e_detec.noise_filter->ch_noise_floor(0)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(1)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(2)) << ", " << 10*log10(e_detec.noise_filter->ch_noise_floor(3)) << "]\n";
     //std::cout << "cur energy: [" << 10*log10(ChPowers[0]) << "," << 10*log10(ChPowers[1]) << "," << 10*log10(ChPowers[2]) << "," << 10*log10(ChPowers[3]) << "], cur ch: " <<  current_channel << "\n";
-    e_detec.noise_filter->filter(ChPowers);
+    //e_detec.noise_filter->filter(ChPowers);
     for(int i = 0; i < ChPowers.size(); i++)
     {
         if(ChPowers[i] == 0)

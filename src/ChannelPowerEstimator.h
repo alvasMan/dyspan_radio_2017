@@ -26,23 +26,28 @@
 
 #include <complex>
 #include <vector>
-#include <list>
-#include <map>
-#include <queue>
+#include <boost/shared_ptr.hpp>
 #include "fftw3.h"
 #include <boost/cstdint.hpp>
+//#include <boost/math/distributions/poisson.hpp>
 #include <sstream>
-#include "NoiseFilter3.h"
-#include <memory>
-#include <utility>
+//#include "NoiseFilter3.h"
+#include "stats.h"
+#include "buffer_utils.hpp"
 
+using buffer_utils::bounded_buffer;
 
 typedef std::complex<float> Cplx;
 typedef std::vector<std::complex<float> > CplxVec;
 typedef std::vector<std::complex<float> >::iterator CplxVecIt;
 typedef std::vector<std::complex<float> >::const_iterator CplxVecConstIt;
 
-class EnergyDetector2
+typedef std::pair<double, std::vector<float> > ChPowers;        ///< timestamp + line of powers
+
+#ifndef CHANNELPOWERESTIMATOR_HPP
+#define CHANNELPOWERESTIMATOR_HPP
+
+class ChannelPowerEstimator 
 {
     fftwf_plan fft;                        ///< Our FFT object pointer.
     uint16_t bin_idx;
@@ -55,35 +60,43 @@ class EnergyDetector2
     std::vector<int> bin_mask;
     std::vector<float> ch_avg_coeff;
     std::vector<float> tmp_ch_power;
-    std::vector<int> bin_mask_ref;
-    std::vector<float> ch_avg_coeff_ref;
-    std::vector<float> tmp_ch_power_ref;
     
-    std::vector<MovingAverage<double> > ch_pwr_ma;
-    std::vector<MovingWindowMax> ch_pwr_ma_last_outputs;
+    std::vector< MovingAverage<double> > ch_pwr_ma;
+    //std::vector<MovingWindowMax> ch_pwr_ma_last_outputs;
 
-    std::queue<std::pair<double, std::vector<float> > > results;
+    bounded_buffer<ChPowers> results;
     
     
 public:
-    std::unique_ptr<NoiseFilter3> noise_filter;
+    //std::unique_ptr<NoiseFilter3> noise_filter;
     Cplx* fftBins;                       ///< Allocated using fftwf_malloc (SIMD aligned)
     uint16_t nBins;
     
-    EnergyDetector2();
-    ~EnergyDetector2()
+    ChannelPowerEstimator();
+    ~ChannelPowerEstimator()
     {
         destroy();
     }
 
-    void set_parameters(uint16_t _avg_win_size = 16, uint16_t fftsize = 512, uint16_t num_channels = 4, float bin_mask_select_perc = 0.5, float bin_mask_ref_perc = 0.5);
+    void set_parameters(uint16_t _avg_win_size, uint16_t num_channels, const std::vector<int> &_bin_mask);
+    void set_parameters(uint16_t _avg_win_size, uint16_t fftsize, uint16_t num_channels);
     void setup();
     void destroy();
     void push_samples(const std::vector<Cplx> &vec);
     void push_sample(Cplx val);
     void process(double tstamp = 0);
-    inline bool result_exists() {
+    inline bool result_exists() 
+    {
         return results.empty() == false;
     }
-    void pop_result(double &tstamp, std::vector<float> &vec);
+    Cplx& operator[](int idx) 
+    {
+        assert(idx >= 0 && idx < nBins);
+        return fftBins[idx];
+    }
+    inline uint16_t fft_size() const {return nBins;}
+    void pop_result(double &tstamp, std::vector<float> &vec);   // WARNING: with no move semantics I have to use shared_ptr to avoid mem leaks
+    bool try_pop_result(double &tstamp, std::vector<float> &vec);
 };
+
+#endif
