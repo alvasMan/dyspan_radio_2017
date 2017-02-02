@@ -37,6 +37,9 @@
 #include <ctime>
 #endif
 
+using std::cout;
+using std::endl;
+
 OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     DyspanRadio(params),
     seq_no_(0),
@@ -57,15 +60,15 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     fgbuffer = (std::complex<float>*) malloc(fgbuffer_len * sizeof(std::complex<float>));
 
     //create a usrp device
-    std::cout << std::endl;
-    std::cout << boost::format("Creating the usrp device with: %s...") % params_.args << std::endl;
+    cout << endl;
+    cout << boost::format("Creating the usrp device with: %s...") % params_.args << endl;
     usrp_tx = uhd::usrp::multi_usrp::make(params_.args);
     usrp_tx->set_tx_subdev_spec(params_.txsubdev);
-    std::cout << boost::format("Using Device: %s") % usrp_tx->get_pp_string() << std::endl;
+    cout << boost::format("Using Device: %s") % usrp_tx->get_pp_string() << endl;
     usrp_rx = uhd::usrp::multi_usrp::make(params_.args);
     usrp_rx->set_rx_subdev_spec(params_.rxsubdev);
 
-    // std::cout << boost::format("number of channels ::: %s") % usrp_rx->get_rx_num_channels() << std::endl;
+    // cout << boost::format("number of channels ::: %s") % usrp_rx->get_rx_num_channels() << endl;
 
     // initialize default tx values
     double rx_rf_rate = params_.num_channels * params_.channel_bandwidth;
@@ -82,6 +85,10 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     set_rx_rate(rx_rf_rate);
     set_rx_gain_uhd(params_.rx_gain_uhd);
     //set_rx_antenna("J1");
+    
+    // Add PU parameters and scenarios
+    pu_data = context_utils::make_rf_environment();    // this is gonna read files
+    pu_scenario_api.set_environment(*pu_data);
 
     if (params_.has_sensing)
     {
@@ -97,19 +104,19 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
         tx_ = spectrum_init(0);
         spectrum_eror_t ret = spectrum_connect(tx_, (char*)params_.db_ip.c_str(), 5002, payload_len_, 1);
         spectrum_errorToText(tx_, ret, error_buffer, sizeof(error_buffer));
-        std::cout << boost::format("TX connect: %s") % error_buffer << std::endl;
+        cout << boost::format("TX connect: %s") % error_buffer << endl;
         if (ret < 0) {
             throw std::runtime_error("Couldn't connect to challenge database");
         }
 
         // get radio number
         int radio = spectrum_getRadioNumber(tx_);
-        std::cout << boost::format("TX radio number: %d") % radio << std::endl;
+        cout << boost::format("TX radio number: %d") % radio << endl;
 
         // wait for the start of stage 3 (here you get penalized for interference).
         // The testing database starts in this state so this will instantly return.
         spectrum_waitForState(tx_, 3, -1);
-        std::cout << boost::format("Stage 3 has started.") << std::endl;
+        cout << boost::format("Stage 3 has started.") << endl;
     }
 
     //create a transmit streamer
@@ -121,7 +128,7 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
 
 OfdmTransceiver::~OfdmTransceiver()
 {
-    std::cout << "Transmitted " << seq_no_ << " frames." << std::endl;
+    cout << "Transmitted " << seq_no_ << " frames." << endl;
     if (tx_)
         spectrum_delete(tx_);
     delete fgbuffer;
@@ -142,12 +149,30 @@ void OfdmTransceiver::start(void)
         threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );
         //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
     }
-
+    
+    // Launch thread that handles database throughput queries
+    if(params_.use_db)
+    {
+        threads_.push_back(new boost::thread(launch_database_thread, &database_api, tx_));
+    }
+    else
+    {
+        threads_.push_back(new boost::thread(launch_mock_database_thread, &database_api));
+    }
+    
     // start sensing thread
     if (params_.has_sensing)
     {
-        std::cout << "Starting sensing threads..." << std::endl;
-        sensing_function();
+        cout << "Starting sensing threads..." << endl;
+        // the two threads communicate through the e_detec buffer
+        threads_.push_back(new boost::thread(launch_spectrogram_generator, usrp_tx, &e_detec));
+        threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
+        threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, &pu_scenario_api));
+    }
+    else
+    {
+        // launch a scenario updater
+        threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, &pu_scenario_api));
     }
 }
 
@@ -181,7 +206,7 @@ void OfdmTransceiver::modulation_function(void)
                 spectrum_eror_t ret = spectrum_getPacket(tx_, payload, payload_len_, -1);
                 spectrum_errorToText(tx_, ret, error_buffer, sizeof(error_buffer));
                 if (ret < 0) {
-                    std::cout << boost::format("Error: %s") % error_buffer << std::endl;
+                    cout << boost::format("Error: %s") % error_buffer << endl;
                     throw std::runtime_error("Couldn't connect to challenge database");
                 }
                 // getPacket returns actual length
@@ -216,14 +241,14 @@ void OfdmTransceiver::modulation_function(void)
             frame_buffer.pushBack(usrp_buffer);
 
             if (params_.debug)
-                std::cout << boost::format("TX frame %6u (%d Bytes)") % seq_no_ % actual_payload_len << std::endl;
+                cout << boost::format("TX frame %6u (%d Bytes)") % seq_no_ % actual_payload_len << endl;
 
             seq_no_++;
         }
     }
     catch(boost::thread_interrupted)
     {
-        std::cout << "Modulation thread interrupted." << std::endl;
+        cout << "Modulation thread interrupted." << endl;
     }
 }
 
@@ -237,7 +262,7 @@ void OfdmTransceiver::transmit_function(void)
   }
   catch(boost::thread_interrupted)
   {
-    std::cout << "Transmit thread interrupted." << std::endl;
+    cout << "Transmit thread interrupted." << endl;
   }
 }
 
@@ -260,7 +285,7 @@ void OfdmTransceiver::random_transmit_function(void)
     }
     catch(boost::thread_interrupted)
     {
-        std::cout << "Random transmit thread interrupted." << std::endl;
+        cout << "Random transmit thread interrupted." << endl;
     }
 }
 
@@ -301,7 +326,7 @@ void OfdmTransceiver::reconfigure_usrp(const int num, bool tune_lo = false)
     uhd::tune_result_t result = usrp_tx->set_tx_freq(request);
 
     if (params_.debug) {
-        std::cout << result.to_pp_string() << std::endl;
+        cout << result.to_pp_string() << endl;
     }
 }
 
@@ -343,9 +368,9 @@ void OfdmTransceiver::transmit_packet()
 
     if (num_tx_samps < samps_to_send)
     {
-      std::cerr << "Send timeout..." << std::endl;
+      std::cerr << "Send timeout..." << endl;
     }
-    //std::cout << boost::format("Sent packet: %u samples of %u") % num_tx_samps % total_num_samps << std::endl;
+    //cout << boost::format("Sent packet: %u samples of %u") % num_tx_samps % total_num_samps << endl;
 
     num_acc_samps += num_tx_samps;
   }
@@ -366,13 +391,6 @@ void OfdmTransceiver::launch_change_places()
     }
 }
 
-void OfdmTransceiver::sensing_function(void)
-{
-    // the two threads communicate through the e_detec buffer
-    threads_.push_back(new boost::thread(launch_spectrogram_generator, usrp_tx, &e_detec));
-    threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
-}
-
 void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
 {
     //e_detec.noise_filter->filter(ChPowers);
@@ -380,38 +398,41 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
     std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-last_ch_tstamp;
     if(elapsed_seconds.count()>2)
     {
-        std::cout << "time elapsed " << elapsed_seconds.count() << std::endl;
-        std::cout << "CHAAAAAAAAAAANGE PLACES!" << std::endl;
+        cout << "time elapsed " << elapsed_seconds.count() << endl;
+        cout << "CHAAAAAAAAAAANGE PLACES!" << endl;
 
         // channel map will be defined by learning code
         constexpr int channel_map[] = {2, 0, 3, 1};
 
         last_ch_tstamp = std::chrono::system_clock::now();
-        reconfigure_usrp(current_channel);
-        reconfigure_usrp(channel_map[current_channel]);
+        reconfigure_usrp(channel_map[current_channel]%channels_.size());
+        //reconfigure_usrp(current_channel);
+        
+        cout << "Current Challenge Score: " << database_api.current_score() << endl;
+        cout << "Current Challenge Scenario: " << pu_scenario_api.PU_scenario_idx() << endl;
     }
 }
 
 // set transmitter frequency
 void OfdmTransceiver::set_tx_freq(float freq)
 {
-    std::cout << boost::format("Setting TX Center Frequency: %f") % freq << std::endl;
+    cout << boost::format("Setting TX Center Frequency: %f") % freq << endl;
     uhd::tune_request_t request(freq);
     uhd::tune_result_t result = usrp_tx->set_tx_freq(request);
 
     if (params_.debug) {
-        std::cout << result.to_pp_string() << std::endl;
+        cout << result.to_pp_string() << endl;
     }
-    std::cout << "Actual TX Frequency: " << (usrp_tx->get_tx_freq()/1e6) << " MHz" << std::endl;
+    cout << "Actual TX Frequency: " << (usrp_tx->get_tx_freq()/1e6) << " MHz" << endl;
 }
 
 // set transmitter sample rate
 void OfdmTransceiver::set_tx_rate(float rate)
 {
     //set transmit parameter
-    std::cout << boost::format("Setting TX Rate: %f Msps...") % (rate/1e6) << std::endl;
+    cout << boost::format("Setting TX Rate: %f Msps...") % (rate/1e6) << endl;
     usrp_tx->set_tx_rate(rate);
-    std::cout << boost::format("Actual TX Rate: %f Msps...") % (usrp_tx->get_tx_rate()/1e6) << std::endl << std::endl;
+    cout << boost::format("Actual TX Rate: %f Msps...") % (usrp_tx->get_tx_rate()/1e6) << endl << endl;
 }
 
 // set transmitter software gain
@@ -423,16 +444,16 @@ void OfdmTransceiver::set_tx_gain_soft(float gain)
 // set transmitter hardware (UHD) gain
 void OfdmTransceiver::set_tx_gain_uhd(float gain)
 {
-    std::cout << boost::format("Setting TX Gain %f") % gain << std::endl;
+    cout << boost::format("Setting TX Gain %f") % gain << endl;
     usrp_tx->set_tx_gain(gain);
-    std::cout << "Actual TX gain: " << usrp_tx->get_tx_gain() << std::endl;
+    cout << "Actual TX gain: " << usrp_tx->get_tx_gain() << endl;
 }
 
 // set transmitter antenna
 void OfdmTransceiver::set_tx_antenna(char * _tx_antenna)
 {
     usrp_tx->set_tx_antenna(_tx_antenna);
-    std::cout << "Using TX Antenna: " << usrp_tx->get_tx_antenna() << std::endl;
+    cout << "Using TX Antenna: " << usrp_tx->get_tx_antenna() << endl;
 }
 
 // reset transmitter objects and buffers
@@ -450,7 +471,7 @@ void OfdmTransceiver::reset_tx()
 void OfdmTransceiver::set_rx_freq(float _rx_freq)
 {
     usrp_rx->set_rx_freq(_rx_freq);
-    std::cout << "Actual RX Frequency: " << (usrp_rx->get_rx_freq()/1e6) << " MHz" << std::endl;
+    cout << "Actual RX Frequency: " << (usrp_rx->get_rx_freq()/1e6) << " MHz" << endl;
     boost::this_thread::sleep(boost::posix_time::milliseconds(500));
 
     // check LO Lock
@@ -459,9 +480,9 @@ void OfdmTransceiver::set_rx_freq(float _rx_freq)
     if(std::find(sensor_names.begin(), sensor_names.end(), "lo_locked") != sensor_names.end())
     {
         uhd::sensor_value_t lo_locked = usrp_rx->get_rx_sensor("lo_locked",0);
-        std::cout << "Checking RX: " << lo_locked.to_pp_string() <<  "..." << std::endl;
+        cout << "Checking RX: " << lo_locked.to_pp_string() <<  "..." << endl;
         if(!lo_locked.to_bool())
-            std::cout << "Failed to lock LO" << std::endl;
+            cout << "Failed to lock LO" << endl;
     }
 }
 
@@ -469,21 +490,21 @@ void OfdmTransceiver::set_rx_freq(float _rx_freq)
 void OfdmTransceiver::set_rx_rate(float _rx_rate)
 {
     usrp_rx->set_rx_rate(_rx_rate);
-    std::cout << "Actual RX Rate: " << (usrp_rx->get_rx_rate()/1e6) << " Msps" << std::endl;
+    cout << "Actual RX Rate: " << (usrp_rx->get_rx_rate()/1e6) << " Msps" << endl;
 }
 
 // set receiver hardware (UHD) gain
 void OfdmTransceiver::set_rx_gain_uhd(float _rx_gain_uhd)
 {
     usrp_rx->set_rx_gain(_rx_gain_uhd);
-    std::cout << "Actual RX gain: " << usrp_rx->get_rx_gain() << " dB" << std::endl;
+    cout << "Actual RX gain: " << usrp_rx->get_rx_gain() << " dB" << endl;
 }
 
 // set receiver antenna
 void OfdmTransceiver::set_rx_antenna(char * _rx_antenna)
 {
     usrp_rx->set_rx_antenna(_rx_antenna);
-    std::cout << "Using RX Antenna: " << usrp_rx->get_rx_antenna() << std::endl;
+    cout << "Using RX Antenna: " << usrp_rx->get_rx_antenna() << endl;
 }
 
 // reset receiver objects and buffers
@@ -496,12 +517,12 @@ void OfdmTransceiver::set_channel(uint32_t num)
 {
   // channel 9 means random hopping after each packet
   if (num == 9) {
-    std::cout << "Switching Tx mode to random hopping." << std::endl;
+    cout << "Switching Tx mode to random hopping." << endl;
     next_channel = num;
   } else if (num < channels_.size()) {
-    std::cout << "Tuning to channel " << num << std::endl;
+    cout << "Tuning to channel " << num << endl;
     reconfigure_usrp(num);
   } else {
-    std::cout << "Unknown channel " << num << std::endl;
+    cout << "Unknown channel " << num << endl;
   }
 }

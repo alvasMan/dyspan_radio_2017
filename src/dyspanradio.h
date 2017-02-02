@@ -38,7 +38,6 @@
 #include <boost/ptr_container/ptr_vector.hpp>
 #include "aligned_allocator.h"
 #include "channels.h"
-#include "spectrum.h"
 
 typedef std::vector<std::complex<float> > CplxFVec;
 typedef std::vector<unsigned char> CharVec;

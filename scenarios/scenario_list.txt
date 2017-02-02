@@ -1,0 +1,11 @@
+# channel width(1,2,4), number of channels(1,2,4), packet delay idx(0<--back-to-back,1,...), distribution(poisson/etc)
+1,1,1,deterministic
+1,1,2,deterministic
+1,2,1,deterministic
+1,4,2,deterministic
+2,1,1,deterministic
+4,1,1,deterministic
+4,1,0,deterministic
+1,2,1,poisson
+1,2,1,poisson
+1,2,1,poisson

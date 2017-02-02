@@ -8,7 +8,9 @@ file(GLOB sources
     multichannelrx.cpp
     multichannelrx_pfb.cpp
     ChannelPowerEstimator.cpp
-    sensing_components.cpp)
+    sensing_components.cpp
+    context_awareness.cpp
+    database_comms.cpp)
 
 file(GLOB headers
     dyspanradio.h
