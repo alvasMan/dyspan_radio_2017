@@ -6,6 +6,7 @@
 2,1,1,deterministic
 4,1,1,deterministic
 4,1,0,deterministic
-1,2,1,poisson
-1,2,1,poisson
-1,2,1,poisson
+4,1,1,poisson
+4,1,1,poisson
+4,1,1,poisson
+# i still need to change the delays of the poissons

@@ -122,33 +122,31 @@ public:
 };
 
 template <typename T>
-class MovingAverage {
+class MovingAverage 
+{
     std::vector<T> buf;
-    T pwr_sum;
-    uint32_t idx;
-    uint16_t count_refresh, refresh_period;
+    T pwr_sum = 0;
+    uint32_t idx = 0;
+    uint16_t count_refresh = 0;
+    uint16_t refresh_period = 5;
 
 public:
-    MovingAverage() {pwr_sum = 0; idx = 0;}
+    MovingAverage() = default;
     MovingAverage(uint32_t size) {set_size(size);}
-    inline void set_size(uint32_t size) {buf.resize(size, 0); pwr_sum = 0; idx = 0; count_refresh = 0; refresh_period = 4 * buf.size();}
-    inline uint32_t size() {return buf.size();}
-    inline void push(const T &val) {
+    inline void set_size(uint32_t size) {buf.resize(size, 0); count_refresh = 0; refresh_period = 3 * buf.size();}
+    inline uint32_t size() const {return buf.size();}
+    inline void push(const T &val) 
+    {
         pwr_sum += val - buf[idx];
-        buf[idx++] = val;
+        buf[idx] = val;
+        idx = (idx >= size()-1) ? idx+1 : 0;
         if(count_refresh++ >= refresh_period)
             refresh();
-        if(idx >= size()) idx = 0;
     }
-    inline T get_avg() { return pwr_sum / (float)size(); }
+    inline double get_avg() const { return pwr_sum / (double)size(); }
     inline void refresh() 
     {
         pwr_sum = std::accumulate(buf.begin(), buf.end(), 0.0);
-        //T old_pwr_sum = pwr_sum;
-        //pwr_sum = std::accumulate(buf.begin(), buf.end(), 0.0);
-        //T test = std::abs(old_pwr_sum - pwr_sum)/pwr_sum;
-        //if(test < 0.001) refresh_period += buf.size();
-        //else if(test > 0.1)  refresh_period = buf.size();
         count_refresh = 0;
     }
 };

@@ -107,16 +107,18 @@ string search_project_folder()
     
     // check if in src folder
     string str = full_path.string();
-    if(str.find("src"))
+    if(str.find("src")!=std::string::npos)
     {
-        full_path /= "../../";
+        full_path /= "../..";
         //cout << "Current path is : " << full_path << endl;
         return full_path.string();
     }
     
     // check if scenarios
-    // TODO:
+    // TODO: check if the folder scenarios exists
+    return full_path.string();
     
+    // TODO: otherwise throw error
     throw std::exception();
 }
 
@@ -136,8 +138,8 @@ unique_ptr<RFEnvironmentData> make_rf_environment()
         cout << "Could not find scenarios folder" << endl;
         throw std::exception();
     }
-    string params_file = project_folder + "scenarios/PU_params.txt";
-    string scenarios_file = project_folder + "scenarios/scenario_list.txt";
+    string params_file = project_folder + "/scenarios/PU_params.txt";
+    string scenarios_file = project_folder + "/scenarios/scenario_list.txt";
 
     // Create the environment structure
     std::unique_ptr<RFEnvironmentData> env;

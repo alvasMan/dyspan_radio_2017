@@ -40,6 +40,7 @@ void launch_database_thread(DatabaseApi* db_api, spectrum* spec)
     {
         // TODO: Query Database
         
+        
         // TODO: Update throughputs
         db_api->push_Tsu(DbReply(tsu));
         db_api->push_Tsu_real(DbReply(tsu*0.9));

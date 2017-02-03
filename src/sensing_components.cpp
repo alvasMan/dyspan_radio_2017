@@ -4,8 +4,14 @@
  * and open the template in the editor.
  */
 
+#include "general_utils.hpp"
 #include "sensing_components.h"
 #include <fstream>
+#include <cmath>
+
+using std::cout;
+using std::endl;
+using std::vector;
 
 void SpectrogramGenerator::setup_rx_chain(uhd::usrp::multi_usrp::sptr utx)
 {
@@ -64,6 +70,31 @@ bool SpectrogramGenerator::recv_fft_pwrs()
     return true;
 }
 
+void resize_ch_pwr_outputsdB(std::vector<float>& out, const vector<float>& in)
+{
+    float interp_factor = out.size()/(float)in.size();
+    
+    //cout << "in size: " << in.size() << endl;
+    
+    for(int i = 0; i < out.size(); ++i)
+    {
+        float i_val = i/interp_factor;
+        float i_floor = std::floor(i_val);
+        float i_ceil = std::ceil(i_val);
+        
+        if(i_ceil!=in.size())
+        {
+            float alpha = (i_val-i_floor);
+            out[i] = 10*log10((1-alpha)*in[i_floor] + alpha*in[i_ceil]);
+        }
+        else
+            out[i] = in[i_floor];
+    }
+}
+
+namespace sensing_utils
+{
+
 void launch_spectrogram_generator(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* pwr_estim)
 {
     SpectrogramGenerator s;
@@ -93,37 +124,48 @@ void launch_spectrogram_generator(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelP
     }
 }
 
-//void launch_spectrogram_results_to_file(ChannelPowerEstimator* pwr_estim, std::string filename)
-//{
-//    std::ofstream of;
-//    of.open("temp.bin", std::ios::out | std::ios::binary);
-//    
-//    if(of.is_open()==false)
-//    {
-//        std::cout << "Unable to open file." << std::endl;
-//        return; // TODO: send a signal
-//    }
-//    // loop
-//    try 
-//    {
-//        while(true)
-//        {
-//            double tstamp;
-//            std::vector<float> ch_power;
-//            //blocks waiting
-//            pwr_estim->pop_result(tstamp, ch_power);
-//
-//            of << ch_power;
-//        }
-//    }
-//    catch(boost::thread_interrupted)
-//    {
-//        std::cout << "Receive thread interrupted." << std::endl;
-//    }
-//    
-//    of.close();
-//    /* Print the top N predictions. */
-////    for (size_t i = 0; i < predictions.size(); ++i)
-////    {
-//    //pwr_estim;
-//}
+// This thread just receives the samples coming from the SpectrogramGenerator and saves them to a file
+void launch_spectrogram_to_file_thread(ChannelPowerEstimator* pwr_estim)
+{
+    std::string filename = "/home/connect/repo/generated_files/temp.bin";
+    std::vector<int> NNdims = {64,64};
+    
+    std::ofstream of;
+    of.open(filename, std::ios::out | std::ios::binary);
+    
+    if(of.is_open()==false)
+    {
+        std::cout << "Spectrogram2FileThread: Unable to open file in " << filename << std::endl;
+        return; // TODO: send a signal
+    }
+    // loop
+    try 
+    {
+        std::vector<float> resized_pwr_outputsdB(NNdims[1]);
+        while(true)
+        {
+            boost::this_thread::interruption_point();
+            
+            //blocks waiting
+            buffer_utils::rdataset<ChPowers>  ch_powers = pwr_estim->pop_result();
+            assert(ch_powers().second.size()>0);
+            
+            //cout << "DEBUG: reading from e_detec timestamp: " << ch_powers().first << " buffer: " << print_range(ch_powers().second) << endl;
+            
+            // resize to NN dimensions
+            resize_ch_pwr_outputsdB(resized_pwr_outputsdB, ch_powers().second);
+            
+            // i can't max to 1 here
+            
+            // write to file
+            of.write((char*)&resized_pwr_outputsdB[0], resized_pwr_outputsdB.size()*sizeof(float));
+        }
+    }
+    catch(boost::thread_interrupted)
+    {
+        std::cout << "Spectrogram2FileThread: Receive thread interrupted." << std::endl;
+    }
+    
+    of.close();
+}
+};

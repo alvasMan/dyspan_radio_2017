@@ -47,6 +47,25 @@ typedef std::pair<double, std::vector<float> > ChPowers;        ///< timestamp +
 #ifndef CHANNELPOWERESTIMATOR_HPP
 #define CHANNELPOWERESTIMATOR_HPP
 
+class SpectrogramGenerator
+{
+public:
+    SpectrogramGenerator() = delete;
+    SpectrogramGenerator(int n_channels, int siz) : results(1000),
+    Nch(n_channels), step_size(siz), mov_avg(n_channels, MovingAverage<float>(siz))
+    {
+    }
+    
+    void work();
+    
+    buffer_utils::bounded_buffer<ChPowers> results;
+private:
+    int Nch;
+    int step_size;
+    int mavg_count = 0;
+    std::vector< MovingAverage<float> > mov_avg;
+};
+
 class ChannelPowerEstimator 
 {
     fftwf_plan fft;                        ///< Our FFT object pointer.
@@ -54,18 +73,12 @@ class ChannelPowerEstimator
 
     uint16_t Nch;
     uint16_t mavg_size;
-    uint16_t mavg_step_size;
-    uint16_t mavg_count;
 
     std::vector<int> bin_mask;
-    std::vector<float> ch_avg_coeff;
     std::vector<float> tmp_ch_power;
+    std::vector<float> ch_avg_coeff;
     
-    std::vector< MovingAverage<double> > ch_pwr_ma;
-    //std::vector<MovingWindowMax> ch_pwr_ma_last_outputs;
-
-    bounded_buffer<ChPowers> results;
-    
+    std::unique_ptr<SpectrogramGenerator> spectrogram_module;
     
 public:
     //std::unique_ptr<NoiseFilter3> noise_filter;
@@ -85,17 +98,14 @@ public:
     void push_samples(const std::vector<Cplx> &vec);
     void push_sample(Cplx val);
     void process(double tstamp = 0);
-    inline bool result_exists() 
-    {
-        return results.empty() == false;
-    }
     Cplx& operator[](int idx) 
     {
         assert(idx >= 0 && idx < nBins);
         return fftBins[idx];
     }
     inline uint16_t fft_size() const {return nBins;}
-    void pop_result(buffer_utils::rdataset<ChPowers> &d);   // WARNING: with no move semantics I have to use shared_ptr to avoid mem leaks
+    buffer_utils::rdataset<ChPowers> pop_result();
+    //void pop_result(buffer_utils::rdataset<ChPowers> &d);   // WARNING: with no move semantics I have to use shared_ptr to avoid mem leaks
     bool try_pop_result(buffer_utils::rdataset<ChPowers> &d);
 };
 

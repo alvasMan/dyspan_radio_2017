@@ -16,9 +16,6 @@
 #ifndef SENSINGMODULE_H
 #define SENSINGMODULE_H
 
-void launch_spectrogram_generator(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* estim);
-//void launch_spectrogram_results_handler(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* estim);
-
 class SpectrogramGenerator
 {
 public:
@@ -37,6 +34,14 @@ private:
     uhd::rx_streamer::sptr rx_stream;
     bool overflow_message = true;
     uhd::rx_metadata_t metadata;
+};
+
+namespace sensing_utils
+{    
+void launch_spectrogram_generator(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* estim);
+//void launch_spectrogram_results_handler(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* estim);
+
+void launch_spectrogram_to_file_thread(ChannelPowerEstimator* pwr_estim);
 };
 
 #endif /* SENSINGMODULE_H */

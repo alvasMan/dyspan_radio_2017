@@ -12,6 +12,7 @@
  */
 
 #include <boost/format.hpp>
+#include <sstream>      // std::stringstream
 
 #ifndef GENERAL_UTILS_HPP
 #define GENERAL_UTILS_HPP
@@ -19,9 +20,10 @@
 template<typename Iterator> 
 std::string print_container(Iterator vec_begin, Iterator vec_end)
 {
-    std::ostringstream os;
+    std::stringstream os;
     Iterator it = vec_begin;
-    os << "[" << *vec_begin;
+    os << "[";
+    os << *vec_begin;
     for (++it; it != vec_end; ++it)
         os << ", " << *it;
     os << "]";

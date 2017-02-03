@@ -165,7 +165,7 @@ void OfdmTransceiver::start(void)
     {
         cout << "Starting sensing threads..." << endl;
         // the two threads communicate through the e_detec buffer
-        threads_.push_back(new boost::thread(launch_spectrogram_generator, usrp_tx, &e_detec));
+        threads_.push_back(new boost::thread(sensing_utils::launch_spectrogram_generator, usrp_tx, &e_detec));
         threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
         threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, &pu_scenario_api));
     }
@@ -174,6 +174,9 @@ void OfdmTransceiver::start(void)
         // launch a scenario updater
         threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, &pu_scenario_api));
     }
+    
+    if(params_.sensing_to_file)
+        threads_.push_back(new boost::thread(sensing_utils::launch_spectrogram_to_file_thread, &e_detec));
 }
 
 
@@ -383,11 +386,12 @@ void OfdmTransceiver::launch_change_places()
         boost::this_thread::interruption_point();
         
         // get data from socket. may block until result arrives
-        buffer_utils::rdataset<ChPowers> dset;
-        e_detec.pop_result(dset);
+        //buffer_utils::rdataset<ChPowers> dset;
+        //e_detec.pop_result(dset);
+        std::vector<float> ch_powers;
         
         // call the CHAAANGE PLACES
-        process_sensing(dset().second);
+        process_sensing(ch_powers);
     }
 }
 
