@@ -39,6 +39,7 @@ SET(BOOST_REQUIRED_COMPONENTS
     system
     thread
     filesystem
+    unit_test_framework
 )
 
 IF(UNIX AND NOT BOOST_ROOT AND EXISTS "/usr/lib64")
@@ -71,3 +72,5 @@ MESSAGE(STATUS "Boost libraries: ${Boost_LIBRARIES}")
 # Adding source directory
 ADD_SUBDIRECTORY(clientlib)
 ADD_SUBDIRECTORY(src)
+
+ADD_SUBDIRECTORY(test)
