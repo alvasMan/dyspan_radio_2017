@@ -16,7 +16,7 @@
 #ifndef SENSINGMODULE_H
 #define SENSINGMODULE_H
 
-class SpectrogramGenerator
+class SensingModule
 {
 public:
     void set_estimator(ChannelPowerEstimator* estim) {pwr_estim = estim;} // copy

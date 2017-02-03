@@ -56,7 +56,7 @@ public:
     {
     }
     
-    void work();
+    void work(double tstamp, const std::vector<float>& ch_pwrs);
     
     buffer_utils::bounded_buffer<ChPowers> results;
 private:

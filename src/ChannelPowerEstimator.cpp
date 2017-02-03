@@ -96,8 +96,6 @@ void ChannelPowerEstimator::setup()
     
     tmp_ch_power.resize(Nch);
     ch_avg_coeff.resize(Nch, 1);
-    mavg_step_size = mavg_size;
-    mavg_count = 0;
     //mavg_count = mavg_step_size-mavg_size; // let the mavg fill completely the first time
     
     // Count number of bins belonging to each channel
@@ -159,7 +157,7 @@ void ChannelPowerEstimator::process(double tstamp)
     for(unsigned int i = 0; i < Nch; ++i)
         tmp_ch_power[i] *= ch_avg_coeff[i];
     
-    if(spectrogram_module())
+    if(spectrogram_module)
         spectrogram_module->work(tstamp, tmp_ch_power);
 }
 
@@ -179,7 +177,10 @@ bool ChannelPowerEstimator::try_pop_result(buffer_utils::rdataset<ChPowers> &d)
 
 buffer_utils::rdataset<ChPowers> ChannelPowerEstimator::pop_result()
 {
-    return std::move(buffer_utils::rdataset<ChPowers>(spectrogram_module->results.get_rdataset()));
+    if(spectrogram_module)
+        return std::move(spectrogram_module->results.get_rdataset());
+    else
+        return std::move(buffer_utils::rdataset<ChPowers>());
 }
 
 class PacketDetector
@@ -196,7 +197,7 @@ public:
     
 private:
     std::vector< MovingAverage<float> > mov_avg;
-    std::pair<double, float> mov_max = {0,0};
+    std::vector< std::pair<double, float> > mov_max;
     int max_plen;
     int Nch = 4;
     float thres;
@@ -236,6 +237,8 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
                 pu_detected = true;
                 counter_stop = 0;
                 n_packet = 0;
+                for(auto& e : mov_max)
+                    e = make_pair(-1,-1);
             }
             
             if(test==false)
@@ -265,7 +268,7 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
     }
 }
 
-void SpectrogramGenerator::work(double tstamp, vector<float>& ch_pwrs)
+void SpectrogramGenerator::work(double tstamp, const vector<float>& ch_pwrs)
 {
     // Adds the channel average power to the moving average
     for(uint16_t j = 0; j < mov_avg.size(); j++) 

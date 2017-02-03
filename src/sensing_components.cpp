@@ -13,7 +13,7 @@ using std::cout;
 using std::endl;
 using std::vector;
 
-void SpectrogramGenerator::setup_rx_chain(uhd::usrp::multi_usrp::sptr utx)
+void SensingModule::setup_rx_chain(uhd::usrp::multi_usrp::sptr utx)
 {
     usrp_tx = utx;
     //create a receive streamer
@@ -23,7 +23,7 @@ void SpectrogramGenerator::setup_rx_chain(uhd::usrp::multi_usrp::sptr utx)
     rx_stream = usrp_tx->get_rx_stream(stream_args);
 }
 
-void SpectrogramGenerator::start()
+void SensingModule::start()
 {
     //setup streaming
     std::cout << std::endl;
@@ -35,7 +35,7 @@ void SpectrogramGenerator::start()
     usrp_tx->issue_stream_cmd(stream_cmd);
 }
 
-bool SpectrogramGenerator::recv_fft_pwrs()
+bool SensingModule::recv_fft_pwrs()
 {
     size_t num_rx_samps = rx_stream->recv(&(*pwr_estim)[0], pwr_estim->fft_size(), metadata, 5.0);
 
@@ -97,7 +97,7 @@ namespace sensing_utils
 
 void launch_spectrogram_generator(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* pwr_estim)
 {
-    SpectrogramGenerator s;
+    SensingModule s;
     
     // setup the generator
     s.set_estimator(pwr_estim);
@@ -124,7 +124,7 @@ void launch_spectrogram_generator(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelP
     }
 }
 
-// This thread just receives the samples coming from the SpectrogramGenerator and saves them to a file
+// This thread just receives the samples coming from the SensingModule and saves them to a file
 void launch_spectrogram_to_file_thread(ChannelPowerEstimator* pwr_estim)
 {
     std::string filename = "/home/connect/repo/generated_files/temp.bin";
