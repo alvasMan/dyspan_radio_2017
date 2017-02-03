@@ -108,7 +108,6 @@ void ChannelPowerEstimator::setup()
     for(int j = 0; j < Nch; j++)
         ch_avg_coeff[j] = 1/((float)ch_count[j] * nBins);
     
-    
     // create noise_filter
     //noise_filter.reset(new NoiseFilter3(Nch, 0.001, 7));
 }
@@ -186,13 +185,12 @@ buffer_utils::rdataset<ChPowers> ChannelPowerEstimator::pop_result()
 class PacketDetector
 {
 public:
-    PacketDetector(int n_channels, int mov_avg_len, int max_packet_length) : 
-            max_plen(max_packet_length), Nch(n_channels) 
+    PacketDetector(int n_channels, int packet_length) : 
+            mov_avg(n_channels,MovingAverage<float>(packet_length)),
+            max_plen(packet_length), Nch(n_channels) 
             {
-                setup();
             }
     
-    void setup();
     void work(double tstamp, const vector<float>& vals);
     
 private:
@@ -210,13 +208,6 @@ private:
     std::vector<float> noise_floor;
     std::deque< std::pair<double, float> > detected_pulses;
 };
-
-void PacketDetector::setup()
-{
-    mov_avg.resize(Nch);
-    for(auto& m : mov_avg)
-        m.set_size(max_plen);
-}
 
 void PacketDetector::work(double tstamp, const vector<float>& vals)
 {
@@ -270,6 +261,9 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
 
 void SpectrogramGenerator::work(double tstamp, const vector<float>& ch_pwrs)
 {
+    assert(ch_pwrs.size()==mov_avg.size());
+    assert(mov_avg[0].size()>0);
+    
     // Adds the channel average power to the moving average
     for(uint16_t j = 0; j < mov_avg.size(); j++) 
         mov_avg[j].push(ch_pwrs[j]);

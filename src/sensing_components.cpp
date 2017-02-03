@@ -97,10 +97,7 @@ namespace sensing_utils
 
 void launch_spectrogram_generator(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* pwr_estim)
 {
-    SensingModule s;
-    
-    // setup the generator
-    s.set_estimator(pwr_estim);
+    SensingModule s(pwr_estim);
     s.setup_rx_chain(usrp_tx);
     
     // start streaming
@@ -120,7 +117,7 @@ void launch_spectrogram_generator(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelP
     }
     catch(boost::thread_interrupted)
     {
-        std::cout << "Receive thread interrupted." << std::endl;
+        std::cout << "Sensing thread interrupted." << std::endl;
     }
 }
 
@@ -148,6 +145,10 @@ void launch_spectrogram_to_file_thread(ChannelPowerEstimator* pwr_estim)
             
             //blocks waiting
             buffer_utils::rdataset<ChPowers>  ch_powers = pwr_estim->pop_result();
+            
+            if(ch_powers.empty())
+                boost::this_thread::sleep(boost::posix_time::milliseconds(500));
+            
             assert(ch_powers().second.size()>0);
             
             //cout << "DEBUG: reading from e_detec timestamp: " << ch_powers().first << " buffer: " << print_range(ch_powers().second) << endl;

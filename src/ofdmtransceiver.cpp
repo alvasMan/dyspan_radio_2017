@@ -160,6 +160,9 @@ void OfdmTransceiver::start(void)
         threads_.push_back(new boost::thread(launch_mock_database_thread, &database_api));
     }
     
+    if(params_.sensing_to_file)
+        threads_.push_back(new boost::thread(sensing_utils::launch_spectrogram_to_file_thread, &e_detec));
+    
     // start sensing thread
     if (params_.has_sensing)
     {
@@ -174,9 +177,6 @@ void OfdmTransceiver::start(void)
         // launch a scenario updater
         threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, &pu_scenario_api));
     }
-    
-    if(params_.sensing_to_file)
-        threads_.push_back(new boost::thread(sensing_utils::launch_spectrogram_to_file_thread, &e_detec));
 }
 
 

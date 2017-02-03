@@ -51,9 +51,13 @@ class SpectrogramGenerator
 {
 public:
     SpectrogramGenerator() = delete;
+    SpectrogramGenerator(const SpectrogramGenerator&) = delete;
+    SpectrogramGenerator(const SpectrogramGenerator&&) = delete;
     SpectrogramGenerator(int n_channels, int siz) : results(1000),
     Nch(n_channels), step_size(siz), mov_avg(n_channels, MovingAverage<float>(siz))
     {
+        assert(n_channels>0);
+        assert(siz>0);
     }
     
     void work(double tstamp, const std::vector<float>& ch_pwrs);
@@ -86,6 +90,8 @@ public:
     uint16_t nBins;
     
     ChannelPowerEstimator();
+    ChannelPowerEstimator(const ChannelPowerEstimator&&) = delete;
+    ChannelPowerEstimator(const ChannelPowerEstimator&) = delete;
     ~ChannelPowerEstimator()
     {
         destroy();

@@ -131,15 +131,18 @@ class MovingAverage
     uint16_t refresh_period = 5;
 
 public:
-    MovingAverage() = default;
-    MovingAverage(uint32_t size) {set_size(size);}
+    MovingAverage() = default;//delete;
+    MovingAverage(uint32_t size) : buf(size,0), refresh_period(3*size) 
+    {
+    }
     inline void set_size(uint32_t size) {buf.resize(size, 0); count_refresh = 0; refresh_period = 3 * buf.size();}
     inline uint32_t size() const {return buf.size();}
     inline void push(const T &val) 
     {
         pwr_sum += val - buf[idx];
-        buf[idx] = val;
-        idx = (idx >= size()-1) ? idx+1 : 0;
+        buf[idx++] = val;
+        if(idx >= buf.size())
+            idx = 0;
         if(count_refresh++ >= refresh_period)
             refresh();
     }

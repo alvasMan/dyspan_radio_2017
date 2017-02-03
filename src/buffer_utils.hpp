@@ -210,6 +210,8 @@ public:
         r.buf = NULL;
         r.data = NULL;
     }
+    
+    inline bool empty() const {return data == NULL || buf==NULL;}
 
     inline T& operator()()
     {

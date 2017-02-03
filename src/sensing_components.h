@@ -19,7 +19,7 @@
 class SensingModule
 {
 public:
-    void set_estimator(ChannelPowerEstimator* estim) {pwr_estim = estim;} // copy
+    SensingModule(ChannelPowerEstimator* estim) : pwr_estim(estim) {} // copy
     void setup_rx_chain(uhd::usrp::multi_usrp::sptr utx);       ///< Configure the rx_stream
     void run();                     ///< Run the USRP Rx and stores the values in pwr_estim
     void start();
