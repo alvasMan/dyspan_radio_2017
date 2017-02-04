@@ -26,6 +26,7 @@ public:
     bool recv_fft_pwrs();
     
     ChannelPowerEstimator *pwr_estim;
+    std::unique_ptr<PacketDetector> packet_detector;
     double current_timestamp;
     uhd::time_spec_t tspec;
     

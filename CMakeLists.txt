@@ -27,6 +27,7 @@ SET(CMAKE_CXX_FLAGS_RELEASE "-O2 -pipe -march=native -mtune=native -ffast-math -
 FIND_PACKAGE(UHD REQUIRED)
 FIND_PACKAGE(FFTW3F REQUIRED)
 FIND_PACKAGE(LIQUIDDSP REQUIRED)
+FIND_PACKAGE(PythonLibs REQUIRED)
 
 ########################################################################
 # Setup Boost
@@ -62,7 +63,8 @@ SET(Boost_ADDITIONAL_VERSIONS
 )
 FIND_PACKAGE(Boost 1.46 COMPONENTS ${BOOST_REQUIRED_COMPONENTS})
 
-INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS}
+                    ${PYTHON_INCLUDE_DIR})
 LINK_DIRECTORIES(${Boost_LIBRARY_DIRS} ${CMAKE_SOURCE_DIR}/clientlib)
 
 MESSAGE(STATUS "Boost include directories: ${Boost_INCLUDE_DIRS}")

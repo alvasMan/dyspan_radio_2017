@@ -13,16 +13,6 @@ using std::cout;
 using std::endl;
 using std::vector;
 
-void SensingModule::setup_rx_chain(uhd::usrp::multi_usrp::sptr utx)
-{
-    usrp_tx = utx;
-    //create a receive streamer
-    std::string wire_format("sc16");
-    std::string cpu_format("fc32");
-    uhd::stream_args_t stream_args(cpu_format, wire_format);
-    rx_stream = usrp_tx->get_rx_stream(stream_args);
-}
-
 void SensingModule::start()
 {
     //setup streaming
@@ -70,6 +60,16 @@ bool SensingModule::recv_fft_pwrs()
     return true;
 }
 
+void SensingModule::setup_rx_chain(uhd::usrp::multi_usrp::sptr utx)
+{
+    usrp_tx = utx;
+    //create a receive streamer
+    std::string wire_format("sc16");
+    std::string cpu_format("fc32");
+    uhd::stream_args_t stream_args(cpu_format, wire_format);
+    rx_stream = usrp_tx->get_rx_stream(stream_args);
+}
+
 void resize_ch_pwr_outputsdB(std::vector<float>& out, const vector<float>& in)
 {
     float interp_factor = out.size()/(float)in.size();
@@ -99,6 +99,7 @@ void launch_spectrogram_generator(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelP
 {
     SensingModule s(pwr_estim);
     s.setup_rx_chain(usrp_tx);
+    s.packet_detector.reset(new PacketDetector(pwr_estim->Nch, 15, 2));
     
     // start streaming
     s.start();
@@ -113,6 +114,12 @@ void launch_spectrogram_generator(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelP
             // receive data from USRP and place it in the buffer
             if(s.recv_fft_pwrs()==false)
                 break;
+            
+            // Discover packets through a moving average
+            s.packet_detector->work(pwr_estim->current_tstamp, pwr_estim->output_ch_pwrs);
+            
+            // Analyse difference in TOAs
+            // TODO: Store TDOAs and reference TOAs
         }
     }
     catch(boost::thread_interrupted)
@@ -164,7 +171,7 @@ void launch_spectrogram_to_file_thread(ChannelPowerEstimator* pwr_estim)
     }
     catch(boost::thread_interrupted)
     {
-        std::cout << "Spectrogram2FileThread: Receive thread interrupted." << std::endl;
+        std::cout << "STATUS: Spectrogram to file thread successfully interrupted." << std::endl;
     }
     
     of.close();
