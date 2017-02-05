@@ -38,8 +38,8 @@ public:
 class DatabaseApi
 {
 public:
-    DatabaseApi(int cap = 10) : Tsu_real_values(cap), Tpu_real_values(cap), Tsu_values(cap), Tpu_values(cap) {}
-    
+    DatabaseApi(int cap = 10);
+
     // setters
     void push_Tsu_real(const DbReply& r)
     {
@@ -102,7 +102,7 @@ private:
 };
 
 void launch_mock_database_thread(DatabaseApi* db_api);
-void launch_database_thread(DatabaseApi* db_api, spectrum* spec);
+void launch_database_thread(DatabaseApi* db_api, spectrum* spec, int radio_number);
 
 #endif /* DATABASE_H */
 

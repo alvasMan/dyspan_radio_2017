@@ -117,6 +117,9 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
         // The testing database starts in this state so this will instantly return.
         spectrum_waitForState(tx_, 3, -1);
         cout << boost::format("Stage 3 has started.") << endl;
+
+        // ::TODO:: Instantiate dbApi and create a thread for launch_database_thread function
+
     }
 
     //create a transmit streamer
@@ -153,7 +156,8 @@ void OfdmTransceiver::start(void)
     // Launch thread that handles database throughput queries
     if(params_.use_db)
     {
-        threads_.push_back(new boost::thread(launch_database_thread, &database_api, tx_));
+        int radio_id = spectrum_getRadioNumber(tx_);
+        threads_.push_back(new boost::thread(boost::bind(launch_database_thread, &database_api, tx_, radio_id)));
     }
     else
     {
