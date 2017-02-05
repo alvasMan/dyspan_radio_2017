@@ -22,19 +22,28 @@ void launch_mock_database_thread(DatabaseApi* db_api)
 {
     float tsu = 0;
     float tpu = 0;
-    while(true)
+    try
     {
-//        std::cout << "DEBUG: Gonna update database score" << endl;
-        db_api->push_Tsu(DbReply(tsu));
-        db_api->push_Tsu_real(DbReply(tsu*0.9));
-        db_api->push_Tpu(DbReply(tpu));
-        db_api->push_Tpu_real(DbReply(tpu*0.9));
-        
-//        std::cout << "DEBUG: Updated database score" << endl;
-        
-        boost::this_thread::sleep(boost::posix_time::milliseconds(5000));
-        tsu+=2;
-        tpu++;
+        while(true)
+        {
+            boost::this_thread::interruption_point();
+            
+    //        std::cout << "DEBUG: Gonna update database score" << endl;
+            db_api->push_Tsu(DbReply(tsu));
+            db_api->push_Tsu_real(DbReply(tsu*0.9));
+            db_api->push_Tpu(DbReply(tpu));
+            db_api->push_Tpu_real(DbReply(tpu*0.9));
+
+    //        std::cout << "DEBUG: Updated database score" << endl;
+
+            boost::this_thread::sleep(boost::posix_time::milliseconds(5000));
+            tsu+=2;
+            tpu++;
+        }
+    }
+    catch(boost::thread_interrupted)
+    {
+        cout << "STATUS: Database thread successfully interrupted." << endl;
     }
 }
 
@@ -47,23 +56,31 @@ void launch_database_thread(DatabaseApi* db_api, spectrum* spec, int radio_numbe
     float tpu = 0;
     float tpu_provided = 0;
 
-    while(true)
+    try {
+       while(true)
+       {
+          boost::this_thread::interruption_point();
+
+          // TODO: Query Database
+          tpu = spectrum_getThroughput(spec, 0, -1);
+          tpu_provided = spectrum_getProvidedThroughput(spec, 0, -1);
+
+          tsu = spectrum_getThroughput(spec, radio_number, -1);
+          tsu_provided = spectrum_getProvidedThroughput(spec, radio_number, -1);
+
+          // TODO: Update throughputs
+          db_api->push_Tsu(DbReply(tsu));
+          db_api->push_Tsu_real(DbReply(tsu*0.9));
+
+          db_api->push_Tpu(DbReply(tpu));
+          db_api->push_Tpu_real(DbReply(tpu*0.9));
+
+          // Is sleep needed?
+          boost::this_thread::sleep(boost::posix_time::milliseconds(5000));
+       }
+    }
+    catch(boost::thread_interrupted)
     {
-        // TODO: Query Database
-        tpu = spectrum_getThroughput(spec, 0, -1);
-        tpu_provided = spectrum_getProvidedThroughput(spec, 0, -1);
-
-        tsu = spectrum_getThroughput(spec, radio_number, -1);
-        tsu_provided = spectrum_getProvidedThroughput(spec, radio_number, -1);
-
-        // TODO: Update throughputs
-        db_api->push_Tsu(DbReply(tsu));
-        db_api->push_Tsu_real(DbReply(tsu*0.9));
-
-        db_api->push_Tpu(DbReply(tpu));
-        db_api->push_Tpu_real(DbReply(tpu*0.9));
-        
-        // Is sleep needed?
-        boost::this_thread::sleep(boost::posix_time::milliseconds(5000));
+       cout << "STATUS: Database thread successfully interrupted." << endl;
     }
 }

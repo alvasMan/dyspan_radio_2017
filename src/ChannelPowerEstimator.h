@@ -47,13 +47,19 @@ typedef std::pair<double, std::vector<float> > ChPowers;        ///< timestamp +
 #ifndef CHANNELPOWERESTIMATOR_HPP
 #define CHANNELPOWERESTIMATOR_HPP
 
+class PacketDetector;
+
 class SpectrogramGenerator
 {
 public:
     SpectrogramGenerator() = delete;
+    SpectrogramGenerator(const SpectrogramGenerator&) = delete;
+    SpectrogramGenerator(const SpectrogramGenerator&&) = delete;
     SpectrogramGenerator(int n_channels, int siz) : results(1000),
     Nch(n_channels), step_size(siz), mov_avg(n_channels, MovingAverage<float>(siz))
     {
+        assert(n_channels>0);
+        assert(siz>0);
     }
     
     void work(double tstamp, const std::vector<float>& ch_pwrs);
@@ -71,21 +77,24 @@ class ChannelPowerEstimator
     fftwf_plan fft;                        ///< Our FFT object pointer.
     uint16_t bin_idx;
 
-    uint16_t Nch;
     uint16_t mavg_size;
 
     std::vector<int> bin_mask;
-    std::vector<float> tmp_ch_power;
     std::vector<float> ch_avg_coeff;
     
     std::unique_ptr<SpectrogramGenerator> spectrogram_module;
     
 public:
+    uint16_t Nch;
+    std::vector<float> output_ch_pwrs;
+    double current_tstamp = -1;
     //std::unique_ptr<NoiseFilter3> noise_filter;
     Cplx* fftBins;                       ///< Allocated using fftwf_malloc (SIMD aligned)
     uint16_t nBins;
     
     ChannelPowerEstimator();
+    ChannelPowerEstimator(const ChannelPowerEstimator&&) = delete;
+    ChannelPowerEstimator(const ChannelPowerEstimator&) = delete;
     ~ChannelPowerEstimator()
     {
         destroy();
@@ -107,6 +116,44 @@ public:
     buffer_utils::rdataset<ChPowers> pop_result();
     //void pop_result(buffer_utils::rdataset<ChPowers> &d);   // WARNING: with no move semantics I have to use shared_ptr to avoid mem leaks
     bool try_pop_result(buffer_utils::rdataset<ChPowers> &d);
+};
+
+
+class PacketDetector
+{
+    struct ChannelParams
+    {
+        float noise_floor = 0;
+        long n_noise_samples = 0;
+        int n_packet = 0;
+        int counter_stop = 0;
+        int counter_block = 0;
+        bool pu_detected = false;
+        std::deque< std::pair<double, float> > detected_pulses;
+    };
+    
+public:
+    PacketDetector(int n_channels, int packet_length, float t = 1.5) :
+            mov_avg(n_channels,MovingAverage<float>(packet_length, packet_length)), mov_max(n_channels,std::make_pair(-1,-1)),
+            max_plen(packet_length), Nch(n_channels), thres(t),
+                    params(Nch)
+//                    avg_pwr(Nch,std::make_pair(0,0))
+            {
+            }
+    
+    void work(double tstamp, const std::vector<float>& vals);
+    
+private:
+    std::vector< MovingAverage<float> > mov_avg;
+    std::vector< std::pair<double, float> > mov_max;
+    int max_plen;
+    int Nch = 4;
+    float thres = 1.5;
+    
+    std::vector<ChannelParams> params;
+    
+    int counter_max = 3;
+//    std::vector<std::pair<long,float> > avg_pwr;
 };
 
 #endif

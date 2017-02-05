@@ -27,6 +27,7 @@
 #include "ChannelPowerEstimator.h"
 #include "general_utils.hpp"
 #include "sensing_components.h"
+//#include "matplotlibcpp.h"
 
 using namespace std;
 //using namespace dyspan;
@@ -55,15 +56,17 @@ void ChannelPowerEstimator::set_parameters(uint16_t _avg_win_size,
     // Define the bin mask    
     bin_mask.resize(nBins);
     float inv_bins_per_channel = (float)Nch / nBins; // 1/bins_per_channel
-    for(int i = 0; i < nBins; i++) 
+    for(int i = 0; i < nBins; i++)
     {
         bin_mask[i] = floor(((i + nBins/2) % nBins) * inv_bins_per_channel);
     }
    
     // Cancel DC Offset
     bin_mask[nBins-1] = -1;
+    bin_mask[nBins-2] = -1;
     bin_mask[0] = -1;
     bin_mask[1] = -1;
+    bin_mask[2] = -1;
     
     cout << "Bin mask:";
     cout << print_range(bin_mask) << endl;
@@ -94,7 +97,7 @@ void ChannelPowerEstimator::setup()
     // Create SpectrogramGenerator
     spectrogram_module.reset(new SpectrogramGenerator(Nch, mavg_size));
     
-    tmp_ch_power.resize(Nch);
+    output_ch_pwrs.resize(Nch,-1);
     ch_avg_coeff.resize(Nch, 1);
     //mavg_count = mavg_step_size-mavg_size; // let the mavg fill completely the first time
     
@@ -107,7 +110,6 @@ void ChannelPowerEstimator::setup()
     }
     for(int j = 0; j < Nch; j++)
         ch_avg_coeff[j] = 1/((float)ch_count[j] * nBins);
-    
     
     // create noise_filter
     //noise_filter.reset(new NoiseFilter3(Nch, 0.001, 7));
@@ -142,7 +144,7 @@ void ChannelPowerEstimator::process(double tstamp)
 //    cout << print_container_dB(&fftBins[0], &fftBins[nBins]) << endl;
     
     fftwf_execute(fft);
-    tmp_ch_power.assign(Nch, 0);
+    output_ch_pwrs.assign(Nch, 0);
     
 //    cout << "\n FFT input: " 
 //         << print_container_dB(&fftBins[0], &fftBins[nBins]) << endl;
@@ -151,14 +153,16 @@ void ChannelPowerEstimator::process(double tstamp)
     for(unsigned int i = 0; i < nBins; i++)
     {
         if(bin_mask[i] >= 0)
-            tmp_ch_power[bin_mask[i]] += fftBins[i].real()*fftBins[i].real() + fftBins[i].imag()*fftBins[i].imag();//norm(fftBins[i]);
+            output_ch_pwrs[bin_mask[i]] += fftBins[i].real()*fftBins[i].real() + fftBins[i].imag()*fftBins[i].imag();//norm(fftBins[i]);
     }
     
     for(unsigned int i = 0; i < Nch; ++i)
-        tmp_ch_power[i] *= ch_avg_coeff[i];
+        output_ch_pwrs[i] *= ch_avg_coeff[i];
     
     if(spectrogram_module)
-        spectrogram_module->work(tstamp, tmp_ch_power);
+        spectrogram_module->work(tstamp, output_ch_pwrs);
+    
+    current_tstamp = tstamp;
 }
 
 bool ChannelPowerEstimator::try_pop_result(buffer_utils::rdataset<ChPowers> &d)
@@ -183,93 +187,87 @@ buffer_utils::rdataset<ChPowers> ChannelPowerEstimator::pop_result()
         return std::move(buffer_utils::rdataset<ChPowers>());
 }
 
-class PacketDetector
-{
-public:
-    PacketDetector(int n_channels, int mov_avg_len, int max_packet_length) : 
-            max_plen(max_packet_length), Nch(n_channels) 
-            {
-                setup();
-            }
-    
-    void setup();
-    void work(double tstamp, const vector<float>& vals);
-    
-private:
-    std::vector< MovingAverage<float> > mov_avg;
-    std::vector< std::pair<double, float> > mov_max;
-    int max_plen;
-    int Nch = 4;
-    float thres;
-    float thres2;
-    
-    bool pu_detected = false;
-    int counter_stop = 0;
-    int counter_max = 2;
-    int n_packet = 0;
-    std::vector<float> noise_floor;
-    std::deque< std::pair<double, float> > detected_pulses;
-};
-
-void PacketDetector::setup()
-{
-    mov_avg.resize(Nch);
-    for(auto& m : mov_avg)
-        m.set_size(max_plen);
-}
-
 void PacketDetector::work(double tstamp, const vector<float>& vals)
 {
     for(int i = 0; i < vals.size(); ++i)
     {
-        mov_avg[i].push(vals[i] - noise_floor[i]);
+        // compute average pwr
+//        avg_pwr[i].first++;
+//        avg_pwr[i].second = avg_pwr[i].second + (vals[i]-avg_pwr[i].second)/avg_pwr[i].first;
+        
+        float old_sample = mov_avg[i].push(vals[i]);
+        
+        if(params[i].counter_block>0 || vals[i] < pow(10,-90/10))
+        {        
+            params[i].counter_block--;
+            continue;
+        }
         
         float val_smoothed = mov_avg[i].get_avg();
-        bool test = val_smoothed > (thres - 1) * noise_floor[i];
-        if(test && pu_detected==false)
-        {
-            noise_floor[i] = 0.99 * noise_floor[i] + 0.01*vals[i];
+        bool test = val_smoothed > thres * params[i].noise_floor;
+        if(params[i].pu_detected==false && (test==false || params[i].n_noise_samples < 100))
+        {    
+            params[i].n_noise_samples++;
+            if(params[i].n_noise_samples < 100)
+            {
+                params[i].noise_floor = params[i].noise_floor + (old_sample-params[i].noise_floor)/params[i].n_noise_samples;
+            }
+            else
+                params[i].noise_floor = 0.96 * params[i].noise_floor + 0.04*vals[i];
+//            cout << "DEBUG: Noise floor " << noise_floor[i] << endl;
         }
         else
         {
-            if(pu_detected==false)
+            if(params[i].pu_detected==false)
             {
-                pu_detected = true;
-                counter_stop = 0;
-                n_packet = 0;
-                for(auto& e : mov_max)
-                    e = make_pair(-1,-1);
+                params[i].pu_detected = true;
+                params[i].counter_stop = 0;
+                params[i].n_packet = 0;
+                mov_max[i] = make_pair(-1,-1);
             }
             
             if(test==false)
-                counter_stop++;
+                params[i].counter_stop++;
             else
-                counter_stop = 0;
+                params[i].counter_stop = 0;
             
             if(val_smoothed > mov_max[i].second)
             {
                 mov_max[i].first = tstamp;
                 mov_max[i].second = val_smoothed;
+                params[i].n_packet = 0;
             }
             
-            if(counter_stop > counter_max || n_packet >= mov_avg[i].size())
+            if(params[i].counter_stop > counter_max || params[i].n_packet >= mov_avg[i].size()/2)
             {
+                //std:: cout << "DEBUG: Finished search for packet. Val smoothed " << val_smoothed << endl;
                 // select winner
-                if(mov_max[i].second > thres2)
+                if(mov_max[i].second > thres*params[i].noise_floor)
                 {
-                    detected_pulses.push_back(make_pair(mov_max[i].first, mov_max[i].second));
+                    params[i].detected_pulses.push_back(make_pair(mov_max[i].first, mov_max[i].second));
+                    params[i].counter_block = mov_avg[i].size() - params[i].n_packet;
+                    cout << "DEBUG: Packet detected in channel " << i << " with power " << 10*log10(mov_max[i].second) << endl;
+                    cout << "DEBUG: Noise floor " << 10*log10(params[i].noise_floor) << endl;
+//                    auto d = mov_avg[i].data();
+//                    cout << "DEBUG: Average Power " << 10*log10(avg_pwr[i].second) << endl;
+//                    transform(d.begin(), d.end(), d.begin(), [](float &f){return 10*log10(f);});
+//                    matplotlibcpp::plot(d);
+//                    matplotlibcpp::show();
                 }
                 
-                pu_detected = false;
+                params[i].pu_detected = false;
             }
             else
-                n_packet++;
+                params[i].n_packet++;
         }
     }
 }
 
 void SpectrogramGenerator::work(double tstamp, const vector<float>& ch_pwrs)
 {
+    assert(ch_pwrs.size()==mov_avg.size());
+    assert(mov_avg[0].size()>0);
+    
     // Adds the channel average power to the moving average
     for(uint16_t j = 0; j < mov_avg.size(); j++) 
         mov_avg[j].push(ch_pwrs[j]);
