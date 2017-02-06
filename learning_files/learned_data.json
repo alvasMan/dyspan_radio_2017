@@ -7,7 +7,8 @@
                 0,
                 0
             ],
-            "collected_data": {
+            "current_time": "2017-02-06 20:11:02",
+            "monitor_data": {
                 "ChannelPacketRateMonitor": {
                     "Nch": 4,
                     "channel_free": {
@@ -26,62 +27,22 @@
                     },
                     "channel_stats": {
                         "count": [
-                            84,
-                            84,
-                            84,
-                            84
+                            0,
+                            0,
+                            0,
+                            0
                         ],
                         "sum": [
-                            16.8,
-                            16.8,
-                            16.8,
-                            16.8
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0
                         ]
-                    },
-                    "tdelay_max": 0.1
+                    }
                 }
             },
-            "current_time": "2017-02-06 17:40:09",
             "scenario": -1
         }
     ],
-    "scenario_data": [
-        {
-            "collected_data": {
-                "ChannelPacketRateMonitor": {
-                    "Nch": 4,
-                    "channel_free": {
-                        "count": [
-                            45,
-                            45,
-                            45,
-                            45
-                        ],
-                        "sum": [
-                            9,
-                            9,
-                            9,
-                            9
-                        ]
-                    },
-                    "channel_stats": {
-                        "count": [
-                            0,
-                            0,
-                            0,
-                            0
-                        ],
-                        "sum": [
-                            0.0,
-                            0.0,
-                            0.0,
-                            0.0
-                        ]
-                    },
-                    "tdelay_max": 0.1
-                }
-            },
-            "scenario": -1
-        }
-    ]
+    "scenario_data": []
 }

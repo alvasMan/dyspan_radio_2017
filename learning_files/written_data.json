@@ -7,7 +7,8 @@
                 -1,
                 -1
             ],
-            "collected_data": {
+            "current_time": "2017-02-06 20:16:25",
+            "monitor_data": {
                 "ChannelPacketRateMonitor": {
                     "Nch": 4,
                     "channel_free": {
@@ -40,48 +41,44 @@
                     }
                 }
             },
-            "current_time": "2017-02-06 19:51:33",
             "scenario": "unknown"
         }
     ],
     "scenario_data": [
         {
-            "collected_data": [
-                [
-                    "ChannelPacketRateMonitor",
-                    {
-                        "Nch": 4,
-                        "channel_free": {
-                            "count": [
-                                129,
-                                129,
-                                129,
-                                129
-                            ],
-                            "sum": [
-                                25.8,
-                                25.8,
-                                25.8,
-                                25.8
-                            ]
-                        },
-                        "channel_stats": {
-                            "count": [
-                                0,
-                                0,
-                                0,
-                                0
-                            ],
-                            "sum": [
-                                0.0,
-                                0.0,
-                                0.0,
-                                0.0
-                            ]
-                        }
+            "monitor_data": {
+                "ChannelPacketRateMonitor": {
+                    "Nch": 4,
+                    "channel_free": {
+                        "count": [
+                            0,
+                            0,
+                            0,
+                            0
+                        ],
+                        "sum": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0
+                        ]
+                    },
+                    "channel_stats": {
+                        "count": [
+                            0,
+                            0,
+                            0,
+                            0
+                        ],
+                        "sum": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0
+                        ]
                     }
-                ]
-            ],
+                }
+            },
             "scenario": -1
         }
     ]

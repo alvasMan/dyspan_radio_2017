@@ -44,7 +44,7 @@ void TrainingJsonManager::read()
 
 json merge_two_json_entries(json& jscenario, json& jnew, vector<int> channel_occupancy)
 {
-    json j = json::array();
+    json j;
     
     for(json::iterator it = jnew.begin(); it != jnew.end(); ++it)
     {
@@ -53,7 +53,7 @@ json merge_two_json_entries(json& jscenario, json& jnew, vector<int> channel_occ
             monitor_ptr->from_json(jscenario[monitor_ptr->json_key()]);
         monitor_ptr->merge_json(jnew[monitor_ptr->json_key()], channel_occupancy);
         
-        j.push_back({monitor_ptr->json_key(), monitor_ptr->to_json()});
+        j[monitor_ptr->json_key()] = monitor_ptr->to_json();
     }
     
     return j;
@@ -81,13 +81,13 @@ void TrainingJsonManager::merge_new_data()
                  });
             if(it2 != j_write["scenario_data"].end()) // these is an entry already
             {
-                (*it2)["collected_data"] = merge_two_json_entries((*it2)["collected_data"], new_el["collected_data"], channel_occupancy);
+                (*it2)["monitor_data"] = merge_two_json_entries((*it2)["monitor_data"], new_el["monitor_data"], channel_occupancy);
             }
             else // create a new one
             {
                 json jempty;
                 json jnew_entry = {{"scenario",scenario_idx},
-                    {"collected_data",merge_two_json_entries(jempty, new_el["collected_data"], channel_occupancy)}
+                    {"monitor_data",merge_two_json_entries(jempty, new_el["monitor_data"], channel_occupancy)}
                 };
                 j_write["scenario_data"].push_back(jnew_entry);
             }
@@ -111,7 +111,7 @@ void TrainingJsonManager::write(json& j)
         {"current_time", return_current_time_and_date()},
         {"scenario", "unknown"},
         {"channel_occupancy", v},
-        {"collected_data", j}
+        {"monitor_data", j}
     };
     
     // read a JSON file
