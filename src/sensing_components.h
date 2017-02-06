@@ -12,6 +12,8 @@
  */
 #include "ChannelPowerEstimator.h"
 #include <uhd/usrp/multi_usrp.hpp>
+#include "../utils/json.hpp"
+#include <map>
 
 #ifndef SENSINGMODULE_H
 #define SENSINGMODULE_H
@@ -39,10 +41,11 @@ private:
 
 namespace sensing_utils
 {    
-void launch_spectrogram_generator(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* estim);
+void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* estim, TrainingJsonManager* json_manager);
 //void launch_spectrogram_results_handler(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* estim);
 
 void launch_spectrogram_to_file_thread(ChannelPowerEstimator* pwr_estim);
+
 };
 
 #endif /* SENSINGMODULE_H */

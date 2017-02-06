@@ -27,9 +27,12 @@
 #include "ChannelPowerEstimator.h"
 #include "general_utils.hpp"
 #include "sensing_components.h"
+#include "dyspanradio.h"
+#include <sstream>
 //#include "matplotlibcpp.h"
 
 using namespace std;
+using namespace nlohmann;
 //using namespace dyspan;
 
 
@@ -244,7 +247,7 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
                 // select winner
                 if(mov_max[i].second > thres*params[i].noise_floor)
                 {
-                    params[i].detected_pulses.push_back(make_pair(mov_max[i].first, mov_max[i].second));
+                    detected_pulses.push_back(make_tuple(mov_max[i].first, i, mov_max[i].second));
                     params[i].counter_block = mov_avg[i].size() - params[i].n_packet;
                     cout << "DEBUG: Packet detected in channel " << i << " with power " << 10*log10(mov_max[i].second) << endl;
                     cout << "DEBUG: Noise floor " << 10*log10(params[i].noise_floor) << endl;
@@ -261,6 +264,7 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
                 params[i].n_packet++;
         }
     }
+    sort(detected_pulses.begin(), detected_pulses.end(), [](DetectedPacket& a, DetectedPacket &b){return get<0>(a) < get<0>(b);});
 }
 
 void SpectrogramGenerator::work(double tstamp, const vector<float>& ch_pwrs)
@@ -289,3 +293,140 @@ void SpectrogramGenerator::work(double tstamp, const vector<float>& ch_pwrs)
         mavg_count = 0;
     }
 }
+
+void ForgetfulChannelMonitor::work(const std::vector<float>& ch_pwrs)
+{
+    // make kind of a fosphor thing
+    for(int i = 0; i < channel_energy.size(); ++i)
+        if(channel_energy[i] < ch_pwrs[i])
+            channel_energy[i] = ch_pwrs[i];
+        else
+            channel_energy[i] = alpha*ch_pwrs[i] + (1-alpha)*channel_energy[i];
+}
+
+// returns the indexes sorted by probability of being occupied (descending)
+vector<size_t> ForgetfulChannelMonitor::ch_sorted_by_energy()
+{
+    vector<size_t> idx(channel_energy.size());
+    iota(idx.begin(), idx.end(), 0);
+    
+    sort(idx.begin(), idx.end(),
+       [&](size_t i1, size_t i2) {return channel_energy[i1] > channel_energy[i2];});
+
+    return idx;
+}
+
+void ChannelPacketRateMonitor::work(const std::vector<DetectedPacket>& packets)
+{
+    
+    for(const auto& e : packets)
+    {
+        int ch_idx = get<1>(e);
+        if(prev_packet_tstamp[ch_idx] > 0)
+        {
+            time_format tdelay = get<0>(e) - prev_packet_tstamp[ch_idx];
+            tdelay_sum[ch_idx].first++;
+            tdelay_sum[ch_idx].second += tdelay;
+        }
+        prev_packet_tstamp[ch_idx] = get<0>(e);
+    }
+}
+
+
+json ChannelPacketRateMonitor::to_json()
+{
+    vector<time_format> tsum(Nch,0), tsum_free(Nch,0);
+    vector<long> tcount(Nch,0), tcount_free(Nch,0);
+    for(int i = 0; i < Nch; ++i)
+    {
+        tsum[i] = tdelay_sum[i].second;
+        tcount[i] = tdelay_sum[i].first;
+        tsum_free[i] = tdelay_free_sum[i].second;
+        tcount_free[i] = tdelay_free_sum[i].first;
+    }
+    
+    json j = {
+        {"Nch", Nch},
+        {"channel_stats", {{"sum",tsum},{"count",tcount}}},
+        {"channel_free", {{"sum",tsum_free},{"count",tcount_free}}}
+    };
+    
+    return j;
+}
+
+
+void ChannelPacketRateMonitor::from_json(nlohmann::json& j, vector<int> ch_occupancy)
+{
+    if(j.empty())
+        return;
+    Nch = j["Nch"].get<decltype(Nch)>();
+    
+    
+    tdelay_free_sum.resize(Nch, make_pair(0,0));
+    tdelay_sum.resize(Nch, make_pair(0,0));
+    for(int i = 0; i < Nch; ++i)
+    {
+        tdelay_free_sum[i].first = j["channel_free"]["count"][i].get<long>();
+        tdelay_free_sum[i].second = j["channel_free"]["sum"][i].get<time_format>();
+        tdelay_sum[i].first = j["channel_stats"]["count"][i].get<long>();
+        tdelay_sum[i].second = j["channel_stats"]["sum"][i].get<time_format>();
+    }
+
+    if(ch_occupancy.size()!=0) // swap positions according to occupancy
+        for(int i = 0; i < Nch; ++i)
+            if(ch_occupancy[i]==0)
+                swap(tdelay_free_sum[i],tdelay_sum[i]);
+}
+
+void ChannelPacketRateMonitor::merge_json(nlohmann::json& j2, std::vector<int> ch_occupancy)
+{
+    if(Nch<0) // it was empty
+    {
+        from_json(j2, ch_occupancy);
+    }
+    else
+    {
+        ChannelPacketRateMonitor m2;
+        m2.from_json(j2, ch_occupancy);
+        
+        assert(Nch==m2.Nch);
+    
+        for(int i = 0; i < Nch; ++i)
+        {
+            tdelay_sum[i].first += m2.tdelay_sum[i].first;
+            tdelay_sum[i].second += m2.tdelay_sum[i].second;
+            tdelay_free_sum[i].first += m2.tdelay_free_sum[i].first;
+            tdelay_free_sum[i].second += m2.tdelay_free_sum[i].second;
+        }
+    }
+}
+
+
+
+namespace monitor_utils
+{
+std::string print_packet_rate(const ChannelPacketRateMonitor& p)
+{
+    stringstream os;
+    os << "[";
+    for(int i = 0; i < p.Nch-1; ++i)
+        if(p.is_occupied(i))
+            os << 1.0/p.packet_arrival_period(i) << ",";
+        else
+            os << "free,";
+    if(p.is_occupied(p.Nch-1))
+        os << 1.0/p.packet_arrival_period(p.Nch-1) << "]";
+    else
+        os << "free]";
+    return os.str();
+}
+
+std::unique_ptr<JsonScenarioMonitor> make_scenario_monitor(const std::string& type)
+{
+    if(type=="ChannelPacketRateMonitor")
+        return unique_ptr<JsonScenarioMonitor>(new ChannelPacketRateMonitor);
+    else 
+        throw std::runtime_error("I do not recognize such Json monitor name: " + type);
+}
+
+};

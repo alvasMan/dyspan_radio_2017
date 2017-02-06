@@ -89,6 +89,10 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     // Add PU parameters and scenarios
     pu_data = context_utils::make_rf_environment();    // this is gonna read files
     pu_scenario_api.set_environment(*pu_data);
+    
+    std::string learning_folder = params_.project_folder+"learning_files/";
+    json_learning_manager = TrainingJsonManager(learning_folder + params_.read_learning_file, learning_folder + params_.write_learning_file);
+    json_learning_manager.read(); // reads the config file
 
     if (params_.has_sensing)
     {
@@ -172,7 +176,7 @@ void OfdmTransceiver::start(void)
     {
         cout << "Starting sensing threads..." << endl;
         // the two threads communicate through the e_detec buffer
-        threads_.push_back(new boost::thread(sensing_utils::launch_spectrogram_generator, usrp_tx, &e_detec));
+        threads_.push_back(new boost::thread(sensing_utils::launch_learning_thread, usrp_tx, &e_detec, &json_learning_manager));
         threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
         threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, &pu_scenario_api));
     }

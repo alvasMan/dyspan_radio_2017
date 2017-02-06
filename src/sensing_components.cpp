@@ -8,10 +8,15 @@
 #include "sensing_components.h"
 #include <fstream>
 #include <cmath>
+#include <chrono>
+#include <ctime>
 
 using std::cout;
 using std::endl;
 using std::vector;
+using std::string;
+using std::chrono::system_clock;
+using namespace nlohmann;
 
 void SensingModule::start()
 {
@@ -92,14 +97,19 @@ void resize_ch_pwr_outputsdB(std::vector<float>& out, const vector<float>& in)
     }
 }
 
+
 namespace sensing_utils
 {
 
-void launch_spectrogram_generator(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* pwr_estim)
+void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* pwr_estim, TrainingJsonManager* json_manager)
 {
+    auto t1 = system_clock::now();
+    
     SensingModule s(pwr_estim);
     s.setup_rx_chain(usrp_tx);
-    s.packet_detector.reset(new PacketDetector(pwr_estim->Nch, 15, 2));
+    auto packet_detector = PacketDetector(pwr_estim->Nch, 15, 2);
+    auto ch_monitor = ForgetfulChannelMonitor(pwr_estim->Nch, 0.1);
+    auto par_monitor = ChannelPacketRateMonitor(pwr_estim->Nch, 0.1);
     
     // start streaming
     s.start();
@@ -116,16 +126,40 @@ void launch_spectrogram_generator(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelP
                 break;
             
             // Discover packets through a moving average
-            s.packet_detector->work(pwr_estim->current_tstamp, pwr_estim->output_ch_pwrs);
+            packet_detector.work(pwr_estim->current_tstamp, pwr_estim->output_ch_pwrs);
+            
+            // Perform channel occupancy measurements
+            vector<float> ch_snr(pwr_estim->Nch);
+            for(int i = 0; i < ch_snr.size(); ++i)
+                ch_snr[i] = pwr_estim->output_ch_pwrs[i] / packet_detector.params[i].noise_floor;
+            ch_monitor.work(ch_snr);
+            
+            par_monitor.work(packet_detector.detected_pulses);
             
             // Analyse difference in TOAs
             // TODO: Store TDOAs and reference TOAs
+            
+            packet_detector.detected_pulses.clear();
+            
+            auto t2 = system_clock::now();
+            if(std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count() > 2)
+            {
+//                std::vector<float> pars(par_monitor.Nch);
+//                for(int i = 0; i < par_monitor.Nch; ++i)
+//                    pars[i] = par_monitor.packet_arrival_rate(i);
+//                cout << "DEBUG: Packet Arrival Rates: " << print_range(pars) << endl;
+                cout << "STATUS: Packet Arrival Rates per Channel: " << monitor_utils::print_packet_rate(par_monitor) << endl;
+                t1 = t2;
+            }
         }
     }
     catch(boost::thread_interrupted)
     {
         std::cout << "Sensing thread interrupted." << std::endl;
     }
+    
+    json j = {{par_monitor.json_key(),par_monitor.to_json()}};
+    json_manager->write(j);
 }
 
 // This thread just receives the samples coming from the SensingModule and saves them to a file
@@ -176,4 +210,6 @@ void launch_spectrogram_to_file_thread(ChannelPowerEstimator* pwr_estim)
     
     of.close();
 }
+
+
 };
