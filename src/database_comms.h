@@ -41,68 +41,74 @@ public:
     DatabaseApi(int cap = 10);
 
     // setters
-    void push_Tsu_real(const DbReply& r)
+    void push_Tsu_provided(const DbReply& r)
     {
         std::lock_guard<std::mutex> lk(mut);
-        Tsu_real_values.push_back(r);
+        _Tsu_provided.push_back(r);
     }
-    void push_Tpu_real(const DbReply& r)
+    void push_Tpu_provided(const DbReply& r)
     {
         std::lock_guard<std::mutex> lk(mut);
-        Tpu_real_values.push_back(r);
+        _Tpu_provided.push_back(r);
     }
     void push_Tsu(const DbReply& r)
     {
         std::lock_guard<std::mutex> lk(mut);
-        Tsu_values.push_back(r);
+        _Tsu.push_back(r);
     }
     void push_Tpu(const DbReply& r)
     {
         std::lock_guard<std::mutex> lk(mut);
-        Tpu_values.push_back(r);
+        _Tpu.push_back(r);
     }
     
     // getters
-    float Tsu_real()
+    float Tsu_provided()
     {
         std::lock_guard<std::mutex> lk(mut);
-        return Tsu_real_values.back().throughput;
+
+        return _Tsu_provided.empty()? -1 : _Tsu_provided.back().throughput;
     }
-    float Tpu_real()
+
+    float Tpu_provided()
     {
         std::lock_guard<std::mutex> lk(mut);
-        return Tpu_real_values.back().throughput;
+        return _Tpu_provided.empty()? -1 : _Tpu_provided.back().throughput;
     }
+
     float Tsu()
     {
         std::lock_guard<std::mutex> lk(mut);
-        return Tsu_values.back().throughput;
+        return _Tsu.empty()? -1 : _Tsu.back().throughput;
     }
+
     float Tpu()
     {
         std::lock_guard<std::mutex> lk(mut);
-        return Tpu_values.back().throughput;
+        return _Tpu.empty()? -1 : _Tpu.back().throughput;
     }
+
     float current_score()
     {
         std::lock_guard<std::mutex> lk(mut);
-        if(Tpu_values.back().throughput == 0)
+        if(_Tpu.back().throughput == 0)
             return 0;
         else
-            return std::exp(-10.0f*(1-Tpu_real_values.back().throughput/Tpu_values.back().throughput)) * Tsu_real_values.back().throughput;
+            return std::exp(-10.0f*(1-_Tpu.back().throughput/_Tpu_provided.back().throughput)) * _Tsu.back().throughput;
     }
     
 private:
-    boost::circular_buffer<DbReply> Tsu_real_values; // i need a circular buffer to compute derivatives later
-    boost::circular_buffer<DbReply> Tpu_real_values;
-    boost::circular_buffer<DbReply> Tsu_values;
-    boost::circular_buffer<DbReply> Tpu_values;
+    // i need a circular buffer to compute derivatives later
+    boost::circular_buffer<DbReply> _Tsu_provided;
+    boost::circular_buffer<DbReply> _Tpu_provided;
+    boost::circular_buffer<DbReply> _Tsu;
+    boost::circular_buffer<DbReply> _Tpu;
     
     std::mutex mut;
 };
 
 void launch_mock_database_thread(DatabaseApi* db_api);
-void launch_database_thread(DatabaseApi* db_api, spectrum* spec, int radio_number);
+void launch_database_thread(DatabaseApi* db_api, spectrum* spec, int radio_number, unsigned int sleep_time);
 
 #endif /* DATABASE_H */
 

@@ -2,6 +2,7 @@ INCLUDE_DIRECTORIES(../src)
 INCLUDE_DIRECTORIES(../clientlib)
 
 add_definitions(-DBOOST_ALL_DYN_LINK)
+add_definitions(-DDEBUG)
 
 add_executable (database_test database_test.cpp ../src/database_comms.cpp)
 

@@ -8,6 +8,23 @@
 
 BOOST_AUTO_TEST_SUITE(Database)
 
+char errorBuf[32];
+uint8_t packetBuffer[1500];
+
+void
+get_pkt(spectrum *spec, int radio_id)
+{
+	spectrum_eror_t retVal;
+	retVal = spectrum_getPacket(spec, packetBuffer, sizeof(packetBuffer), -1);
+}
+
+void
+put_pkt(spectrum *spec, int radio_id)
+{
+	spectrum_eror_t retVal;
+   retVal = spectrum_putPacket(spec, packetBuffer, retVal);
+}
+
 BOOST_AUTO_TEST_CASE(test1)
 {
 	char errorBuf[32];
@@ -43,11 +60,21 @@ BOOST_AUTO_TEST_CASE(test1)
 	 */
 	spectrum_waitForState(specTx, 3, -1);
 	spectrum_waitForState(specRx, 3, -1);
-	printf("Stage 3 has started.\n");
+	std::cout << "Stage 3 has started." << std::endl;;
 
    DatabaseApi db(10);
+   boost::thread th(boost::bind(launch_database_thread, &db, specTx, radio_number, 100));
 
-   boost::thread th(boost::bind(launch_database_thread, &db, specTx, radio_number));
+   // Everything created. Now simulate TX and RX in the database
+	int c = 0;
+   while (c++ < 10)
+   {
+			  get_pkt(specTx, radio_number);
+			  put_pkt(specRx, radio_number);
+
+           boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+			  std::cout << "score: " << db.current_score() << std::endl;
+	}
 }
 
 BOOST_AUTO_TEST_SUITE_END()

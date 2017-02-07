@@ -157,7 +157,7 @@ void OfdmTransceiver::start(void)
     if(params_.use_db)
     {
         int radio_id = spectrum_getRadioNumber(tx_);
-        threads_.push_back(new boost::thread(boost::bind(launch_database_thread, &database_api, tx_, radio_id)));
+        threads_.push_back(new boost::thread(boost::bind(launch_database_thread, &database_api, tx_, radio_id, 5000)));
     }
     else
     {

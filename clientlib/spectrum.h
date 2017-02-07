@@ -48,7 +48,7 @@ typedef enum {ERROR_OK=0, ERROR_INVALID=-1, ERROR_AUTH=-2,
 spectrum* spectrum_init(char debug);
 void spectrum_delete(spectrum* ctx);
 spectrum_eror_t spectrum_getRadioNumber(spectrum* ctx);
-spectrum_eror_t spectrum_connect(spectrum* ctx, char* hostname, uint16_t port, uint16_t requestedPacketLen, uint8_t isTransmitter);
+spectrum_eror_t spectrum_connect(spectrum* ctx, const char* hostname, uint16_t port, uint16_t requestedPacketLen, uint8_t isTransmitter);
 void spectrum_errorToText(spectrum* ctx, spectrum_eror_t error, char* output, uint32_t len);
 spectrum_eror_t spectrum_getPacket(spectrum* ctx, uint8_t* buffer, uint32_t bufferLength, int32_t timeoutMs);
 spectrum_eror_t spectrum_putPacket(spectrum* ctx, uint8_t* buffer, uint32_t bufferLength);

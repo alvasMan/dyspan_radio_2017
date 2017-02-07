@@ -10,10 +10,11 @@
 using std::cout;
 using std::endl;
 
-DatabaseApi::DatabaseApi(int cap): Tsu_real_values(cap),
-	Tpu_real_values(cap),
-	Tsu_values(cap),
-	Tpu_values(cap)
+DatabaseApi::DatabaseApi(int cap): 
+   _Tsu_provided(cap),
+	_Tpu_provided(cap),
+	_Tsu(cap),
+	_Tpu(cap)
 {
 }
 
@@ -30,9 +31,9 @@ void launch_mock_database_thread(DatabaseApi* db_api)
             
     //        std::cout << "DEBUG: Gonna update database score" << endl;
             db_api->push_Tsu(DbReply(tsu));
-            db_api->push_Tsu_real(DbReply(tsu*0.9));
+            db_api->push_Tsu_provided(DbReply(tsu*1.1));
             db_api->push_Tpu(DbReply(tpu));
-            db_api->push_Tpu_real(DbReply(tpu*0.9));
+            db_api->push_Tpu_provided(DbReply(tpu*1.1));
 
     //        std::cout << "DEBUG: Updated database score" << endl;
 
@@ -48,7 +49,7 @@ void launch_mock_database_thread(DatabaseApi* db_api)
 }
 
 // TODO: Write it
-void launch_database_thread(DatabaseApi* db_api, spectrum* spec, int radio_number)
+void launch_database_thread(DatabaseApi* db_api, spectrum* spec, int radio_number, unsigned int sleep_time)
 {
     float tsu = 0;
     float tsu_provided = 0;
@@ -68,15 +69,22 @@ void launch_database_thread(DatabaseApi* db_api, spectrum* spec, int radio_numbe
           tsu = spectrum_getThroughput(spec, radio_number, -1);
           tsu_provided = spectrum_getProvidedThroughput(spec, radio_number, -1);
 
+#ifdef DEBUG
+          std::cout << "Tsu: "      << tsu          << std::endl;
+          std::cout << "Tsu_real: " << tsu_provided << std::endl;
+          std::cout << "Tpu: "      << tpu          << std::endl;
+          std::cout << "Tpu_real: " << tpu_provided << std::endl;
+#endif
+
           // TODO: Update throughputs
           db_api->push_Tsu(DbReply(tsu));
-          db_api->push_Tsu_real(DbReply(tsu*0.9));
+          db_api->push_Tsu_provided(DbReply(tsu_provided));
 
           db_api->push_Tpu(DbReply(tpu));
-          db_api->push_Tpu_real(DbReply(tpu*0.9));
+          db_api->push_Tpu_provided(DbReply(tpu_provided));
 
           // Is sleep needed?
-          boost::this_thread::sleep(boost::posix_time::milliseconds(5000));
+          boost::this_thread::sleep(boost::posix_time::milliseconds(sleep_time));
        }
     }
     catch(boost::thread_interrupted)
