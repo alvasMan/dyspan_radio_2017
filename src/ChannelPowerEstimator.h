@@ -176,27 +176,40 @@ public:
 
 #define TDELAY_MAX 0.1
 
-class ChannelPacketRateMonitor : public JsonScenarioMonitor
+class ChannelPacketRateMonitorInterface
+{
+public:
+    ChannelPacketRateMonitorInterface() = default;
+    ChannelPacketRateMonitorInterface(int n_channels) : Nch(n_channels) {}
+    virtual time_format packet_arrival_period(int i) const = 0;
+    virtual time_format packet_arrival_rate(int i) const = 0;    
+    virtual bool is_occupied(int i) const = 0;
+    virtual ~ChannelPacketRateMonitorInterface() {}
+    
+    int Nch = -1;
+};
+
+class ChannelPacketRateMonitor : public ChannelPacketRateMonitorInterface, public JsonScenarioMonitor
 {
 public:
     ChannelPacketRateMonitor() = default;
     ChannelPacketRateMonitor(int n_channels, time_format t_max) : 
-                Nch(n_channels), 
+                ChannelPacketRateMonitorInterface(n_channels), 
                 tdelay_sum(n_channels,std::make_pair(0,0)), tdelay_free_sum(n_channels,std::make_pair(0,0)),
                 prev_packet_tstamp(n_channels,0) 
     {
     }
     void work(const std::vector<DetectedPacket>& packets);
-    inline time_format packet_arrival_period(int i) const 
+    inline time_format packet_arrival_period(int i) const final
     {
         return (tdelay_sum[i].first>0) ? tdelay_sum[i].second/tdelay_sum[i].first : std::numeric_limits<time_format>::max();
     }
-    inline time_format packet_arrival_rate(int i) const 
+    inline time_format packet_arrival_rate(int i) const  final
     {
         return (tdelay_sum[i].first>0) ? 1.0/tdelay_sum[i].second/tdelay_sum[i].first : 0;
     }
      // NOTE: Coarse estimation of availability of the channel. If Pfa is high, this wont work.
-    inline bool is_occupied(int i) const {return packet_arrival_period(i) < TDELAY_MAX;}
+    inline bool is_occupied(int i) const final {return packet_arrival_period(i) < TDELAY_MAX;}
     
     // json utils
     std::string json_key() {return "ChannelPacketRateMonitor";}
@@ -204,7 +217,6 @@ public:
     void from_json(nlohmann::json& j, std::vector<int> ch_occupancy = {}) final;
     void merge_json(nlohmann::json& j2, std::vector<int> ch_occupancy = {}) final;
     
-    int Nch = -1;
     std::vector<std::pair<long,time_format>> tdelay_sum;
     std::vector<std::pair<long,time_format>> tdelay_free_sum;
     
@@ -219,9 +231,9 @@ public:
     }
     SituationalAwarenessApi* pu_api;
     
-    std::vector<ExpandedScenarioDescriptor> possible_expanded_scenarios(const ChannelPacketRateMonitor& m, int forbidden_channel = -1);
+    std::vector<ExpandedScenarioDescriptor> possible_expanded_scenarios(const ChannelPacketRateMonitorInterface* m, int forbidden_channel = -1);
     std::vector<scenario_number_type> possible_scenario_idxs(const std::vector<ExpandedScenarioDescriptor>& possible_expanded_scenarios);
-    std::vector<scenario_number_type> possible_scenario_idxs(const ChannelPacketRateMonitor& m, int forbidden_channel = -1);
+    std::vector<scenario_number_type> possible_scenario_idxs(const ChannelPacketRateMonitorInterface* m, int forbidden_channel = -1);
 };
 
 namespace monitor_utils

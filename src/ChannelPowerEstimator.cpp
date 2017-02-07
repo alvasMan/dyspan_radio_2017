@@ -376,7 +376,9 @@ void ChannelPacketRateMonitor::merge_json(nlohmann::json& j2, std::vector<int> c
     }
 }
 
-std::vector<ExpandedScenarioDescriptor> ChannelPacketRateTester::possible_expanded_scenarios(const ChannelPacketRateMonitor& m, int forbidden_channel)
+#define UNOCCUPIED_DELAY 0.1
+
+std::vector<ExpandedScenarioDescriptor> ChannelPacketRateTester::possible_expanded_scenarios(const ChannelPacketRateMonitorInterface* m, int forbidden_channel)
 {
     const auto& expanded_l = pu_api->expanded_scenarios.scenarios_expanded_list;
     const auto& delay_list = pu_api->environment_data->delay_ms_list;
@@ -385,15 +387,16 @@ std::vector<ExpandedScenarioDescriptor> ChannelPacketRateTester::possible_expand
     
     for(int i = 0; i < expanded_l.size(); ++i)
     {
-        float rate = 0.001/delay_list[expanded_l[i].scenario->packet_delay_idx];
+        float delay = delay_list[expanded_l[i].scenario->packet_delay_idx]/1000;
         // TODO: some optimizations can be done
         float err_acum = 0;
-        for(int n = 0; n < m.Nch; ++n)
+        for(int n = 0; n < m->Nch; ++n)
         {
             if(n==forbidden_channel)
                 continue;
-            auto true_rate = (expanded_l[i].ch_occupied_mask[n]) ? rate : 0.0;
-            err_acum += pow(abs(m.packet_arrival_rate(n) - true_rate),2);
+            auto true_delay = (expanded_l[i].ch_occupied_mask[n]) ? delay : UNOCCUPIED_DELAY;
+            auto d = m->is_occupied(n) ? m->packet_arrival_period(n) : UNOCCUPIED_DELAY; 
+            err_acum += pow(abs(d - true_delay),2);
         }
         if(err_acum < min_err_acum)
         {
@@ -424,7 +427,7 @@ vector<scenario_number_type> ChannelPacketRateTester::possible_scenario_idxs(con
     return vector<scenario_number_type>(set_idxs.begin(), set_idxs.end());
 }
 
-vector<scenario_number_type> ChannelPacketRateTester::possible_scenario_idxs(const ChannelPacketRateMonitor& m, int forbidden_channel)
+vector<scenario_number_type> ChannelPacketRateTester::possible_scenario_idxs(const ChannelPacketRateMonitorInterface* m, int forbidden_channel)
 {
     return possible_scenario_idxs(possible_expanded_scenarios(m,forbidden_channel));
 }

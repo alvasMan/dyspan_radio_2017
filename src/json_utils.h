@@ -23,6 +23,7 @@ public:
     virtual nlohmann::json to_json() = 0;
     virtual void from_json(nlohmann::json& j, std::vector<int> ch_occupancy = {}) = 0;
     virtual void merge_json(nlohmann::json& j2, std::vector<int> ch_occupancy = {}) = 0;
+    virtual ~JsonScenarioMonitor() {}
 };
 
 class TrainingJsonManager

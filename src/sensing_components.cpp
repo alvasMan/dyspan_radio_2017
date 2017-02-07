@@ -10,6 +10,7 @@
 #include <cmath>
 #include <chrono>
 #include <ctime>
+#include <memory>
 
 using std::cout;
 using std::endl;
@@ -143,7 +144,7 @@ void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler*
     
     shandler->sensing_module->setup_rx_chain(usrp_tx);
     auto packet_detector = PacketDetector(shandler->Nch, 15, 2);
-    auto par_monitor = ChannelPacketRateMonitor(shandler->Nch, 0.1);
+    std::unique_ptr<ChannelPacketRateMonitor> par_monitor(new ChannelPacketRateMonitor(shandler->Nch, 0.1));
     
     // start streaming
     shandler->sensing_module->start();
@@ -161,12 +162,12 @@ void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler*
             // Discover packets through a moving average
             packet_detector.work(shandler->pwr_estim->current_tstamp, shandler->pwr_estim->output_ch_pwrs);
             
-            par_monitor.work(packet_detector.detected_pulses);
+            par_monitor->work(packet_detector.detected_pulses);
             
             // Check the list of possible scenarios
             if(!packet_detector.detected_pulses.empty() || (shandler->pwr_estim->current_tstamp-last_tstamp)>2)
             {
-                auto possible_scenario_numbers = shandler->channel_rate_tester->possible_scenario_idxs(par_monitor);
+                auto possible_scenario_numbers = shandler->channel_rate_tester->possible_scenario_idxs(par_monitor.get());
             
                 // If update, update the API
                 if(old_scenario_number != possible_scenario_numbers[0])
@@ -185,7 +186,7 @@ void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler*
             auto t2 = system_clock::now();
             if(std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count() > 2)
             {
-                cout << "STATUS: Packet Arrival Periods per Channel: " << monitor_utils::print_packet_period(par_monitor) << endl;
+                cout << "STATUS: Packet Arrival Periods per Channel: " << monitor_utils::print_packet_period(*par_monitor) << endl;
                 t1 = t2;
             }
         }
