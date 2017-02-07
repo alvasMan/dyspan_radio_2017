@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<block>
+  <name>pktrecv</name>
+  <key>dbconnect_pktrecv</key>
+  <category>dbconnect</category>
+  <import>import dbconnect</import>
+  <make>dbconnect.pktrecv($server, $port, $debug)</make>
+    <param>
+      <name>Server IP</name>
+      <key>server</key>
+      <value>127.0.0.1</value>
+      <type>string</type>
+    </param>
+    <param>
+      <name>Port</name>
+      <key>port</key>
+      <value>5002</value>
+      <type>int</type>
+    </param>
+	<param>
+		<name>Debug</name>
+		<key>debug</key>
+		<value>False</value>
+		<type>bool</type>
+		<option>
+			<name>Enable</name>
+			<key>True</key>
+		</option>
+		<option>
+			<name>Disable</name>
+			<key>False</key>
+		</option>
+	</param>
+	<sink>
+		<name>in0</name>
+		<type>message</type>
+		<optional>1</optional>
+	</sink>
+	<sink>
+		<name>in1</name>
+		<type>message</type>
+		<optional>1</optional>
+	</sink>
+	<sink>
+		<name>in2</name>
+		<type>message</type>
+		<optional>1</optional>
+	</sink>
+	<sink>
+		<name>in3</name>
+		<type>message</type>
+		<optional>1</optional>
+	</sink>
+</block>
