@@ -1,12 +1,14 @@
-# channel width(1,2,4), number of channels(1,2,4), packet delay idx(0<--back-to-back,1,...), distribution(poisson/etc)
-1,1,1,deterministic
-1,1,2,deterministic
-1,2,1,deterministic
-1,4,2,deterministic
+# n occupied channels(1,2,4), channel hopping(true/false), packet delay idx(0<--back-to-back,1,...), distribution(poisson/etc)
+1,0,1,deterministic
+1,0,2,deterministic
 2,1,1,deterministic
-4,1,1,deterministic
-4,1,0,deterministic
-4,1,1,poisson
-4,1,1,poisson
-4,1,1,poisson
-# i still need to change the delays of the poissons
+4,1,2,deterministic
+2,0,1,deterministic
+4,0,1,deterministic
+4,0,0,deterministic
+4,0,1,poisson
+4,0,1,poisson
+4,0,1,poisson
+0,0,0,deterministic
+# the scenario 11 is just no PU case
+# NOTE: i still need to change the delays of the poissons

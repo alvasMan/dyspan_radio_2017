@@ -100,19 +100,113 @@ void resize_ch_pwr_outputsdB(std::vector<float>& out, const vector<float>& in)
 
 namespace sensing_utils
 {
+SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::string json_read_filename,
+                                             std::string json_write_filename, SituationalAwarenessApi *pu_scenario_api, 
+                                    bool has_sensing, bool has_deep_learning)
+{
+    SensingHandler shandler;
+    
+    shandler.Nch = Nch;
+    
+    if(has_sensing)
+    {
+        int moving_average_size = 1;
+        int Nfft = 512;
+        shandler.pwr_estim.reset(new ChannelPowerEstimator());
+        shandler.pwr_estim->set_parameters(moving_average_size, Nfft, shandler.Nch);
+        //shandler.pwr_estim->set_parameters(16, 512, 4, 0.4, 0.4);//(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
+        
+        // SETUP JSON LEARNER/READER
+        std::string learning_folder = project_folder+"learning_files/";
+        shandler.json_learning_manager.reset(new TrainingJsonManager(learning_folder + json_read_filename, learning_folder + json_write_filename));
+        shandler.json_learning_manager->read(); // reads the config file
+        
+        // SETUP USRP Reader to PowerChannelEstimator input
+        shandler.sensing_module.reset(new SensingModule(shandler.pwr_estim.get()));
+        
+        if(has_deep_learning)
+            shandler.spectrogram_module.reset(new SpectrogramGenerator(shandler.Nch, moving_average_size));
+        
+        shandler.channel_rate_tester.reset(new ChannelPacketRateTester(pu_scenario_api));
+    }
+    
+    shandler.pu_scenario_api = pu_scenario_api;
+    
+    return std::move(shandler);
+}
 
-void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* pwr_estim, TrainingJsonManager* json_manager)
+void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler* shandler)
+{
+    auto t1 = system_clock::now();
+    scenario_number_type old_scenario_number = -1;
+    time_format last_tstamp = -1000000;
+    
+    shandler->sensing_module->setup_rx_chain(usrp_tx);
+    auto packet_detector = PacketDetector(shandler->Nch, 15, 2);
+    auto par_monitor = ChannelPacketRateMonitor(shandler->Nch, 0.1);
+    
+    // start streaming
+    shandler->sensing_module->start();
+    
+    // loop
+    try 
+    {
+        while (true)
+        {
+            boost::this_thread::interruption_point();
+// receive data from USRP and place it in the buffer
+            if(shandler->sensing_module->recv_fft_pwrs()==false)
+                break;
+            
+            // Discover packets through a moving average
+            packet_detector.work(shandler->pwr_estim->current_tstamp, shandler->pwr_estim->output_ch_pwrs);
+            
+            par_monitor.work(packet_detector.detected_pulses);
+            
+            // Check the list of possible scenarios
+            if(!packet_detector.detected_pulses.empty() || (shandler->pwr_estim->current_tstamp-last_tstamp)>2)
+            {
+                auto possible_scenario_numbers = shandler->channel_rate_tester->possible_scenario_idxs(par_monitor);
+            
+                // If update, update the API
+                if(old_scenario_number != possible_scenario_numbers[0])
+                {
+                    cout << "DEBUG: New scenario " << possible_scenario_numbers[0] << endl;
+                    old_scenario_number = possible_scenario_numbers[0];
+                    shandler->pu_scenario_api->set_PU_scenario(old_scenario_number);
+                }
+                last_tstamp = shandler->pwr_estim->current_tstamp;
+            }
+            
+            // clear the just detected packets
+            packet_detector.detected_pulses.clear();
+            
+            // Print to screen
+            auto t2 = system_clock::now();
+            if(std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count() > 2)
+            {
+                cout << "STATUS: Packet Arrival Periods per Channel: " << monitor_utils::print_packet_period(par_monitor) << endl;
+                t1 = t2;
+            }
+        }
+    }
+    catch(boost::thread_interrupted)
+    {
+        std::cout << "Sensing thread interrupted." << std::endl;
+    }
+}
+
+void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler* shandler)
 {
     auto t1 = system_clock::now();
     
-    SensingModule s(pwr_estim);
-    s.setup_rx_chain(usrp_tx);
-    auto packet_detector = PacketDetector(pwr_estim->Nch, 15, 2);
-    auto ch_monitor = ForgetfulChannelMonitor(pwr_estim->Nch, 0.1);
-    auto par_monitor = ChannelPacketRateMonitor(pwr_estim->Nch, 0.1);
+    shandler->sensing_module->setup_rx_chain(usrp_tx);
+    auto packet_detector = PacketDetector(shandler->Nch, 15, 2);
+    auto ch_monitor = ForgetfulChannelMonitor(shandler->Nch, 0.1);
+    auto par_monitor = ChannelPacketRateMonitor(shandler->Nch, 0.1);
     
     // start streaming
-    s.start();
+    shandler->sensing_module->start();
     
     // loop
     try 
@@ -122,22 +216,26 @@ void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEs
             boost::this_thread::interruption_point();
 
             // receive data from USRP and place it in the buffer
-            if(s.recv_fft_pwrs()==false)
+            if(shandler->sensing_module->recv_fft_pwrs()==false)
                 break;
             
             // Discover packets through a moving average
-            packet_detector.work(pwr_estim->current_tstamp, pwr_estim->output_ch_pwrs);
+            packet_detector.work(shandler->pwr_estim->current_tstamp, shandler->pwr_estim->output_ch_pwrs);
             
             // Perform channel occupancy measurements
-            vector<float> ch_snr(pwr_estim->Nch);
+            vector<float> ch_snr(shandler->Nch);
             for(int i = 0; i < ch_snr.size(); ++i)
-                ch_snr[i] = pwr_estim->output_ch_pwrs[i] / packet_detector.params[i].noise_floor;
+                ch_snr[i] = shandler->pwr_estim->output_ch_pwrs[i] / packet_detector.params[i].noise_floor;
             ch_monitor.work(ch_snr);
             
             par_monitor.work(packet_detector.detected_pulses);
             
             // Analyse difference in TOAs
             // TODO: Store TDOAs and reference TOAs
+            
+            // Move data to spectrogram
+            if(shandler->spectrogram_module)
+                shandler->spectrogram_module->work(shandler->pwr_estim->current_tstamp, shandler->pwr_estim->output_ch_pwrs);
             
             packet_detector.detected_pulses.clear();
             
@@ -159,11 +257,11 @@ void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEs
     }
     
     json j = {{par_monitor.json_key(),par_monitor.to_json()}};
-    json_manager->write(j);
+    shandler->json_learning_manager->write(j);
 }
 
 // This thread just receives the samples coming from the SensingModule and saves them to a file
-void launch_spectrogram_to_file_thread(ChannelPowerEstimator* pwr_estim)
+void launch_spectrogram_to_file_thread(SensingHandler* shandler)
 {
     std::string filename = "/home/connect/repo/generated_files/temp.bin";
     std::vector<int> NNdims = {64,64};
@@ -185,7 +283,7 @@ void launch_spectrogram_to_file_thread(ChannelPowerEstimator* pwr_estim)
             boost::this_thread::interruption_point();
             
             //blocks waiting
-            buffer_utils::rdataset<ChPowers>  ch_powers = pwr_estim->pop_result();
+            buffer_utils::rdataset<ChPowers>  ch_powers = shandler->spectrogram_module->results.get_rdataset();
             
             if(ch_powers.empty())
                 boost::this_thread::sleep(boost::posix_time::milliseconds(500));

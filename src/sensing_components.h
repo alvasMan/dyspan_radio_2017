@@ -21,17 +21,20 @@
 class SensingModule
 {
 public:
-    SensingModule(ChannelPowerEstimator* estim) : pwr_estim(estim) {} // copy
-    void setup_rx_chain(uhd::usrp::multi_usrp::sptr utx);       ///< Configure the rx_stream
-    void run();                     ///< Run the USRP Rx and stores the values in pwr_estim
+
+    SensingModule(ChannelPowerEstimator* estim) : pwr_estim(estim)
+    {
+    } // copy
+    void setup_rx_chain(uhd::usrp::multi_usrp::sptr utx); ///< Configure the rx_stream
+    void run(); ///< Run the USRP Rx and stores the values in pwr_estim
     void start();
     bool recv_fft_pwrs();
-    
+
     ChannelPowerEstimator *pwr_estim;
     std::unique_ptr<PacketDetector> packet_detector;
     double current_timestamp;
     uhd::time_spec_t tspec;
-    
+
 private:
     uhd::usrp::multi_usrp::sptr usrp_tx;
     uhd::rx_streamer::sptr rx_stream;
@@ -39,12 +42,32 @@ private:
     uhd::rx_metadata_t metadata;
 };
 
+class SituationalAwarenessApi;
+
+class SensingHandler
+{
+public:
+    int Nch = 4;
+    std::unique_ptr<SensingModule> sensing_module;
+    std::unique_ptr<ChannelPowerEstimator> pwr_estim;
+    std::unique_ptr<SpectrogramGenerator> spectrogram_module;
+    std::unique_ptr<TrainingJsonManager> json_learning_manager;
+    std::unique_ptr<ChannelPacketRateTester> channel_rate_tester;
+    SituationalAwarenessApi *pu_scenario_api;
+};
+
 namespace sensing_utils
-{    
-void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* estim, TrainingJsonManager* json_manager);
+{
+SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::string json_read_filename,
+                                             std::string json_write_filename, SituationalAwarenessApi *pu_scenario_api, 
+                                    bool has_sensing, bool has_deep_learning);
+
+void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler* shandler);
+
+void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler* shandler);
 //void launch_spectrogram_results_handler(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* estim);
 
-void launch_spectrogram_to_file_thread(ChannelPowerEstimator* pwr_estim);
+void launch_spectrogram_to_file_thread(SensingHandler* shandler);
 
 };
 

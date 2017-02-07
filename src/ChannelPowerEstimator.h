@@ -34,6 +34,7 @@
 //#include "NoiseFilter3.h"
 #include "stats.h"
 #include "buffer_utils.hpp"
+#include "context_awareness.h"
 #include "json_utils.h"
 
 using buffer_utils::bounded_buffer;
@@ -83,8 +84,6 @@ class ChannelPowerEstimator
     std::vector<int> bin_mask;
     std::vector<float> ch_avg_coeff;
     
-    std::unique_ptr<SpectrogramGenerator> spectrogram_module;
-    
 public:
     uint16_t Nch;
     std::vector<float> output_ch_pwrs;
@@ -114,9 +113,9 @@ public:
         return fftBins[idx];
     }
     inline uint16_t fft_size() const {return nBins;}
-    buffer_utils::rdataset<ChPowers> pop_result();
+//    buffer_utils::rdataset<ChPowers> pop_result();
     //void pop_result(buffer_utils::rdataset<ChPowers> &d);   // WARNING: with no move semantics I have to use shared_ptr to avoid mem leaks
-    bool try_pop_result(buffer_utils::rdataset<ChPowers> &d);
+//    bool try_pop_result(buffer_utils::rdataset<ChPowers> &d);
 };
 
 typedef double time_format;
@@ -192,6 +191,10 @@ public:
     {
         return (tdelay_sum[i].first>0) ? tdelay_sum[i].second/tdelay_sum[i].first : std::numeric_limits<time_format>::max();
     }
+    inline time_format packet_arrival_rate(int i) const 
+    {
+        return (tdelay_sum[i].first>0) ? 1.0/tdelay_sum[i].second/tdelay_sum[i].first : 0;
+    }
      // NOTE: Coarse estimation of availability of the channel. If Pfa is high, this wont work.
     inline bool is_occupied(int i) const {return packet_arrival_period(i) < TDELAY_MAX;}
     
@@ -208,9 +211,23 @@ public:
     std::vector<time_format> prev_packet_tstamp;
 };
 
+class ChannelPacketRateTester
+{
+public:
+    ChannelPacketRateTester(SituationalAwarenessApi* api) : pu_api(api)
+    {
+    }
+    SituationalAwarenessApi* pu_api;
+    
+    std::vector<ExpandedScenarioDescriptor> possible_expanded_scenarios(const ChannelPacketRateMonitor& m, int forbidden_channel = -1);
+    std::vector<scenario_number_type> possible_scenario_idxs(const std::vector<ExpandedScenarioDescriptor>& possible_expanded_scenarios);
+    std::vector<scenario_number_type> possible_scenario_idxs(const ChannelPacketRateMonitor& m, int forbidden_channel = -1);
+};
+
 namespace monitor_utils
 {
 std::string print_packet_rate(const ChannelPacketRateMonitor& p);
+std::string print_packet_period(const ChannelPacketRateMonitor& p);
 };
 
 

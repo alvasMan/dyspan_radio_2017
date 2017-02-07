@@ -1,5 +1,5 @@
 # delay in msec
-delays,0,5,10
+delays,1,5,10
 num_channels,4
 # channel bandwidth in MHz
 channel_bandwidth,2.5

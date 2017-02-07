@@ -97,8 +97,8 @@ void ChannelPowerEstimator::setup()
     fft = fftwf_plan_dft_1d(nBins, (fftwf_complex*)fftBins, (fftwf_complex*)fftBins, FFTW_FORWARD, FFTW_MEASURE);
     bin_idx = 0;
     
-    // Create SpectrogramGenerator
-    spectrogram_module.reset(new SpectrogramGenerator(Nch, mavg_size));
+//    // Create SpectrogramGenerator
+//    spectrogram_module.reset(new SpectrogramGenerator(Nch, mavg_size));
     
     output_ch_pwrs.resize(Nch,-1);
     ch_avg_coeff.resize(Nch, 1);
@@ -162,32 +162,7 @@ void ChannelPowerEstimator::process(double tstamp)
     for(unsigned int i = 0; i < Nch; ++i)
         output_ch_pwrs[i] *= ch_avg_coeff[i];
     
-    if(spectrogram_module)
-        spectrogram_module->work(tstamp, output_ch_pwrs);
-    
     current_tstamp = tstamp;
-}
-
-bool ChannelPowerEstimator::try_pop_result(buffer_utils::rdataset<ChPowers> &d)
-{
-    return spectrogram_module->results.try_get_rdataset(d);
-//    if(result_exists())
-//    {
-//        buffer_utils::rdataset<ChPowers> d;
-//        results.get_rdataset(d);
-//        vec = d().second; // NOTE: should I copy?
-//        tstamp = d().first;
-//        return true;
-//    }
-//    return false;
-}
-
-buffer_utils::rdataset<ChPowers> ChannelPowerEstimator::pop_result()
-{
-    if(spectrogram_module)
-        return std::move(spectrogram_module->results.get_rdataset());
-    else
-        return std::move(buffer_utils::rdataset<ChPowers>());
 }
 
 void PacketDetector::work(double tstamp, const vector<float>& vals)
@@ -249,8 +224,8 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
                 {
                     detected_pulses.push_back(make_tuple(mov_max[i].first, i, mov_max[i].second));
                     params[i].counter_block = mov_avg[i].size() - params[i].n_packet;
-                    cout << "DEBUG: Packet detected in channel " << i << " with power " << 10*log10(mov_max[i].second) << endl;
-                    cout << "DEBUG: Noise floor " << 10*log10(params[i].noise_floor) << endl;
+                    //cout << "DEBUG: Packet detected in channel " << i << " with power " << 10*log10(mov_max[i].second) << endl;
+                    //cout << "DEBUG: Noise floor " << 10*log10(params[i].noise_floor) << endl;
 //                    auto d = mov_avg[i].data();
 //                    cout << "DEBUG: Average Power " << 10*log10(avg_pwr[i].second) << endl;
 //                    transform(d.begin(), d.end(), d.begin(), [](float &f){return 10*log10(f);});
@@ -401,7 +376,58 @@ void ChannelPacketRateMonitor::merge_json(nlohmann::json& j2, std::vector<int> c
     }
 }
 
+std::vector<ExpandedScenarioDescriptor> ChannelPacketRateTester::possible_expanded_scenarios(const ChannelPacketRateMonitor& m, int forbidden_channel)
+{
+    const auto& expanded_l = pu_api->expanded_scenarios.scenarios_expanded_list;
+    const auto& delay_list = pu_api->environment_data->delay_ms_list;
+    float min_err_acum = std::numeric_limits<float>::max();
+    vector<int> min_idxs;
+    
+    for(int i = 0; i < expanded_l.size(); ++i)
+    {
+        float rate = 0.001/delay_list[expanded_l[i].scenario->packet_delay_idx];
+        // TODO: some optimizations can be done
+        float err_acum = 0;
+        for(int n = 0; n < m.Nch; ++n)
+        {
+            if(n==forbidden_channel)
+                continue;
+            auto true_rate = (expanded_l[i].ch_occupied_mask[n]) ? rate : 0.0;
+            err_acum += pow(abs(m.packet_arrival_rate(n) - true_rate),2);
+        }
+        if(err_acum < min_err_acum)
+        {
+            min_err_acum = err_acum;
+            min_idxs.assign({i});
+        }
+        else if(err_acum == min_err_acum)
+        {
+            min_idxs.push_back(i);
+        }
+        //std::cout << "DEBUG: scenario error distance (" << expanded_l[i].scenario_idx << "," << i << ")=" << err_acum << endl;
+    }
+    
+    vector<ExpandedScenarioDescriptor> possible_scens;
+    possible_scens.reserve(min_idxs.size());
+    for(auto& e : min_idxs)
+        possible_scens.push_back(expanded_l[e]);
+    return possible_scens;
+}
 
+vector<scenario_number_type> ChannelPacketRateTester::possible_scenario_idxs(const vector<ExpandedScenarioDescriptor>& possible_expanded_scenarios)
+{
+    // find unique elements
+    set<scenario_number_type> set_idxs;
+    for(auto& e : possible_expanded_scenarios)
+        set_idxs.insert(e.scenario_idx);
+
+    return vector<scenario_number_type>(set_idxs.begin(), set_idxs.end());
+}
+
+vector<scenario_number_type> ChannelPacketRateTester::possible_scenario_idxs(const ChannelPacketRateMonitor& m, int forbidden_channel)
+{
+    return possible_scenario_idxs(possible_expanded_scenarios(m,forbidden_channel));
+}
 
 namespace monitor_utils
 {
@@ -411,11 +437,26 @@ std::string print_packet_rate(const ChannelPacketRateMonitor& p)
     os << "[";
     for(int i = 0; i < p.Nch-1; ++i)
         if(p.is_occupied(i))
-            os << 1.0/p.packet_arrival_period(i) << ",";
+            os << p.packet_arrival_rate(i) << ",";
         else
             os << "free,";
     if(p.is_occupied(p.Nch-1))
-        os << 1.0/p.packet_arrival_period(p.Nch-1) << "]";
+        os << p.packet_arrival_rate(p.Nch-1) << "]";
+    else
+        os << "free]";
+    return os.str();
+}
+std::string print_packet_period(const ChannelPacketRateMonitor& p)
+{
+    stringstream os;
+    os << "[";
+    for(int i = 0; i < p.Nch-1; ++i)
+        if(p.is_occupied(i))
+            os << p.packet_arrival_period(i) << ",";
+        else
+            os << "free,";
+    if(p.is_occupied(p.Nch-1))
+        os << p.packet_arrival_period(p.Nch-1) << "]";
     else
         os << "free]";
     return os.str();

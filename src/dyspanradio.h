@@ -51,6 +51,7 @@ typedef struct
     // generic radio parameters
     bool debug;
     bool has_sensing;
+    bool has_learning;
     bool sensing_to_file;
     std::string mode;
     std::string args;

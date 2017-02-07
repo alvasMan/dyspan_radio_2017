@@ -127,3 +127,5 @@ void TrainingJsonManager::write(json& j)
     ofptr.close();
     cout << "STATUS: Successfully wrote learned data to json file " << w_file << endl;
 }
+
+// TODO: Move data in json to monitor testers
