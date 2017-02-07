@@ -34,6 +34,8 @@
 //#include "NoiseFilter3.h"
 #include "stats.h"
 #include "buffer_utils.hpp"
+#include "context_awareness.h"
+#include "json_utils.h"
 
 using buffer_utils::bounded_buffer;
 
@@ -82,8 +84,6 @@ class ChannelPowerEstimator
     std::vector<int> bin_mask;
     std::vector<float> ch_avg_coeff;
     
-    std::unique_ptr<SpectrogramGenerator> spectrogram_module;
-    
 public:
     uint16_t Nch;
     std::vector<float> output_ch_pwrs;
@@ -113,11 +113,13 @@ public:
         return fftBins[idx];
     }
     inline uint16_t fft_size() const {return nBins;}
-    buffer_utils::rdataset<ChPowers> pop_result();
+//    buffer_utils::rdataset<ChPowers> pop_result();
     //void pop_result(buffer_utils::rdataset<ChPowers> &d);   // WARNING: with no move semantics I have to use shared_ptr to avoid mem leaks
-    bool try_pop_result(buffer_utils::rdataset<ChPowers> &d);
+//    bool try_pop_result(buffer_utils::rdataset<ChPowers> &d);
 };
 
+typedef double time_format;
+typedef std::tuple<time_format,int,float> DetectedPacket;
 
 class PacketDetector
 {
@@ -129,7 +131,6 @@ class PacketDetector
         int counter_stop = 0;
         int counter_block = 0;
         bool pu_detected = false;
-        std::deque< std::pair<double, float> > detected_pulses;
     };
     
 public:
@@ -143,7 +144,7 @@ public:
     
     void work(double tstamp, const std::vector<float>& vals);
     
-private:
+//private:
     std::vector< MovingAverage<float> > mov_avg;
     std::vector< std::pair<double, float> > mov_max;
     int max_plen;
@@ -151,9 +152,83 @@ private:
     float thres = 1.5;
     
     std::vector<ChannelParams> params;
+    std::vector<DetectedPacket> detected_pulses;
     
     int counter_max = 3;
 //    std::vector<std::pair<long,float> > avg_pwr;
 };
+
+class ForgetfulChannelMonitor
+{
+public:
+    ForgetfulChannelMonitor(int n_channels, float alpha_x = 0.1) : Nch(n_channels), alpha(alpha_x), channel_energy(Nch)
+    {
+    }
+    
+    void work(const std::vector<float>& ch_pwrs);
+    std::vector<size_t> ch_sorted_by_energy();
+    
+    int Nch;
+    float alpha;
+    
+    std::vector<float> channel_energy;
+};
+
+#define TDELAY_MAX 0.1
+
+class ChannelPacketRateMonitor : public JsonScenarioMonitor
+{
+public:
+    ChannelPacketRateMonitor() = default;
+    ChannelPacketRateMonitor(int n_channels, time_format t_max) : 
+                Nch(n_channels), 
+                tdelay_sum(n_channels,std::make_pair(0,0)), tdelay_free_sum(n_channels,std::make_pair(0,0)),
+                prev_packet_tstamp(n_channels,0) 
+    {
+    }
+    void work(const std::vector<DetectedPacket>& packets);
+    inline time_format packet_arrival_period(int i) const 
+    {
+        return (tdelay_sum[i].first>0) ? tdelay_sum[i].second/tdelay_sum[i].first : std::numeric_limits<time_format>::max();
+    }
+    inline time_format packet_arrival_rate(int i) const 
+    {
+        return (tdelay_sum[i].first>0) ? 1.0/tdelay_sum[i].second/tdelay_sum[i].first : 0;
+    }
+     // NOTE: Coarse estimation of availability of the channel. If Pfa is high, this wont work.
+    inline bool is_occupied(int i) const {return packet_arrival_period(i) < TDELAY_MAX;}
+    
+    // json utils
+    std::string json_key() {return "ChannelPacketRateMonitor";}
+    nlohmann::json to_json() final;
+    void from_json(nlohmann::json& j, std::vector<int> ch_occupancy = {}) final;
+    void merge_json(nlohmann::json& j2, std::vector<int> ch_occupancy = {}) final;
+    
+    int Nch = -1;
+    std::vector<std::pair<long,time_format>> tdelay_sum;
+    std::vector<std::pair<long,time_format>> tdelay_free_sum;
+    
+    std::vector<time_format> prev_packet_tstamp;
+};
+
+class ChannelPacketRateTester
+{
+public:
+    ChannelPacketRateTester(SituationalAwarenessApi* api) : pu_api(api)
+    {
+    }
+    SituationalAwarenessApi* pu_api;
+    
+    std::vector<ExpandedScenarioDescriptor> possible_expanded_scenarios(const ChannelPacketRateMonitor& m, int forbidden_channel = -1);
+    std::vector<scenario_number_type> possible_scenario_idxs(const std::vector<ExpandedScenarioDescriptor>& possible_expanded_scenarios);
+    std::vector<scenario_number_type> possible_scenario_idxs(const ChannelPacketRateMonitor& m, int forbidden_channel = -1);
+};
+
+namespace monitor_utils
+{
+std::string print_packet_rate(const ChannelPacketRateMonitor& p);
+std::string print_packet_period(const ChannelPacketRateMonitor& p);
+};
+
 
 #endif

@@ -10,7 +10,9 @@ file(GLOB sources
     ChannelPowerEstimator.cpp
     sensing_components.cpp
     context_awareness.cpp
-    database_comms.cpp)
+    database_comms.cpp
+    json_utils.cpp
+    markov_chain_components.cpp)
 
 file(GLOB headers
     dyspanradio.h

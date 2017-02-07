@@ -40,6 +40,7 @@
 #include "sensing_components.h"
 #include "context_awareness.h"
 #include "database_comms.h"
+#include "json_utils.h"
 
 class OfdmTransceiver : public DyspanRadio
 {
@@ -100,11 +101,11 @@ private:
     Buffer<boost::shared_ptr<CplxFVec> > frame_buffer;
 
     // receiver objects
-    ChannelPowerEstimator e_detec;
+    SensingHandler shandler;
     
     // situational awareness objects
     std::unique_ptr<RFEnvironmentData> pu_data;
-    SituationalAwarenessApi pu_scenario_api;
+    std::unique_ptr<SituationalAwarenessApi> pu_scenario_api;
     DatabaseApi database_api;
     
     //std::pair<double,bool> DwellEst(DwellTimeEstimator &Dwell, double &previous_dwelltime, int &dwell_counter, int steady_state, double steady_state_Th);

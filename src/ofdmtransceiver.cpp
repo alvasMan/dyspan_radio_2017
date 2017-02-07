@@ -88,14 +88,12 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     
     // Add PU parameters and scenarios
     pu_data = context_utils::make_rf_environment();    // this is gonna read files
-    pu_scenario_api.set_environment(*pu_data);
+    pu_scenario_api.reset(new SituationalAwarenessApi(*pu_data));
 
     if (params_.has_sensing)
     {
-        // setting up the energy detector (number of averages over time,fft size, number of channels)
-        e_detec.set_parameters(1, 512, 4);
-        
-        //e_detec.set_parameters(16, 512, 4, 0.4, 0.4);//(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
+        shandler = sensing_utils::make_sensing_handler(4, params_.project_folder, params_.read_learning_file,
+                                             params_.write_learning_file, pu_scenario_api.get(), true, true);
     }
 
     if (params_.use_db) 
@@ -164,22 +162,27 @@ void OfdmTransceiver::start(void)
         threads_.push_back(new boost::thread(launch_mock_database_thread, &database_api));
     }
     
-    if(params_.sensing_to_file)
-        threads_.push_back(new boost::thread(sensing_utils::launch_spectrogram_to_file_thread, &e_detec));
     
     // start sensing thread
     if (params_.has_sensing)
     {
         cout << "Starting sensing threads..." << endl;
         // the two threads communicate through the e_detec buffer
-        threads_.push_back(new boost::thread(sensing_utils::launch_spectrogram_generator, usrp_tx, &e_detec));
+        if(params_.has_learning)
+        {
+            threads_.push_back(new boost::thread(sensing_utils::launch_learning_thread, usrp_tx, &shandler));            
+            if(params_.sensing_to_file)
+                threads_.push_back(new boost::thread(sensing_utils::launch_spectrogram_to_file_thread, &shandler));
+        }
+        else
+            threads_.push_back(new boost::thread(sensing_utils::launch_sensing_thread, usrp_tx, &shandler));
         threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
-        threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, &pu_scenario_api));
+        //threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, pu_scenario_api.get()));
     }
     else
     {
         // launch a scenario updater
-        threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, &pu_scenario_api));
+        threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, pu_scenario_api.get()));
     }
 }
 
@@ -417,7 +420,7 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
         //reconfigure_usrp(current_channel);
         
         cout << "Current Challenge Score: " << database_api.current_score() << endl;
-        cout << "Current Challenge Scenario: " << pu_scenario_api.PU_scenario_idx() << endl;
+        cout << "Current Challenge Scenario: " << pu_scenario_api->PU_scenario_idx() << endl;
     }
 }
 

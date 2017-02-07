@@ -20,12 +20,32 @@
 #ifndef CONTEXTAWARESYSTEM_H
 #define CONTEXTAWARESYSTEM_H
 
+class ExpandedScenarioDescriptor
+{
+public:
+    scenario_number_type scenario_idx;
+    const ScenarioDescriptor* scenario;
+    std::vector<bool> ch_occupied_mask;
+};
+
+class ScenariosExpanded
+{
+public:
+    ScenariosExpanded(RFEnvironmentData* rf_env) : rf_environment(rf_env)
+    {
+        expand_scenarios();
+    }
+    void expand_scenarios();
+    const RFEnvironmentData* rf_environment;
+    std::vector<ExpandedScenarioDescriptor> scenarios_expanded_list;
+};
+
 // This will be information that is not in the Scenario Description
 // For instance, the actual utilized channels
 class ScenarioStats
 {
 public:
-    void set_occupied_channels(const std::vector<int8_t>& v)
+    void set_occupied_channels(const std::vector<int>& v)
     {
         std::lock_guard<std::mutex> lk(mut);
 //        if(env->scenario_list[scenario_idx.load()].n_visited_channels!=v.size())
@@ -34,37 +54,36 @@ public:
 //        }
         ch_vec = v;
     }
-    std::vector<int8_t> occupied_channels()
+    std::vector<int> occupied_channels()
     {
         std::lock_guard<std::mutex> lk(mut);
         return ch_vec;
     }
 private:
     
-    std::vector<int8_t> ch_vec;
+    std::vector<int> ch_vec;
     std::mutex mut;
 };
 
 class SituationalAwarenessApi
 {   
 public:
-    
-    int PU_scenario_idx() const {return scenario_idx.load();}
-    void set_PU_scenario(int s) 
+    SituationalAwarenessApi(RFEnvironmentData& e) : environment_data(&e), expanded_scenarios(&e)
     {
-        assert(s < env->scenario_list.size() && s >= -1);
-        scenario_idx = (int8_t)s;
     }
-    const RFEnvironmentData* get_environment()
-    { // need to lock?
-        return env;
+    int PU_scenario_idx() const {return scenario_idx.load();}
+    void set_PU_scenario(scenario_number_type s)
+    {
+        assert(s < environment_data->scenario_list.size() && s >= -1);
+        scenario_idx = s;
     }
-    void set_environment(RFEnvironmentData& e) {env = &e;}
     
+    const RFEnvironmentData* environment_data;   // this will only change at the beginning
+    const ScenariosExpanded expanded_scenarios;
     ScenarioStats stats;
 private:
-    RFEnvironmentData* env;   // this will only change at the beginning
-    std::atomic<int8_t> scenario_idx;
+    std::atomic<scenario_number_type> scenario_idx;
+    std::atomic<scenario_number_type> expanded_scenario_idx;
 };
 
 namespace context_utils
@@ -72,15 +91,15 @@ namespace context_utils
 std::unique_ptr<RFEnvironmentData> make_rf_environment();
 void launch_mock_scenario_update_thread(SituationalAwarenessApi* scenario_api);
 
-inline bool is_channel_visited(const std::vector<int8_t>& occupied_channels, int8_t ch)
+inline bool is_channel_visited(const std::vector<int>& occupied_channels, int ch)
 {
     auto it = std::find(occupied_channels.begin(), occupied_channels.end(), ch);
     return it == occupied_channels.end();
 }
 
-inline std::vector<int8_t> find_free_channels(const std::vector<int8_t>& occupied_channels, int8_t num_channels = 4)
+inline std::vector<int> find_free_channels(const std::vector<int>& occupied_channels, int num_channels = 4)
 {
-    std::vector<int8_t> possible_channels(num_channels); 
+    std::vector<int> possible_channels(num_channels); 
     std::iota(possible_channels.begin(), possible_channels.end(), 0);
     
     auto new_end_it = std::remove_if(possible_channels.begin(), possible_channels.end(), [&](int8_t ch_val)
@@ -92,15 +111,8 @@ inline std::vector<int8_t> find_free_channels(const std::vector<int8_t>& occupie
     return possible_channels;
 }
 
-std::vector<int8_t> find_free_channels(const SituationalAwarenessApi& api);
-        
-//        auto new_end_it = std::remove_if(possible_channels.begin(), possible_channels.end(), [&](uint8_t val)
-//        {
-//            return std::find(context.scenario_list.begin(), context.scenario_list.end(), [&](const ScenarioDescriptor& s)
-//            {
-//                return scenario_utils::is_channel_visited(s,val);
-//            }) != context.scenario_list.end();
-//        });
+std::vector<int> find_free_channels(const SituationalAwarenessApi& api);
+
 };
 
 #endif /* CONTEXTAWARESYSTEM_H */
