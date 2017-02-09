@@ -36,6 +36,89 @@ using namespace nlohmann;
 //using namespace dyspan;
 
 
+namespace sensing_utils
+{
+vector<int> generate_bin_mask(int Nch, int nBins)
+{
+    vector<int> bin_mask(nBins);
+    float inv_bins_per_channel = (float)Nch / nBins; // 1/bins_per_channel
+    for(int i = 0; i < nBins; i++)
+    {
+        bin_mask[i] = floor(((i + nBins/2) % nBins) * inv_bins_per_channel);
+    }
+    return bin_mask;
+}
+
+vector<int> generate_bin_mask(int Nch, int nBins, float non_guard_percentage)
+{
+    int Nbins_per_channel = nBins / Nch;
+    int non_guard_bins = round(non_guard_percentage*Nbins_per_channel);
+    int half_guard_bins = (Nbins_per_channel - non_guard_bins)/2;
+    
+    vector<int> bin_mask(nBins,-1);
+    for(int i = 0; i < nBins; i++)
+    {
+        int ch_idx = ((i + nBins/2)%nBins) / Nbins_per_channel;
+        int j = ((i + nBins/2)%nBins) % Nbins_per_channel;
+        if(j >= half_guard_bins && j < (Nbins_per_channel-half_guard_bins))
+            bin_mask[i] = ch_idx;
+    }
+    return bin_mask;
+}
+
+// bin mask is equal to -1 for non assigned bins
+// non_reference_mask is false for the values of the bin mask which correspond to reference bins
+pair<vector<int>,vector<pair<int,bool>>> generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage)
+{
+    int Nbins_per_channel = nBins / Nch;
+    int non_guard_bins = round(non_guard_percentage*Nbins_per_channel);
+    int half_guard_bins = (Nbins_per_channel - non_guard_bins)/2;
+    int half_reference_bins = round(reference_percentage*Nbins_per_channel/2);
+ 
+    assert(half_reference_bins>0);   
+    assert(half_reference_bins<=half_guard_bins);
+    
+    vector<int> bin_mask(nBins,-1);
+    vector<pair<int,bool>> map_ref_bins(3*Nch);
+    for(int i = 0; i < nBins; i++)
+    {
+        int ch_idx = ((i + nBins/2)%nBins) / Nbins_per_channel;
+        int j = ((i + nBins/2)%nBins) % Nbins_per_channel;
+        if(j < half_reference_bins)
+            bin_mask[i] = ch_idx*3;
+        else if(j>= half_guard_bins && j < half_guard_bins + non_guard_bins)
+            bin_mask[i] = ch_idx*3+1;
+        else if(j >= Nbins_per_channel - half_reference_bins)
+            bin_mask[i] = ch_idx*3+2;
+    }
+    for(int m = 0; m < Nch; ++m)
+    {
+        map_ref_bins[m*Nch] = make_pair(m,false);
+        map_ref_bins[m*Nch+1] = make_pair(m,true);
+        map_ref_bins[m*Nch+2] = make_pair(m,false);
+    }
+    return make_pair(bin_mask, map_ref_bins);
+}
+
+vector<float> relative_channel_powers(int Nch, const vector<float> &ch_powers, const vector<int>& bin_mask, const vector<pair<int,bool>>& ref_map)
+{
+    vector<float> rel_ch_powers(Nch);
+    vector<float> tmp_ref_powers(Nch);
+    
+    for(int i = 0; i < ch_powers.size(); ++i)
+        if(ref_map[i].second==true)
+            rel_ch_powers[ref_map[i].first] += ch_powers[i];
+        else
+            tmp_ref_powers[ref_map[i].first] += ch_powers[i];
+    
+    for(int i = 0; i < Nch; ++i)
+        rel_ch_powers[i] = rel_ch_powers[i] / tmp_ref_powers[i];
+    
+    return rel_ch_powers;
+}
+
+};
+
 ChannelPowerEstimator::ChannelPowerEstimator() : fftBins(NULL), fft(NULL)
 {
 }

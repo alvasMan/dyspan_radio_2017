@@ -39,6 +39,12 @@
 
 using buffer_utils::bounded_buffer;
 
+using std::vector;
+using std::string;
+using std::cout;
+using std::endl;
+using std::pair;
+
 typedef std::complex<float> Cplx;
 typedef std::vector<std::complex<float> > CplxVec;
 typedef std::vector<std::complex<float> >::iterator CplxVecIt;
@@ -156,6 +162,13 @@ public:
     
     int counter_max = 3;
 //    std::vector<std::pair<long,float> > avg_pwr;
+};
+
+namespace sensing_utils
+{
+std::vector<int> generate_bin_mask(int Nch, int nBins);
+std::vector<int> generate_bin_mask(int Nch, int nBins, float non_guard_percentage);
+std::pair<std::vector<int>,vector<pair<int,bool>>> generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage);
 };
 
 class ForgetfulChannelMonitor
