@@ -26,6 +26,7 @@
 #include <gnuradio/block_detail.h>
 #include <string.h>
 #include <random>
+#include <vector>
 #include "pktgen_impl.h"
 #define dout d_debug && std::cout
 
@@ -41,7 +42,7 @@ namespace gr {
      * The private constructor
      */
 
-	pktgen_impl::pktgen_impl(float interval, int pktsize, bool quit, bool debug, bool rand_scen, const std::string &host, int port, int tmin, int tmax, int tconst, int mean1, int mean2 , int mean3, int swtime, float psc, int seed, int gain_min, int gain_max, int gain_period, int gain_incr, int fixed_scenario) :
+	pktgen_impl::pktgen_impl(float interval, int pktsize, bool quit, bool debug, bool rand_scen, const std::string &host, int port, int tmin, int tmax, int tconst, int mean1, int mean2 , int mean3, int swtime, float psc, int seed, int gain_min, int gain_max, int gain_period, int gain_incr, int fixed_scenario, int first_channel, int second_channel) :
 		block("pktgen",
 				gr::io_signature::make(0, 0, 0),
 				gr::io_signature::make(0, 0, 0)),
@@ -75,7 +76,9 @@ namespace gr {
 		d_pktsize(pktsize),
 		d_finished(false),
 		d_quit(quit),
-                d_fixed_scenario(fixed_scenario) {
+                d_fixed_scenario(fixed_scenario),
+                d_first_channel(first_channel),
+                d_second_channel(second_channel) {
 
 	message_port_register_out(pmt::mp("out0"));
 	message_port_register_out(pmt::mp("out1"));
@@ -118,6 +121,26 @@ void pktgen_impl:: tx_connect(const std::string &host, int port)
 
 	}
 
+std::vector<int> scenario_generator(int scenario)
+{
+	std::vector<int> scenario_list;
+	if(scenario==-1)
+	{
+		scenario_list.resize(10);
+		for(int i = 0; i < 10; ++i)
+		{
+			scenario_list[i] = i;
+		}
+		std::random_shuffle(&scenario_list[0], &scenario_list[10]);
+	}
+	else
+	{
+		scenario_list.resize(1);
+		scenario_list[0] = scenario;
+	}
+	return scenario_list;
+}
+
 void
 pktgen_impl::run(pktgen_impl *instance) {
 
@@ -143,7 +166,7 @@ pktgen_impl::run(pktgen_impl *instance) {
 	int d_inter_per2=0;
 	int d_inter_per3=0;
 	int d_inter_gain=0;
-	int d_dist_per=0;
+	int d_dist_per=1000000; // i have to change this from 0 to a high value bc the organizers are idiots
 	int chan=0;
 	int idx=0;
 	/*
@@ -164,7 +187,10 @@ pktgen_impl::run(pktgen_impl *instance) {
 	   */
 	int dist_type =0;
 	int scncnt=0;
-	int scenearr[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+	srand(d_seed);
+	std::vector<int> scenearr = scenario_generator(d_fixed_scenario);
+	bool first_change = true;
+	bool flag_change_scenario = true;
 	int delay_1 = d_tmin;
 	int delay_2 = d_tmax;
 	bool sel_chan0 = false;  
@@ -172,39 +198,28 @@ pktgen_impl::run(pktgen_impl *instance) {
 	bool sel_chan2 = false;  
 	bool sel_chan3 = false;  
 	int d_gain=d_gain_min;
-	int hopping_2_chan[2]={0,1};
-	int occ_2_chan[2]={0,1};
+	int hopping_2_chan[2]={d_first_channel,d_second_channel};
+	int occ_2_chan[2]={d_first_channel,d_second_channel};
 
-	//randomize scenarios
-	if (d_rand_scen && d_fixed_scenario < 0)
+	if(d_fixed_scenario<0)
 	{
-		srand(d_seed);
-		std::random_shuffle(&scenearr[0], &scenearr[10]);
+		//select hopping channels
+		hopping_2_chan[0] = d_dist1(d_gen1); 
+		int schan = d_dist1(d_gen1);
+		while( schan == hopping_2_chan[0])
+		{
+			schan = d_dist1(d_gen1); 
+		}
+		hopping_2_chan[1] = schan; 
+		//select occupied channels
+		occ_2_chan[0] = d_dist1(d_gen1); 
+		schan = d_dist1(d_gen1);
+		while( schan == occ_2_chan[0])
+		{
+			schan = d_dist1(d_gen1); 
+		}
+		occ_2_chan[1] = schan; 
 	}
-        else
-        {
-		for(int i = 0; i < 10; ++i)
-                    scenearr[i] = d_fixed_scenario;
-        }
-
-
-	//select hopping channels
-	hopping_2_chan[0] = d_dist1(d_gen1); 
-	int schan = d_dist1(d_gen1);
-	while( schan == hopping_2_chan[0])
-	{
-		schan = d_dist1(d_gen1); 
-	}
-	hopping_2_chan[1] = schan; 
-	//select occupied channels
-	occ_2_chan[0] = d_dist1(d_gen1); 
-	schan = d_dist1(d_gen1);
-	while( schan == occ_2_chan[0])
-	{
-		schan = d_dist1(d_gen1); 
-	}
-	occ_2_chan[1] = schan; 
-
 
 	//set to first scenario from the array
 	dist_type = scenearr[0];
@@ -696,12 +711,13 @@ pktgen_impl::run(pktgen_impl *instance) {
 			
 			delay = d_interval;
 
-			if(d_dist_per>=d_swtime)
+			if(d_dist_per>=d_swtime && (d_fixed_scenario>=0 || first_change))
 			{
+				first_change = false;
 				scncnt++;
 				d_dist_per =0;
 				//dist_type++;
-				dist_type = scenearr[scncnt];
+				dist_type = scenearr[scncnt%scenearr.size()];
 				// Select channel based on scenario
 				switch (dist_type) {
 					case 0:
@@ -711,7 +727,7 @@ pktgen_impl::run(pktgen_impl *instance) {
 						  sel_chan1 = false;  
 						  sel_chan2 = false;  
 						  sel_chan3 = false;  
-						  chan = d_dist1(d_gen1);
+						  chan = (d_fixed_scenario < 0) ? d_dist1(d_gen1) : d_first_channel;
 						  switch(chan){
 							  case 0:
 						  		  sel_chan0 = true;  
@@ -787,13 +803,14 @@ pktgen_impl::run(pktgen_impl *instance) {
 				if (d_rand_scen && scncnt == 5)
 				{
 					srand(d_seed);
-					std::random_shuffle(&scenearr[0], &scenearr[10]);
+					std::random_shuffle(&scenearr[0], &scenearr[scenearr.size()]);
 				}
-				scncnt = scncnt%10;
+				scncnt = scncnt%scenearr.size();
 			}
 			
 			if(d_inter_gain>=d_gain_period)
 			{
+				dout << "DEBUG: " << d_first_channel << std::endl;
 				d_inter_gain=0;
 				d_gain = d_gain + d_gain_incr;
 				if (d_gain > d_gain_max)
@@ -870,10 +887,10 @@ pktgen_impl::is_running() {
 }
 
     pktgen::sptr
-    pktgen::make(float interval, int pktsize, bool quit, bool debug, bool rand_scen, const std::string &host, int port, int tmin, int tmax, int tconst, int mean1, int mean2, int mean3, int swtime, float psc, int seed,int gain_min, int gain_max, int gain_period, int gain_incr, int fixed_scenario)
+    pktgen::make(float interval, int pktsize, bool quit, bool debug, bool rand_scen, const std::string &host, int port, int tmin, int tmax, int tconst, int mean1, int mean2, int mean3, int swtime, float psc, int seed,int gain_min, int gain_max, int gain_period, int gain_incr, int fixed_scenario, int first_channel, int second_channel)
     {
       return gnuradio::get_initial_sptr
-        (new pktgen_impl(interval, pktsize, quit, debug, rand_scen, host, port, tmin, tmax, tconst, mean1, mean2, mean3, swtime, psc, seed, gain_min, gain_max, gain_period, gain_incr, fixed_scenario));
+        (new pktgen_impl(interval, pktsize, quit, debug, rand_scen, host, port, tmin, tmax, tconst, mean1, mean2, mean3, swtime, psc, seed, gain_min, gain_max, gain_period, gain_incr, fixed_scenario, first_channel, second_channel));
     }
 
   } /* namespace dbconnect */

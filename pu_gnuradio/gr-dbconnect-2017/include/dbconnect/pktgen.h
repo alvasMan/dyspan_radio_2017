@@ -47,7 +47,7 @@ namespace gr {
        * creating new instances.
        */
 	static sptr make(float interval,int pktsize = 1500, bool quit = true, bool debug = false, bool rand_scen = true, const std::string &host="127.0.0.1", int port=5002, 
-			         int tmin=5, int tmax=100, int tconst=0, int mean1=20, int mean2=100, int mean3=50, int swtime=60000, float psc=0.05, int seed=6643, int gain_min=10, int gain_max=30, int gain_period=60000, int gain_incr=5, int fixed_scenario=-1);
+			         int tmin=5, int tmax=100, int tconst=0, int mean1=20, int mean2=100, int mean3=50, int swtime=60000, float psc=0.05, int seed=6643, int gain_min=10, int gain_max=30, int gain_period=60000, int gain_incr=5, int fixed_scenario=-1, int first_channel = -1, int second_channel = -1);
 
 	virtual void set_nmsg(int nmsg) = 0;
 	virtual int get_nmsg() = 0;
