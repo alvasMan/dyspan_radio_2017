@@ -36,6 +36,7 @@
 #include "buffer_utils.hpp"
 #include "context_awareness.h"
 #include "json_utils.h"
+#include <map>
 
 using buffer_utils::bounded_buffer;
 
@@ -44,6 +45,7 @@ using std::string;
 using std::cout;
 using std::endl;
 using std::pair;
+using std::map;
 
 typedef std::complex<float> Cplx;
 typedef std::vector<std::complex<float> > CplxVec;
@@ -164,11 +166,40 @@ public:
 //    std::vector<std::pair<long,float> > avg_pwr;
 };
 
+struct BinMask
+{
+    enum BinType {reference, guard, valid};
+    typedef vector<int>::iterator iterator;
+    typedef vector<int>::const_iterator const_iterator;
+    struct SectionProperties
+    {
+        int channel_idx;
+        int count;
+        BinType type;
+    };
+    
+    BinMask(const vector<int>& bmask);
+    BinMask(const vector<int>& bmask, const vector<int>& channel_map, const vector<bool>& ref_map);
+    int& operator[](int idx) {return bin_mask[idx];}
+    const int& operator[](int idx) const {return bin_mask[idx];}
+    size_t size() const {return bin_mask.size();}
+    iterator begin() {return bin_mask.begin();}
+    iterator end() {return bin_mask.end();}
+    const_iterator begin() const {return bin_mask.begin();}
+    const_iterator end() const {return bin_mask.end();}
+    size_t n_sections() const {return section_props.size()-1;} // i don't count guards
+    
+    vector<int> bin_mask; // size equal to number of bins
+    map<int,SectionProperties> section_props;
+    int Nch;
+};
+
 namespace sensing_utils
 {
-std::vector<int> generate_bin_mask(int Nch, int nBins);
-std::vector<int> generate_bin_mask(int Nch, int nBins, float non_guard_percentage);
-std::pair<std::vector<int>,vector<pair<int,bool>>> generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage);
+BinMask generate_bin_mask(int Nch, int nBins);
+BinMask generate_bin_mask(int Nch, int nBins, float non_guard_percentage);
+BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage);
+vector<float> relative_channel_powers(const BinMask& bmask, const vector<float> &ch_powers);
 };
 
 class ForgetfulChannelMonitor

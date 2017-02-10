@@ -11,6 +11,7 @@
 #include <chrono>
 #include <ctime>
 #include <memory>
+#include "matplotlibcpp.h"
 
 using std::cout;
 using std::endl;
@@ -114,7 +115,10 @@ SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::st
         int moving_average_size = 1;
         int Nfft = 512;
         shandler.pwr_estim.reset(new ChannelPowerEstimator());
-        shandler.pwr_estim->set_parameters(moving_average_size, Nfft, shandler.Nch);
+        //shandler.pwr_estim->set_parameters(moving_average_size, Nfft, shandler.Nch);
+        auto maskprops = sensing_utils::generate_bin_mask(shandler.Nch, Nfft, 0.8);
+        assert(maskprops.bin_mask.size()==Nfft);
+        shandler.pwr_estim->set_parameters(moving_average_size, maskprops.n_sections(), maskprops.bin_mask);
         //shandler.pwr_estim->set_parameters(16, 512, 4, 0.4, 0.4);//(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
         
         // SETUP JSON LEARNER/READER
@@ -143,8 +147,10 @@ void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler*
     time_format last_tstamp = -1000000;
     
     shandler->sensing_module->setup_rx_chain(usrp_tx);
-    auto packet_detector = PacketDetector(shandler->Nch, 15, 2);
+    auto packet_detector = PacketDetector(shandler->Nch, 15, 10);
     std::unique_ptr<ChannelPacketRateMonitor> par_monitor(new ChannelPacketRateMonitor(shandler->Nch, 0.1));
+    auto ch_monitor = ForgetfulChannelMonitor(shandler->Nch, 0.01);
+    vector<int> ch_counter(shandler->Nch,0);
     
     // start streaming
     shandler->sensing_module->start();
@@ -163,6 +169,14 @@ void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler*
             packet_detector.work(shandler->pwr_estim->current_tstamp, shandler->pwr_estim->output_ch_pwrs);
             
             par_monitor->work(packet_detector.detected_pulses);
+            
+            // Perform channel occupancy measurements
+            vector<float> ch_snr(shandler->Nch);
+            for(int i = 0; i < ch_snr.size(); ++i)
+                ch_snr[i] = shandler->pwr_estim->output_ch_pwrs[i] / packet_detector.params[i].noise_floor;
+            ch_monitor.work(shandler->pwr_estim->output_ch_pwrs);//ch_snr);
+            for(auto &e : packet_detector.detected_pulses)
+                ch_counter[std::get<1>(e)]++;
             
             // Check the list of possible scenarios
             if(!packet_detector.detected_pulses.empty() || (shandler->pwr_estim->current_tstamp-last_tstamp)>2)
@@ -187,6 +201,18 @@ void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler*
             if(std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count() > 2)
             {
                 cout << "STATUS: Packet Arrival Periods per Channel: " << monitor_utils::print_packet_period(*par_monitor) << endl;
+                cout << "STATUS: Packet Power per Channel: " << print_range(ch_monitor.channel_energy, [](float f){return 10*log10(f);}) << endl;
+                vector<float> noise_pwr;
+                for(auto& e : packet_detector.params)
+                    noise_pwr.push_back(e.noise_floor);
+                cout << "STATUS: Noise Floor per Channel: " << print_range(noise_pwr, [](float f){return 10*log10(f);}) << endl;
+                cout << "STATUS: Number of detected per channel: " << print_range(ch_counter) << endl;
+                vector<float> d(512);
+                for(int i = 0; i < 512; ++i)
+                    d[i] = 10*log10(abs(shandler->pwr_estim->fftBins[(i+256)%512]));
+                matplotlibcpp::plot(d);
+                matplotlibcpp::show();
+                //cout << "\n FFT input: " << print_container_dB(&shandler->pwr_estim->fftBins[0], &shandler->pwr_estim->fftBins[512]) << endl;
                 t1 = t2;
             }
         }

@@ -22,50 +22,75 @@ BOOST_AUTO_TEST_CASE(test1)
 	int nBins = 512;
 	int Nch = 4;
 
-	auto bin_mask1 = sensing_utils::generate_bin_mask(Nch, nBins);
-	auto bin_mask2 = sensing_utils::generate_bin_mask(Nch, nBins, 1.0);
-	BOOST_REQUIRE(bin_mask1.size()==nBins);
-	BOOST_REQUIRE(bin_mask2.size()==nBins);
+	auto mask1 = sensing_utils::generate_bin_mask(Nch, nBins);
+	auto mask2 = sensing_utils::generate_bin_mask(Nch, nBins, 1.0);
+	BOOST_REQUIRE(mask1.size()==nBins);
+	BOOST_REQUIRE(mask2.size()==nBins);
+        BOOST_REQUIRE(mask1.Nch==Nch);
+        BOOST_REQUIRE(mask2.Nch==Nch);
 //	cout << "Bin mask 1 with no guard\n";
 //	cout << print_range(bin_mask1) << endl;
 //	cout << "Bin mask 2 with no guard\n";
 //	cout << print_range(bin_mask2) << endl;
-	for(int i = 0; i < nBins; ++i)
-	{
-		BOOST_REQUIRE(bin_mask1[i]==bin_mask2[i]);
-		BOOST_REQUIRE(bin_mask1[i]>=0);
-	}
-
-	auto bin_mask3 = sensing_utils::generate_bin_mask(Nch, nBins, 0.75);
-	BOOST_REQUIRE(bin_mask3.size()==nBins);
+        
+        // Check if the two masks are equal
+        BOOST_REQUIRE(std::equal(mask1.begin(), mask1.end(), mask2.begin()));
+        // There should not be any guard bins
+        BOOST_REQUIRE(std::find_if(mask1.begin(), mask1.end(),[](int i){return i < 0;})==mask1.end());
+        // Check if the count of bins for each channel is the expected
+        BOOST_REQUIRE(count_bins(mask1.bin_mask,-1)==mask1.section_props[-1].count);
+        for(int i = 0; i < Nch; ++i)
+        {
+            BOOST_REQUIRE(count_bins(mask1.bin_mask,i)==mask1.section_props[i].count);
+            BOOST_REQUIRE(count_bins(mask1.bin_mask,i)==mask2.section_props[i].count);
+        }
+        
 	cout << "Bin mask 3 with guard of 25\%\n";
-	cout << print_range(bin_mask3) << endl;	
-	cout << "Number of non-assigned bins: " << count_bins(bin_mask3,-1) << endl;
+	auto mask3 = sensing_utils::generate_bin_mask(Nch, nBins, 0.75);
+	BOOST_REQUIRE(mask3.size()==nBins);
+	cout << print_range(mask3.bin_mask) << endl;	
+	cout << "Number of non-assigned bins: " << count_bins(mask3.bin_mask,-1) << endl;
 	vector<int> ref_counts3;
 	for(int i = 0; i < Nch; ++i)
-		ref_counts3.push_back(count_bins(bin_mask3,i));
-	cout << "Reference counts: " << print_range(ref_counts3) << endl;
-	
-	auto mask_pair = sensing_utils::generate_bin_mask_and_reference(Nch, nBins, 0.75, 0.1);
-	auto bin_mask4 = mask_pair.first;
-	auto ref_map = mask_pair.second;
-	BOOST_REQUIRE(bin_mask4.size()==nBins);
-	cout << "Bin mask 4 with guard of 25\% and reference 10\%\n";
-	cout << print_range(bin_mask4) << endl;
-	cout << "Number of non-assigned bins: " << count_bins(bin_mask4,-1) << endl;
-	vector<int> ref_counts;
-	vector<int> non_ref_counts;	
-	for(int i = 0; i < ref_map.size(); ++i)
-	{
-		if(ref_map[i].second==true)
-			non_ref_counts.push_back(count_bins(bin_mask4,i));
-		else
-			ref_counts.push_back(count_bins(bin_mask4,i));
+        {
+            auto c = count_bins(mask3.bin_mask,i);
+            BOOST_REQUIRE(c==mask3.section_props[i].count);
+            BOOST_REQUIRE(mask3.section_props[i].type==BinMask::valid);
+            ref_counts3.push_back(c);
 	}
-	cout << "Reference channel counts: " << endl;
-	cout << print_range(ref_counts) << endl;
-	cout << "Non-Reference channel counts: " << endl;
-	cout << print_range(non_ref_counts) << endl;
+        cout << "Reference counts: " << print_range(ref_counts3) << endl;
+}
+
+
+BOOST_AUTO_TEST_CASE(test2)
+{
+	int nBins = 512;
+	int Nch = 4;
+        
+        // TEST with noise reference sections of the spectrogram
+	cout << "Bin mask 4 with guard of 25\% and reference 10\%\n";
+	auto mask4 = sensing_utils::generate_bin_mask_and_reference(Nch, nBins, 0.75, 0.1);
+	BOOST_REQUIRE(mask4.size()==nBins);
+        BOOST_REQUIRE(mask4.Nch==Nch);
+        BOOST_REQUIRE(mask4.n_sections()==3*Nch);
+        BOOST_REQUIRE(mask4.section_props[-1].count==count_bins(mask4.bin_mask,-1));
+        for(int i = 0; i < mask4.n_sections(); ++i)
+        {
+            BOOST_REQUIRE(mask4.section_props[i].count==count_bins(mask4.bin_mask,i));
+            BOOST_REQUIRE((i%3==1 && mask4.section_props[i].type==BinMask::valid) || (i%3!=1 && mask4.section_props[i].type==BinMask::reference));
+        }
+//	cout << print_range(bin_mask4) << endl;
+//	cout << "Number of non-assigned bins: " << count_bins(bin_mask4,-1) << endl;
+//        
+        vector<float> sp_powers(Nch*3,1);
+        vector<float> test_powers = {1.5,2.5,3.5,4.5};
+        for(int i = 0; i < Nch; ++i)
+            sp_powers[i*3+1] += i + 0.5;
+        cout << "Original channel powers: " << print_range(sp_powers) << endl;
+        vector<float> ch_powers = sensing_utils::relative_channel_powers(mask4, sp_powers);
+        cout << "Channel powers: " << print_range(ch_powers) << endl;
+        BOOST_REQUIRE(ch_powers.size()==test_powers.size());
+        BOOST_REQUIRE(std::equal(ch_powers.begin(), ch_powers.end(), test_powers.begin()));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

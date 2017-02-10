@@ -35,10 +35,54 @@ using namespace std;
 using namespace nlohmann;
 //using namespace dyspan;
 
+BinMask::BinMask(const vector<int>& bmask)
+{
+    bin_mask = bmask;
+    int ch_idx = 0;
+    for(int i = 0; i < bin_mask.size(); ++i)
+    {
+        auto it = section_props.find(bin_mask[i]);
+        if(it==section_props.end())
+        {
+            if(bin_mask[i]>=0)
+                section_props[bin_mask[i]] = {ch_idx++,1,BinMask::valid};
+            else
+                section_props[bin_mask[i]] = {bin_mask[i],1,BinMask::guard};
+        }
+        else
+            it->second.count++;
+    }
+    auto mask_cpy = bin_mask;
+    Nch = std::distance(mask_cpy.begin(),unique(mask_cpy.begin(),mask_cpy.end()));
+}
+
+BinMask::BinMask(const vector<int>& bmask, const vector<int>& channel_map, const vector<bool>& ref_map)
+{
+    bin_mask = bmask;
+    Nch = 0;
+    for(int i = 0; i < bin_mask.size(); ++i)
+    {
+        auto it = section_props.find(bin_mask[i]);
+        if(it==section_props.end())
+        {
+            if(bin_mask[i]>=0)
+            {
+                BinMask::BinType t = (ref_map[bin_mask[i]]) ? BinMask::reference : BinMask::valid;
+                section_props[bin_mask[i]] = {channel_map[bin_mask[i]],1,t};
+                if(t==BinMask::valid)
+                    Nch++;
+            }
+            else
+                section_props[bin_mask[i]] = {bin_mask[i],1,BinMask::guard};
+        }
+        else
+            it->second.count++;
+    }
+}
 
 namespace sensing_utils
 {
-vector<int> generate_bin_mask(int Nch, int nBins)
+BinMask generate_bin_mask(int Nch, int nBins)
 {
     vector<int> bin_mask(nBins);
     float inv_bins_per_channel = (float)Nch / nBins; // 1/bins_per_channel
@@ -46,10 +90,10 @@ vector<int> generate_bin_mask(int Nch, int nBins)
     {
         bin_mask[i] = floor(((i + nBins/2) % nBins) * inv_bins_per_channel);
     }
-    return bin_mask;
+    return BinMask(bin_mask);
 }
 
-vector<int> generate_bin_mask(int Nch, int nBins, float non_guard_percentage)
+BinMask generate_bin_mask(int Nch, int nBins, float non_guard_percentage)
 {
     int Nbins_per_channel = nBins / Nch;
     int non_guard_bins = round(non_guard_percentage*Nbins_per_channel);
@@ -63,12 +107,12 @@ vector<int> generate_bin_mask(int Nch, int nBins, float non_guard_percentage)
         if(j >= half_guard_bins && j < (Nbins_per_channel-half_guard_bins))
             bin_mask[i] = ch_idx;
     }
-    return bin_mask;
+    return BinMask(bin_mask);
 }
 
 // bin mask is equal to -1 for non assigned bins
 // non_reference_mask is false for the values of the bin mask which correspond to reference bins
-pair<vector<int>,vector<pair<int,bool>>> generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage)
+BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage)
 {
     int Nbins_per_channel = nBins / Nch;
     int non_guard_bins = round(non_guard_percentage*Nbins_per_channel);
@@ -79,7 +123,8 @@ pair<vector<int>,vector<pair<int,bool>>> generate_bin_mask_and_reference(int Nch
     assert(half_reference_bins<=half_guard_bins);
     
     vector<int> bin_mask(nBins,-1);
-    vector<pair<int,bool>> map_ref_bins(3*Nch);
+    vector<int> ch_map(3*Nch);
+    vector<bool> ref_map(3*Nch);
     for(int i = 0; i < nBins; i++)
     {
         int ch_idx = ((i + nBins/2)%nBins) / Nbins_per_channel;
@@ -93,26 +138,40 @@ pair<vector<int>,vector<pair<int,bool>>> generate_bin_mask_and_reference(int Nch
     }
     for(int m = 0; m < Nch; ++m)
     {
-        map_ref_bins[m*Nch] = make_pair(m,false);
-        map_ref_bins[m*Nch+1] = make_pair(m,true);
-        map_ref_bins[m*Nch+2] = make_pair(m,false);
+        ch_map[m*3] = m;
+        ch_map[m*3+1] = m;
+        ch_map[m*3+2] = m;
+        ref_map[m*3] = true;
+        ref_map[m*3+1] = false;
+        ref_map[m*3+2] = true;
     }
-    return make_pair(bin_mask, map_ref_bins);
+    return BinMask(bin_mask, ch_map, ref_map);
 }
 
-vector<float> relative_channel_powers(int Nch, const vector<float> &ch_powers, const vector<int>& bin_mask, const vector<pair<int,bool>>& ref_map)
+vector<float> relative_channel_powers(const BinMask& bmask, const vector<float> &ch_powers)
 {
-    vector<float> rel_ch_powers(Nch);
-    vector<float> tmp_ref_powers(Nch);
+    vector<float> rel_ch_powers(bmask.Nch,0);
+    vector<float> tmp_ref_powers(bmask.Nch,0);
+    vector<int> rel_ch_counts(bmask.Nch,0), tmp_ch_counts(bmask.Nch,0);
     
-    for(int i = 0; i < ch_powers.size(); ++i)
-        if(ref_map[i].second==true)
-            rel_ch_powers[ref_map[i].first] += ch_powers[i];
-        else
-            tmp_ref_powers[ref_map[i].first] += ch_powers[i];
+    //assert(ch_powers.size()==bmask.n_sections());
+    for(int i = 0; i < ch_powers.size();++i)
+    {
+        const auto& el = bmask.section_props.find(i)->second;
+        if(el.type==BinMask::valid)
+        {
+            rel_ch_powers[el.channel_idx] += ch_powers[i]*el.count;
+            rel_ch_counts[el.channel_idx] += el.count;
+        }
+        else if(el.type==BinMask::reference)
+        {
+            tmp_ref_powers[el.channel_idx] += ch_powers[i] * el.count;
+            tmp_ch_counts[el.channel_idx] += el.count;
+        }
+    }
     
-    for(int i = 0; i < Nch; ++i)
-        rel_ch_powers[i] = rel_ch_powers[i] / tmp_ref_powers[i];
+    for(int i = 0; i < bmask.Nch; ++i)
+        rel_ch_powers[i] = (rel_ch_powers[i]/rel_ch_counts[i]) / (tmp_ref_powers[i]/tmp_ch_counts[i]);
     
     return rel_ch_powers;
 }
@@ -169,6 +228,9 @@ void ChannelPowerEstimator::set_parameters(uint16_t _avg_win_size,
     bin_mask = _bin_mask;       // Values in bin_mask must be within [0, number of channels] and size of bin_mask must be equal to nBins. No protection yet.
     nBins = bin_mask.size();
 
+    cout << "Bin mask:";
+    cout << print_range(bin_mask) << endl;
+    
     setup();
 }
 
@@ -271,10 +333,10 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
             params[i].n_noise_samples++;
             if(params[i].n_noise_samples < 100)
             {
-                params[i].noise_floor = params[i].noise_floor + (old_sample-params[i].noise_floor)/params[i].n_noise_samples;
+                params[i].noise_floor = params[i].noise_floor + (vals[i]-params[i].noise_floor)/params[i].n_noise_samples;
             }
             else
-                params[i].noise_floor = 0.96 * params[i].noise_floor + 0.04*vals[i];
+                params[i].noise_floor = 0.96 * params[i].noise_floor + 0.04*old_sample;
 //            cout << "DEBUG: Noise floor " << noise_floor[i] << endl;
         }
         else
@@ -356,9 +418,9 @@ void ForgetfulChannelMonitor::work(const std::vector<float>& ch_pwrs)
 {
     // make kind of a fosphor thing
     for(int i = 0; i < channel_energy.size(); ++i)
-        if(channel_energy[i] < ch_pwrs[i])
-            channel_energy[i] = ch_pwrs[i];
-        else
+//        if(channel_energy[i] < ch_pwrs[i])
+//            channel_energy[i] = ch_pwrs[i];
+//        else
             channel_energy[i] = alpha*ch_pwrs[i] + (1-alpha)*channel_energy[i];
 }
 

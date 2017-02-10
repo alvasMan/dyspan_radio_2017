@@ -47,7 +47,7 @@ std::string print_container_dB(const It itbegin, const It itend)
 {
     return print_container(itbegin, itend, [](decltype(*itbegin) a)
     {
-        return boost::format("%1.11f") % (10 * log10(a));
+        return boost::format("%1.11f") % (10 * log10(abs(a)));
     });
 }
 
