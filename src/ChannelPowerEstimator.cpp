@@ -90,6 +90,14 @@ BinMask generate_bin_mask(int Nch, int nBins)
     {
         bin_mask[i] = floor(((i + nBins/2) % nBins) * inv_bins_per_channel);
     }
+    
+    // Cancel DC Offset
+    bin_mask[nBins-1] = -1;
+    bin_mask[nBins-2] = -1;
+    bin_mask[0] = -1;
+    bin_mask[1] = -1;
+    bin_mask[2] = -1;
+    
     return BinMask(bin_mask);
 }
 
@@ -107,6 +115,14 @@ BinMask generate_bin_mask(int Nch, int nBins, float non_guard_percentage)
         if(j >= half_guard_bins && j < (Nbins_per_channel-half_guard_bins))
             bin_mask[i] = ch_idx;
     }
+    
+    // Cancel DC Offset
+    bin_mask[nBins-1] = -1;
+    bin_mask[nBins-2] = -1;
+    bin_mask[0] = -1;
+    bin_mask[1] = -1;
+    bin_mask[2] = -1;
+    
     return BinMask(bin_mask);
 }
 
@@ -145,6 +161,14 @@ BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_perc
         ref_map[m*3+1] = false;
         ref_map[m*3+2] = true;
     }
+    
+    // Cancel DC Offset
+    bin_mask[nBins-1] = -1;
+    bin_mask[nBins-2] = -1;
+    bin_mask[0] = -1;
+    bin_mask[1] = -1;
+    bin_mask[2] = -1;
+    
     return BinMask(bin_mask, ch_map, ref_map);
 }
 
@@ -198,20 +222,7 @@ void ChannelPowerEstimator::set_parameters(uint16_t _avg_win_size,
     nBins = fftsize;
     Nch = num_channels;
     
-    // Define the bin mask    
-    bin_mask.resize(nBins);
-    float inv_bins_per_channel = (float)Nch / nBins; // 1/bins_per_channel
-    for(int i = 0; i < nBins; i++)
-    {
-        bin_mask[i] = floor(((i + nBins/2) % nBins) * inv_bins_per_channel);
-    }
-   
-    // Cancel DC Offset
-    bin_mask[nBins-1] = -1;
-    bin_mask[nBins-2] = -1;
-    bin_mask[0] = -1;
-    bin_mask[1] = -1;
-    bin_mask[2] = -1;
+    bin_mask = BinMask(Nch,nBins,1.0);
     
     cout << "Bin mask:";
     cout << print_range(bin_mask) << endl;
@@ -221,7 +232,7 @@ void ChannelPowerEstimator::set_parameters(uint16_t _avg_win_size,
 
 void ChannelPowerEstimator::set_parameters(uint16_t _avg_win_size, 
                                     uint16_t num_channels, 
-                                    const std::vector<int> &_bin_mask) 
+                                    const BinMask &_bin_mask) 
 {
     mavg_size = _avg_win_size;
     Nch = num_channels;
@@ -245,18 +256,18 @@ void ChannelPowerEstimator::setup()
 //    // Create SpectrogramGenerator
 //    spectrogram_module.reset(new SpectrogramGenerator(Nch, mavg_size));
     
-    output_ch_pwrs.resize(Nch,-1);
-    ch_avg_coeff.resize(Nch, 1);
+    output_ch_pwrs.resize(bin_mask.n_sections(),-1);
+    ch_avg_coeff.resize(bin_mask.n_sections(), 1);
     //mavg_count = mavg_step_size-mavg_size; // let the mavg fill completely the first time
     
     // Count number of bins belonging to each channel
-    vector<int> ch_count(Nch,0);
+    vector<int> ch_count(bin_mask.n_sections(),0);
     for(unsigned int i = 0; i < nBins; i++) 
     {
         if(bin_mask[i] >= 0)
             ch_count[bin_mask[i]]++;
     }
-    for(int j = 0; j < Nch; j++)
+    for(int j = 0; j < bin_mask.n_sections(); j++)
         ch_avg_coeff[j] = 1/((float)ch_count[j] * nBins);
     
     // create noise_filter

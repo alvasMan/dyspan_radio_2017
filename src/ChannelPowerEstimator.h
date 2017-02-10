@@ -82,6 +82,35 @@ private:
     std::vector< MovingAverage<float> > mov_avg;
 };
 
+
+struct BinMask
+{
+    enum BinType {reference, guard, valid};
+    typedef vector<int>::iterator iterator;
+    typedef vector<int>::const_iterator const_iterator;
+    struct SectionProperties
+    {
+        int channel_idx;
+        int count;
+        BinType type;
+    };
+    
+    BinMask(const vector<int>& bmask);
+    BinMask(const vector<int>& bmask, const vector<int>& channel_map, const vector<bool>& ref_map);
+    int& operator[](int idx) {return bin_mask[idx];}
+    const int& operator[](int idx) const {return bin_mask[idx];}
+    size_t size() const {return bin_mask.size();}
+    iterator begin() {return bin_mask.begin();}
+    iterator end() {return bin_mask.end();}
+    const_iterator begin() const {return bin_mask.begin();}
+    const_iterator end() const {return bin_mask.end();}
+    size_t n_sections() const {return section_props.size()-1;} // i don't count guards
+    
+    vector<int> bin_mask; // size equal to number of bins
+    map<int,SectionProperties> section_props;
+    int Nch;
+};
+
 class ChannelPowerEstimator 
 {
     fftwf_plan fft;                        ///< Our FFT object pointer.
@@ -89,10 +118,10 @@ class ChannelPowerEstimator
 
     uint16_t mavg_size;
 
-    std::vector<int> bin_mask;
     std::vector<float> ch_avg_coeff;
     
 public:
+    BinMask bin_mask;
     uint16_t Nch;
     std::vector<float> output_ch_pwrs;
     double current_tstamp = -1;
@@ -164,34 +193,6 @@ public:
     
     int counter_max = 3;
 //    std::vector<std::pair<long,float> > avg_pwr;
-};
-
-struct BinMask
-{
-    enum BinType {reference, guard, valid};
-    typedef vector<int>::iterator iterator;
-    typedef vector<int>::const_iterator const_iterator;
-    struct SectionProperties
-    {
-        int channel_idx;
-        int count;
-        BinType type;
-    };
-    
-    BinMask(const vector<int>& bmask);
-    BinMask(const vector<int>& bmask, const vector<int>& channel_map, const vector<bool>& ref_map);
-    int& operator[](int idx) {return bin_mask[idx];}
-    const int& operator[](int idx) const {return bin_mask[idx];}
-    size_t size() const {return bin_mask.size();}
-    iterator begin() {return bin_mask.begin();}
-    iterator end() {return bin_mask.end();}
-    const_iterator begin() const {return bin_mask.begin();}
-    const_iterator end() const {return bin_mask.end();}
-    size_t n_sections() const {return section_props.size()-1;} // i don't count guards
-    
-    vector<int> bin_mask; // size equal to number of bins
-    map<int,SectionProperties> section_props;
-    int Nch;
 };
 
 namespace sensing_utils

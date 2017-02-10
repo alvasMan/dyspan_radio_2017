@@ -116,7 +116,8 @@ SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::st
         int Nfft = 512;
         shandler.pwr_estim.reset(new ChannelPowerEstimator());
         //shandler.pwr_estim->set_parameters(moving_average_size, Nfft, shandler.Nch);
-        auto maskprops = sensing_utils::generate_bin_mask(shandler.Nch, Nfft, 0.8);
+        //auto maskprops = sensing_utils::generate_bin_mask(shandler.Nch, Nfft, 0.8);
+        auto maskprops = sensing_utils::generate_bin_mask_and_reference(shandler.Nch, Nfft, 0.8, 0.15);
         assert(maskprops.bin_mask.size()==Nfft);
         shandler.pwr_estim->set_parameters(moving_average_size, maskprops.n_sections(), maskprops.bin_mask);
         //shandler.pwr_estim->set_parameters(16, 512, 4, 0.4, 0.4);//(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
@@ -165,8 +166,10 @@ void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler*
             if(shandler->sensing_module->recv_fft_pwrs()==false)
                 break;
             
+            vector<float> ch_pwrs = sensing_utils::relative_channel_powers(shandler->pwr_estim->bin_mask, shandler->pwr_estim->output_ch_pwrs);
+            
             // Discover packets through a moving average
-            packet_detector.work(shandler->pwr_estim->current_tstamp, shandler->pwr_estim->output_ch_pwrs);
+            packet_detector.work(shandler->pwr_estim->current_tstamp, ch_pwrs);
             
             par_monitor->work(packet_detector.detected_pulses);
             
@@ -207,11 +210,11 @@ void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler*
                     noise_pwr.push_back(e.noise_floor);
                 cout << "STATUS: Noise Floor per Channel: " << print_range(noise_pwr, [](float f){return 10*log10(f);}) << endl;
                 cout << "STATUS: Number of detected per channel: " << print_range(ch_counter) << endl;
-                vector<float> d(512);
-                for(int i = 0; i < 512; ++i)
-                    d[i] = 10*log10(abs(shandler->pwr_estim->fftBins[(i+256)%512]));
-                matplotlibcpp::plot(d);
-                matplotlibcpp::show();
+//                vector<float> d(512);
+//                for(int i = 0; i < 512; ++i)
+//                    d[i] = 10*log10(abs(shandler->pwr_estim->fftBins[(i+256)%512]));
+//                matplotlibcpp::plot(d);
+//                matplotlibcpp::show();
                 //cout << "\n FFT input: " << print_container_dB(&shandler->pwr_estim->fftBins[0], &shandler->pwr_estim->fftBins[512]) << endl;
                 t1 = t2;
             }
