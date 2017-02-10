@@ -119,7 +119,7 @@ SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::st
         //auto maskprops = sensing_utils::generate_bin_mask(shandler.Nch, Nfft, 0.8);
         auto maskprops = sensing_utils::generate_bin_mask_and_reference(shandler.Nch, Nfft, 0.8, 0.15);
         assert(maskprops.bin_mask.size()==Nfft);
-        shandler.pwr_estim->set_parameters(moving_average_size, maskprops.n_sections(), maskprops.bin_mask);
+        shandler.pwr_estim->set_parameters(moving_average_size, maskprops);
         //shandler.pwr_estim->set_parameters(16, 512, 4, 0.4, 0.4);//(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
         
         // SETUP JSON LEARNER/READER
@@ -167,6 +167,7 @@ void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler*
                 break;
             
             vector<float> ch_pwrs = sensing_utils::relative_channel_powers(shandler->pwr_estim->bin_mask, shandler->pwr_estim->output_ch_pwrs);
+            assert(ch_pwrs.size()==shandler->Nch);
             
             // Discover packets through a moving average
             packet_detector.work(shandler->pwr_estim->current_tstamp, ch_pwrs);
@@ -174,10 +175,10 @@ void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler*
             par_monitor->work(packet_detector.detected_pulses);
             
             // Perform channel occupancy measurements
-            vector<float> ch_snr(shandler->Nch);
-            for(int i = 0; i < ch_snr.size(); ++i)
-                ch_snr[i] = shandler->pwr_estim->output_ch_pwrs[i] / packet_detector.params[i].noise_floor;
-            ch_monitor.work(shandler->pwr_estim->output_ch_pwrs);//ch_snr);
+//            vector<float> ch_snr(shandler->Nch);
+//            for(int i = 0; i < ch_snr.size(); ++i)
+//                ch_snr[i] = shandler->pwr_estim->output_ch_pwrs[i] / packet_detector.params[i].noise_floor;
+            ch_monitor.work(ch_pwrs);//shandler->pwr_estim->output_ch_pwrs);//ch_snr);
             for(auto &e : packet_detector.detected_pulses)
                 ch_counter[std::get<1>(e)]++;
             

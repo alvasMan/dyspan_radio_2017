@@ -35,10 +35,10 @@ BOOST_AUTO_TEST_CASE(test1)
         
         // Check if the two masks are equal
         BOOST_REQUIRE(std::equal(mask1.begin(), mask1.end(), mask2.begin()));
-        // There should not be any guard bins
-        BOOST_REQUIRE(std::find_if(mask1.begin(), mask1.end(),[](int i){return i < 0;})==mask1.end());
+        // There should be guard bins bc of DC offset
+        //BOOST_REQUIRE(std::find_if(mask1.begin(), mask1.end(),[](int i){return i < 0;})==mask1.end());
         // Check if the count of bins for each channel is the expected
-        BOOST_REQUIRE(count_bins(mask1.bin_mask,-1)==mask1.section_props[-1].count);
+        BOOST_REQUIRE(count_bins(mask1.bin_mask,-1)==mask1.ignored_section_props.count);
         for(int i = 0; i < Nch; ++i)
         {
             BOOST_REQUIRE(count_bins(mask1.bin_mask,i)==mask1.section_props[i].count);
@@ -73,7 +73,7 @@ BOOST_AUTO_TEST_CASE(test2)
 	BOOST_REQUIRE(mask4.size()==nBins);
         BOOST_REQUIRE(mask4.Nch==Nch);
         BOOST_REQUIRE(mask4.n_sections()==3*Nch);
-        BOOST_REQUIRE(mask4.section_props[-1].count==count_bins(mask4.bin_mask,-1));
+        BOOST_REQUIRE(mask4.ignored_section_props.count==count_bins(mask4.bin_mask,-1));
         for(int i = 0; i < mask4.n_sections(); ++i)
         {
             BOOST_REQUIRE(mask4.section_props[i].count==count_bins(mask4.bin_mask,i));
@@ -91,6 +91,16 @@ BOOST_AUTO_TEST_CASE(test2)
         cout << "Channel powers: " << print_range(ch_powers) << endl;
         BOOST_REQUIRE(ch_powers.size()==test_powers.size());
         BOOST_REQUIRE(std::equal(ch_powers.begin(), ch_powers.end(), test_powers.begin()));
+}
+
+BOOST_AUTO_TEST_CASE(test3)
+{   
+    int Nch = 4;
+    int Nfft =512;
+    auto maskprops = sensing_utils::generate_bin_mask_and_reference(Nch, Nfft, 0.8, 0.15);
+    
+    BOOST_REQUIRE(maskprops.Nch==Nch);
+    
 }
 
 BOOST_AUTO_TEST_SUITE_END()

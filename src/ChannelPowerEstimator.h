@@ -93,8 +93,11 @@ struct BinMask
         int channel_idx;
         int count;
         BinType type;
+        SectionProperties() = default;
+        SectionProperties(int c, int co, BinType t) : channel_idx(c), count(co), type(t) {}
     };
     
+    BinMask() = default;
     BinMask(const vector<int>& bmask);
     BinMask(const vector<int>& bmask, const vector<int>& channel_map, const vector<bool>& ref_map);
     int& operator[](int idx) {return bin_mask[idx];}
@@ -104,10 +107,11 @@ struct BinMask
     iterator end() {return bin_mask.end();}
     const_iterator begin() const {return bin_mask.begin();}
     const_iterator end() const {return bin_mask.end();}
-    size_t n_sections() const {return section_props.size()-1;} // i don't count guards
+    size_t n_sections() const {return section_props.size();}
     
     vector<int> bin_mask; // size equal to number of bins
-    map<int,SectionProperties> section_props;
+    vector<SectionProperties> section_props;
+    SectionProperties ignored_section_props;
     int Nch;
 };
 
@@ -137,7 +141,7 @@ public:
         destroy();
     }
 
-    void set_parameters(uint16_t _avg_win_size, uint16_t num_channels, const std::vector<int> &_bin_mask);
+    void set_parameters(uint16_t _avg_win_size, const BinMask &_bin_mask);
     void set_parameters(uint16_t _avg_win_size, uint16_t fftsize, uint16_t num_channels);
     void setup();
     void destroy();

@@ -38,46 +38,48 @@ using namespace nlohmann;
 BinMask::BinMask(const vector<int>& bmask)
 {
     bin_mask = bmask;
-    int ch_idx = 0;
+    auto ch_idxs = bmask;
+    sort(ch_idxs.begin(), ch_idxs.end());
+    ch_idxs.erase(std::unique(ch_idxs.begin(), ch_idxs.end()), ch_idxs.end());
+    Nch = count_if(ch_idxs.begin(), ch_idxs.end(), [](float f){return f>=0;});
+    
+    section_props.assign(Nch,SectionProperties(-1,0,BinMask::valid));
+    ignored_section_props = SectionProperties(-1,0,BinMask::guard);
+    
+    for(int i = 0; i < section_props.size(); ++i)
+        section_props[i].channel_idx = i;
+    
     for(int i = 0; i < bin_mask.size(); ++i)
     {
-        auto it = section_props.find(bin_mask[i]);
-        if(it==section_props.end())
-        {
-            if(bin_mask[i]>=0)
-                section_props[bin_mask[i]] = {ch_idx++,1,BinMask::valid};
-            else
-                section_props[bin_mask[i]] = {bin_mask[i],1,BinMask::guard};
-        }
+        if(bin_mask[i]>=0)
+            section_props[bin_mask[i]].count++;
         else
-            it->second.count++;
+            ignored_section_props.count++;
     }
-    auto mask_cpy = bin_mask;
-    Nch = std::distance(mask_cpy.begin(),unique(mask_cpy.begin(),mask_cpy.end()));
 }
 
 BinMask::BinMask(const vector<int>& bmask, const vector<int>& channel_map, const vector<bool>& ref_map)
 {
     bin_mask = bmask;
+    
+    section_props.reserve(ref_map.size());
+    ignored_section_props = SectionProperties(-1,0,BinMask::guard);
+    
     Nch = 0;
+    for(int i = 0; i < ref_map.size(); ++i)
+    {
+        BinMask::BinType t = (ref_map[i]) ? BinMask::reference : BinMask::valid;
+        section_props.emplace_back(channel_map[i],0,t);
+        if(t==BinMask::valid)
+            Nch++;
+    }
     for(int i = 0; i < bin_mask.size(); ++i)
     {
-        auto it = section_props.find(bin_mask[i]);
-        if(it==section_props.end())
-        {
-            if(bin_mask[i]>=0)
-            {
-                BinMask::BinType t = (ref_map[bin_mask[i]]) ? BinMask::reference : BinMask::valid;
-                section_props[bin_mask[i]] = {channel_map[bin_mask[i]],1,t};
-                if(t==BinMask::valid)
-                    Nch++;
-            }
-            else
-                section_props[bin_mask[i]] = {bin_mask[i],1,BinMask::guard};
-        }
+        if(bin_mask[i]>=0)
+            section_props[bin_mask[i]].count++;
         else
-            it->second.count++;
-    }
+            ignored_section_props.count++;
+    }    
 }
 
 namespace sensing_utils
@@ -172,24 +174,24 @@ BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_perc
     return BinMask(bin_mask, ch_map, ref_map);
 }
 
-vector<float> relative_channel_powers(const BinMask& bmask, const vector<float> &ch_powers)
+vector<float> relative_channel_powers(const BinMask& bmask, const vector<float> &section_powers)
 {
     vector<float> rel_ch_powers(bmask.Nch,0);
     vector<float> tmp_ref_powers(bmask.Nch,0);
     vector<int> rel_ch_counts(bmask.Nch,0), tmp_ch_counts(bmask.Nch,0);
     
     //assert(ch_powers.size()==bmask.n_sections());
-    for(int i = 0; i < ch_powers.size();++i)
+    for(int i = 0; i < section_powers.size();++i)
     {
-        const auto& el = bmask.section_props.find(i)->second;
+        const auto& el = bmask.section_props[i];
         if(el.type==BinMask::valid)
         {
-            rel_ch_powers[el.channel_idx] += ch_powers[i]*el.count;
+            rel_ch_powers[el.channel_idx] += section_powers[i]*el.count;
             rel_ch_counts[el.channel_idx] += el.count;
         }
         else if(el.type==BinMask::reference)
         {
-            tmp_ref_powers[el.channel_idx] += ch_powers[i] * el.count;
+            tmp_ref_powers[el.channel_idx] += section_powers[i] * el.count;
             tmp_ch_counts[el.channel_idx] += el.count;
         }
     }
@@ -222,7 +224,7 @@ void ChannelPowerEstimator::set_parameters(uint16_t _avg_win_size,
     nBins = fftsize;
     Nch = num_channels;
     
-    bin_mask = BinMask(Nch,nBins,1.0);
+    bin_mask = sensing_utils::generate_bin_mask(Nch,nBins,1.0);
     
     cout << "Bin mask:";
     cout << print_range(bin_mask) << endl;
@@ -230,12 +232,11 @@ void ChannelPowerEstimator::set_parameters(uint16_t _avg_win_size,
     setup();
 }
 
-void ChannelPowerEstimator::set_parameters(uint16_t _avg_win_size, 
-                                    uint16_t num_channels, 
+void ChannelPowerEstimator::set_parameters(uint16_t _avg_win_size,
                                     const BinMask &_bin_mask) 
 {
     mavg_size = _avg_win_size;
-    Nch = num_channels;
+    Nch = _bin_mask.Nch;
     bin_mask = _bin_mask;       // Values in bin_mask must be within [0, number of channels] and size of bin_mask must be equal to nBins. No protection yet.
     nBins = bin_mask.size();
 
@@ -303,7 +304,7 @@ void ChannelPowerEstimator::process(double tstamp)
 //    cout << print_container_dB(&fftBins[0], &fftBins[nBins]) << endl;
     
     fftwf_execute(fft);
-    output_ch_pwrs.assign(Nch, 0);
+    output_ch_pwrs.assign(bin_mask.n_sections(), 0);
     
 //    cout << "\n FFT input: " 
 //         << print_container_dB(&fftBins[0], &fftBins[nBins]) << endl;
@@ -315,7 +316,7 @@ void ChannelPowerEstimator::process(double tstamp)
             output_ch_pwrs[bin_mask[i]] += fftBins[i].real()*fftBins[i].real() + fftBins[i].imag()*fftBins[i].imag();//norm(fftBins[i]);
     }
     
-    for(unsigned int i = 0; i < Nch; ++i)
+    for(unsigned int i = 0; i < bin_mask.n_sections(); ++i)
         output_ch_pwrs[i] *= ch_avg_coeff[i];
     
     current_tstamp = tstamp;
