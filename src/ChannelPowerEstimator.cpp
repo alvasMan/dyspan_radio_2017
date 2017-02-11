@@ -82,9 +82,20 @@ BinMask::BinMask(const vector<int>& bmask, const vector<int>& channel_map, const
     }    
 }
 
+void cancel_dc_offset(vector<int> &bin_mask)
+{
+    int nBins = bin_mask.size();
+    int margin = 4;
+    for(int i = -margin; i < margin; ++i)
+        if(i < 0)
+            bin_mask[nBins+i] = -1;
+        else
+            bin_mask[i] = -1;
+}
+
 namespace sensing_utils
 {
-BinMask generate_bin_mask(int Nch, int nBins)
+BinMask generate_bin_mask_no_guard(int Nch, int nBins, bool cancel_DC_offset)
 {
     vector<int> bin_mask(nBins);
     float inv_bins_per_channel = (float)Nch / nBins; // 1/bins_per_channel
@@ -93,17 +104,13 @@ BinMask generate_bin_mask(int Nch, int nBins)
         bin_mask[i] = floor(((i + nBins/2) % nBins) * inv_bins_per_channel);
     }
     
-    // Cancel DC Offset
-    bin_mask[nBins-1] = -1;
-    bin_mask[nBins-2] = -1;
-    bin_mask[0] = -1;
-    bin_mask[1] = -1;
-    bin_mask[2] = -1;
+    if(cancel_DC_offset)
+        cancel_dc_offset(bin_mask);
     
     return BinMask(bin_mask);
 }
 
-BinMask generate_bin_mask(int Nch, int nBins, float non_guard_percentage)
+BinMask generate_bin_mask(int Nch, int nBins, float non_guard_percentage, bool cancel_DC_offset)
 {
     int Nbins_per_channel = nBins / Nch;
     int non_guard_bins = round(non_guard_percentage*Nbins_per_channel);
@@ -118,19 +125,15 @@ BinMask generate_bin_mask(int Nch, int nBins, float non_guard_percentage)
             bin_mask[i] = ch_idx;
     }
     
-    // Cancel DC Offset
-    bin_mask[nBins-1] = -1;
-    bin_mask[nBins-2] = -1;
-    bin_mask[0] = -1;
-    bin_mask[1] = -1;
-    bin_mask[2] = -1;
+    if(cancel_DC_offset)
+        cancel_dc_offset(bin_mask);
     
     return BinMask(bin_mask);
 }
 
 // bin mask is equal to -1 for non assigned bins
 // non_reference_mask is false for the values of the bin mask which correspond to reference bins
-BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage)
+BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage, bool cancel_DC_offset)
 {
     int Nbins_per_channel = nBins / Nch;
     int non_guard_bins = round(non_guard_percentage*Nbins_per_channel);
@@ -164,12 +167,8 @@ BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_perc
         ref_map[m*3+2] = true;
     }
     
-    // Cancel DC Offset
-    bin_mask[nBins-1] = -1;
-    bin_mask[nBins-2] = -1;
-    bin_mask[0] = -1;
-    bin_mask[1] = -1;
-    bin_mask[2] = -1;
+    if(cancel_DC_offset)
+        cancel_dc_offset(bin_mask);
     
     return BinMask(bin_mask, ch_map, ref_map);
 }
@@ -224,7 +223,7 @@ void ChannelPowerEstimator::set_parameters(uint16_t _avg_win_size,
     nBins = fftsize;
     Nch = num_channels;
     
-    bin_mask = sensing_utils::generate_bin_mask(Nch,nBins,1.0);
+    bin_mask = sensing_utils::generate_bin_mask_no_guard(Nch,nBins,1.0);
     
     cout << "Bin mask:";
     cout << print_range(bin_mask) << endl;
@@ -322,6 +321,8 @@ void ChannelPowerEstimator::process(double tstamp)
     current_tstamp = tstamp;
 }
 
+#define ALPHA 0.0001
+
 void PacketDetector::work(double tstamp, const vector<float>& vals)
 {
     for(int i = 0; i < vals.size(); ++i)
@@ -348,7 +349,7 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
                 params[i].noise_floor = params[i].noise_floor + (vals[i]-params[i].noise_floor)/params[i].n_noise_samples;
             }
             else
-                params[i].noise_floor = 0.96 * params[i].noise_floor + 0.04*old_sample;
+                params[i].noise_floor = (1-ALPHA) * params[i].noise_floor + ALPHA*old_sample;
 //            cout << "DEBUG: Noise floor " << noise_floor[i] << endl;
         }
         else
@@ -405,7 +406,7 @@ void SpectrogramGenerator::work(double tstamp, const vector<float>& ch_pwrs)
     assert(mov_avg[0].size()>0);
     
     // Adds the channel average power to the moving average
-    for(uint16_t j = 0; j < mov_avg.size(); j++) 
+    for(uint16_t j = 0; j < mov_avg.size(); j++)
         mov_avg[j].push(ch_pwrs[j]);
     
     // If a big enough step was done in the moving average, send the average values to the results buffer

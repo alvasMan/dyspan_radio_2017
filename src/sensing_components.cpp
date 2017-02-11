@@ -99,6 +99,44 @@ void resize_ch_pwr_outputsdB(std::vector<float>& out, const vector<float>& in)
     }
 }
 
+void SpectrogramResizer::setup()
+{
+    float mask_interp_factor = bin_mask.size() / Nout;
+    
+    int n_cols = bin_mask.n_sections();
+    vector<int> out_mat_count(Nout*n_cols,0);
+    for(int i = 0; i < bin_mask.size(); ++i)
+    {
+        if(bin_mask[i]<0)
+            continue;
+        int out_idx = std::floor(i/mask_interp_factor);
+        out_mat_count[out_idx*n_cols + bin_mask[i]]++;
+    }
+    
+    out_mat_frac.resize(Nout*n_cols,0);
+    for(int i = 0; i < Nout; ++i)
+    {
+        int tot = std::accumulate(&out_mat_count[i*n_cols],&out_mat_count[(i+1)*n_cols],0);
+        for(int j = 0; j < n_cols; ++j)
+            out_mat_frac[i*n_cols+j] = out_mat_count[i*n_cols+j] / tot;
+    }
+}
+
+void SpectrogramResizer::resize_line(vector<float>& out_vec, const vector<float>& in_vec)
+{
+    assert(out_vec.size()==Nout);
+    assert(in_vec.size()==bin_mask.n_sections());
+    
+    int n_cols = bin_mask.n_sections();
+    for(int i = 0; i < Nout; ++i)
+    {
+        out_vec[i] = 0;
+        for(int j = 0; j < n_cols; ++j)
+        {
+            out_vec[i] += in_vec[j] * out_mat_frac[i*n_cols+j];
+        }
+    }
+}
 
 namespace sensing_utils
 {
@@ -131,7 +169,7 @@ SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::st
         shandler.sensing_module.reset(new SensingModule(shandler.pwr_estim.get()));
         
         if(has_deep_learning)
-            shandler.spectrogram_module.reset(new SpectrogramGenerator(shandler.Nch, moving_average_size));
+            shandler.spectrogram_module.reset(new SpectrogramGenerator(maskprops, moving_average_size));
         
         shandler.channel_rate_tester.reset(new ChannelPacketRateTester(pu_scenario_api));
     }
@@ -162,7 +200,8 @@ void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler*
         while (true)
         {
             boost::this_thread::interruption_point();
-// receive data from USRP and place it in the buffer
+            
+            // receive data from USRP and place it in the buffer
             if(shandler->sensing_module->recv_fft_pwrs()==false)
                 break;
             
@@ -228,11 +267,12 @@ void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler*
 }
 
 void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler* shandler)
-{
+{    
     auto t1 = system_clock::now();
     
+    scenario_number_type old_scenario_number = -1;
     shandler->sensing_module->setup_rx_chain(usrp_tx);
-    auto packet_detector = PacketDetector(shandler->Nch, 15, 2);
+    auto packet_detector = PacketDetector(shandler->Nch, 15, 10);
     auto ch_monitor = ForgetfulChannelMonitor(shandler->Nch, 0.1);
     auto par_monitor = ChannelPacketRateMonitor(shandler->Nch, 0.1);
     
@@ -245,39 +285,33 @@ void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler
         while (true)
         {
             boost::this_thread::interruption_point();
-
+            
             // receive data from USRP and place it in the buffer
             if(shandler->sensing_module->recv_fft_pwrs()==false)
                 break;
             
+            vector<float> ch_pwrs = sensing_utils::relative_channel_powers(shandler->pwr_estim->bin_mask, shandler->pwr_estim->output_ch_pwrs);
+            
+            
             // Discover packets through a moving average
-            packet_detector.work(shandler->pwr_estim->current_tstamp, shandler->pwr_estim->output_ch_pwrs);
+            packet_detector.work(shandler->pwr_estim->current_tstamp, ch_pwrs);
             
-            // Perform channel occupancy measurements
-            vector<float> ch_snr(shandler->Nch);
-            for(int i = 0; i < ch_snr.size(); ++i)
-                ch_snr[i] = shandler->pwr_estim->output_ch_pwrs[i] / packet_detector.params[i].noise_floor;
-            ch_monitor.work(ch_snr);
-            
+            ch_monitor.work(ch_pwrs);
             par_monitor.work(packet_detector.detected_pulses);
-            
-            // Analyse difference in TOAs
-            // TODO: Store TDOAs and reference TOAs
             
             // Move data to spectrogram
             if(shandler->spectrogram_module)
                 shandler->spectrogram_module->work(shandler->pwr_estim->current_tstamp, shandler->pwr_estim->output_ch_pwrs);
             
+            // clear the just detected packets
             packet_detector.detected_pulses.clear();
             
+            // Print to screen
             auto t2 = system_clock::now();
             if(std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count() > 2)
             {
-//                std::vector<float> pars(par_monitor.Nch);
-//                for(int i = 0; i < par_monitor.Nch; ++i)
-//                    pars[i] = par_monitor.packet_arrival_rate(i);
-//                cout << "DEBUG: Packet Arrival Rates: " << print_range(pars) << endl;
-                cout << "STATUS: Packet Arrival Rates per Channel: " << monitor_utils::print_packet_rate(par_monitor) << endl;
+                cout << "STATUS: Packet Arrival Periods per Channel: " << monitor_utils::print_packet_period(par_monitor) << endl;
+                cout << "STATUS: Packet Power per Channel: " << print_range(ch_monitor.channel_energy, [](float f){return 10*log10(f);}) << endl;
                 t1 = t2;
             }
         }
@@ -296,6 +330,7 @@ void launch_spectrogram_to_file_thread(SensingHandler* shandler)
 {
     std::string filename = "/home/connect/repo/generated_files/temp.bin";
     std::vector<int> NNdims = {64,64};
+    SpectrogramResizer sp_resizer(shandler->spectrogram_module->bin_mask, NNdims[1]);
     
     std::ofstream of;
     of.open(filename, std::ios::out | std::ios::binary);
@@ -324,7 +359,8 @@ void launch_spectrogram_to_file_thread(SensingHandler* shandler)
             //cout << "DEBUG: reading from e_detec timestamp: " << ch_powers().first << " buffer: " << print_range(ch_powers().second) << endl;
             
             // resize to NN dimensions
-            resize_ch_pwr_outputsdB(resized_pwr_outputsdB, ch_powers().second);
+            sp_resizer.resize_line(resized_pwr_outputsdB, ch_powers().second);
+            //resize_ch_pwr_outputsdB(resized_pwr_outputsdB, ch_powers().second);
             
             // i can't max to 1 here
             
