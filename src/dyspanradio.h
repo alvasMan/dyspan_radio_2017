@@ -105,7 +105,7 @@ public:
         }
 
         // this is a special case for the 4x 5MHz receiver using two N210s
-        if (params_.channel_bandwidth == 5e6 && params_.num_channels == 4 && params_.num_trx == 2) {
+        if (params_.num_channels == 4 && params_.num_trx == 2) {
             // this initializes 4 channels such that the first two have the same rf_freq and the last two.
             // this makes sure that each N210 is tuned to two channels with the LO sitting between them
             std::cout << boost::str(boost::format("Configuring channels for 4x 5MHz using two N210s")) << std::endl;
@@ -183,4 +183,3 @@ protected:
 };
 
 #endif // DYPANRADIO_H
-

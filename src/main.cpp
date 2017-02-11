@@ -100,7 +100,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("num_channels", po::value<size_t>(&params.num_channels)->default_value(4), "Number of channels (must be multiple of two)")
         ("channel_bandwidth", po::value<double>(&params.channel_bandwidth)->default_value(2500e3), "Bandwidth of each individual channel")
         ("channel_rate", po::value<double>(&params.channel_rate)->default_value(2500e3), "Transmission rate in each individual channel")
-        ("freq",po::value<double>(&params.f_center)->default_value(2490000000),"Sets center frequency")
+        ("freq",po::value<double>(&params.f_center)->default_value(1255000000),"Sets center frequency")
         ("rxgain",po::value<double>(&params.rx_gain_uhd)->default_value(15),"Sets UHD receive gain")
         ("txgain_soft",po::value<double>(&params.tx_gain_soft)->default_value(-12),"Sets software transmit gain")
         ("txgain_uhd",po::value<double>(&params.tx_gain_uhd)->default_value(10),"Sets UHD transmit gain")
