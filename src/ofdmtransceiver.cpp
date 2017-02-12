@@ -276,7 +276,7 @@ void OfdmTransceiver::change_ofdm_mod()
 
     float current_score = DatabaseApi::getInstance().current_score();
 
-	static modulation_scheme mod_scheme = modulation_scheme::LIQUID_MODEM_BPSK;
+	static modulation_scheme mod_scheme = static_cast<modulation_scheme>(fgprops.mod_scheme);
 	switch (mod_scheme)
     {
 
