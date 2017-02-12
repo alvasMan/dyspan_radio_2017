@@ -84,7 +84,7 @@ typedef struct
     std::string db_ip;
     std::string db_user;
     std::string db_password;
-    
+
     std::string project_folder;
     std::string read_learning_file;
     std::string write_learning_file;
@@ -110,7 +110,7 @@ public:
         }
 
         // this is a special case for the 4x 5MHz receiver using two N210s
-        if (params_.channel_bandwidth == 5e6 && params_.num_channels == 4 && params_.num_trx == 2) {
+        if (params_.num_channels == 4 && params_.num_trx == 2) {
             // this initializes 4 channels such that the first two have the same rf_freq and the last two.
             // this makes sure that each N210 is tuned to two channels with the LO sitting between them
             std::cout << boost::str(boost::format("Configuring channels for 4x 5MHz using two N210s")) << std::endl;
@@ -123,27 +123,37 @@ public:
             channels_.push_back({"Channel2", params_.f_center + offset, params_.channel_bandwidth, rf_freq, +offset, params_.channel_rate});
             channels_.push_back({"Channel3", params_.f_center + offset, params_.channel_bandwidth, rf_freq, -offset, params_.channel_rate});
         } else {
-          if (params_.num_channels == 1) {
-            std::cout << boost::str(boost::format("Configuring single channel")) << std::endl;
-            double rf_freq = params_.f_center;
-            channels_.push_back({"Channel0", params_.f_center, params_.channel_bandwidth, rf_freq, 0, params_.channel_rate});
-          } else {
-            std::cout << boost::str(boost::format("Configuring multiple channels")) << std::endl;
-            // this initializes n channels such that the LO is set n*ch_bw apart from the given center freq
-            double guard = 0.5e6;
-            double lo_offset = params_.num_channels * params_.channel_bandwidth/2 + guard;
-            double rf_freq = params_.f_center - lo_offset;
-            for (int i = 0; i < params_.num_channels; i++) {
-              std::string desc("Channel" + std::to_string(i));
-              double dsp_offset = guard + params_.channel_bandwidth/2 + i*params_.channel_bandwidth;
-              channels_.push_back({desc,
-                                    params_.f_center,
-                                    params_.channel_bandwidth,
-                                    rf_freq,
-                                    dsp_offset,
-                                    params_.channel_rate});
-            }
+          // initialize channels, add two in each iteration
+         for (int i = 0; i < params_.num_channels; i += 2) {
+             double offset = i / 2 * params_.channel_bandwidth + params_.channel_bandwidth / 2;
+             // add left neighbor
+             channels_.push_back({"Channel" + std::to_string(i), params_.f_center + offset, params_.channel_bandwidth, params_.f_center, +offset, params_.channel_rate});
+             // add right neighbor
+             channels_.push_back({"Channel" + std::to_string(i + 1), params_.f_center + offset, params_.channel_bandwidth, params_.f_center, -offset, params_.channel_rate});
           }
+
+          // COMMENT: We could not make the Tx-Rx link work with this. I decided to go back to the old version
+          // if (params_.num_channels == 1) {
+          //   std::cout << boost::str(boost::format("Configuring single channel")) << std::endl;
+          //   double rf_freq = params_.f_center;
+          //   channels_.push_back({"Channel0", params_.f_center, params_.channel_bandwidth, rf_freq, 0, params_.channel_rate});
+          // } else {
+          //   std::cout << boost::str(boost::format("Configuring multiple channels")) << std::endl;
+          //   // this initializes n channels such that the LO is set n*ch_bw apart from the given center freq
+          //   double guard = 0.5e6;
+          //   double lo_offset = params_.num_channels * params_.channel_bandwidth/2 + guard;
+          //   double rf_freq = params_.f_center - lo_offset;
+          //   for (int i = 0; i < params_.num_channels; i++) {
+          //     std::string desc("Channel" + std::to_string(i));
+          //     double dsp_offset = guard + params_.channel_bandwidth/2 + i*params_.channel_bandwidth;
+          //     channels_.push_back({desc,
+          //                           params_.f_center,
+          //                           params_.channel_bandwidth,
+          //                           rf_freq,
+          //                           dsp_offset,
+          //                           params_.channel_rate});
+          //   }
+          // }
 
         }
         // TODO: check that all channels have the same center frequency for faster tuning
@@ -188,4 +198,3 @@ protected:
 };
 
 #endif // DYPANRADIO_H
-

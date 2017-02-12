@@ -64,7 +64,7 @@ class tx_ofdm(gr.top_block, Qt.QWidget):
         ##################################################
         self.samp_rate = samp_rate = 10e6
         self.taps = taps = filter.firdes.low_pass(1,samp_rate, 0.95e6,0.05e6)
-        self.sync_word2 = sync_word2 = [0, 0, 0, 0, 0, 0, -1, -1, -1, -1, 1, 1, -1, -1, -1, 1, -1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, 1, -1, -1, 1, -1, 0, 1, -1, 1, 1, 1, -1, 1, 1, 1, -1, 1, 1, 1, 1, -1, 1, -1, -1, -1, 1, -1, 1, -1, -1, -1, -1, 0, 0, 0, 0, 0] 
+        self.sync_word2 = sync_word2 = [0, 0, 0, 0, 0, 0, -1, -1, -1, -1, 1, 1, -1, -1, -1, 1, -1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, 1, -1, -1, 1, -1, 0, 1, -1, 1, 1, 1, -1, 1, 1, 1, -1, 1, 1, 1, 1, -1, 1, -1, -1, -1, 1, -1, 1, -1, -1, -1, -1, 0, 0, 0, 0, 0]
         self.sync_word1 = sync_word1 = [0., 0., 0., 0., 0., 0., 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., -1.41421356, 0., -1.41421356, 0., -1.41421356, 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., -1.41421356, 0., -1.41421356, 0., -1.41421356, 0., -1.41421356, 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., 1.41421356, 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., 1.41421356, 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., 1.41421356, 0., 1.41421356, 0., 0., 0., 0., 0., 0.]
         self.pilot_symbols = pilot_symbols = ((1, 1, 1, -1,),)
         self.pilot_carriers = pilot_carriers = ((-21, -7, 7, 21,),)
@@ -121,19 +121,19 @@ class tx_ofdm(gr.top_block, Qt.QWidget):
         )
         self.qtgui_time_sink_x_0.set_update_time(0.10)
         self.qtgui_time_sink_x_0.set_y_axis(-1, 1)
-        
+
         self.qtgui_time_sink_x_0.set_y_label("Amplitude", "")
-        
+
         self.qtgui_time_sink_x_0.enable_tags(-1, True)
         self.qtgui_time_sink_x_0.set_trigger_mode(qtgui.TRIG_MODE_FREE, qtgui.TRIG_SLOPE_POS, 0.0, 0, 0, "")
         self.qtgui_time_sink_x_0.enable_autoscale(False)
         self.qtgui_time_sink_x_0.enable_grid(True)
         self.qtgui_time_sink_x_0.enable_axis_labels(True)
         self.qtgui_time_sink_x_0.enable_control_panel(True)
-        
+
         if not True:
           self.qtgui_time_sink_x_0.disable_legend()
-        
+
         labels = ["", "", "", "", "",
                   "", "", "", "", ""]
         widths = [1, 1, 1, 1, 1,
@@ -146,7 +146,7 @@ class tx_ofdm(gr.top_block, Qt.QWidget):
                    -1, -1, -1, -1, -1]
         alphas = [1.0, 1.0, 1.0, 1.0, 1.0,
                   1.0, 1.0, 1.0, 1.0, 1.0]
-        
+
         for i in xrange(2*1):
             if len(labels[i]) == 0:
                 if(i % 2 == 0):
@@ -160,7 +160,7 @@ class tx_ofdm(gr.top_block, Qt.QWidget):
             self.qtgui_time_sink_x_0.set_line_style(i, styles[i])
             self.qtgui_time_sink_x_0.set_line_marker(i, markers[i])
             self.qtgui_time_sink_x_0.set_line_alpha(i, alphas[i])
-        
+
         self._qtgui_time_sink_x_0_win = sip.wrapinstance(self.qtgui_time_sink_x_0.pyqwidget(), Qt.QWidget)
         self.top_layout.addWidget(self._qtgui_time_sink_x_0_win)
         self.digital_ofdm_tx_0_2 = digital.ofdm_tx(
@@ -219,7 +219,7 @@ class tx_ofdm(gr.top_block, Qt.QWidget):
         	  debug_log=False,
         	  scramble_bits=False
         	 )
-        self.dbconnect_pktgen_0 = dbconnect.pktgen(1, packet_len, False, False, False, "127.0.0.1", 5002, 5, 10, 2, 20, 50, 100, 30000, 0.05, 6643, 5, 30, 2000, 2, 4, 3, 0)
+        self.dbconnect_pktgen_0 = dbconnect.pktgen(1, packet_len, False, False, False, "127.0.0.1", 5002, 5, 10, 2, 20, 50, 100, 30000, 0.05, 6643, 5, 30, 2000, 2, 1, 0, 0)
         self.dbconnect_pdu_fillpath_cpp_0_0_1 = dbconnect.pdu_fillpath_cpp()
         self.dbconnect_pdu_fillpath_cpp_0_0_0 = dbconnect.pdu_fillpath_cpp()
         self.dbconnect_pdu_fillpath_cpp_0_0 = dbconnect.pdu_fillpath_cpp()
@@ -248,44 +248,44 @@ class tx_ofdm(gr.top_block, Qt.QWidget):
         ##################################################
         # Connections
         ##################################################
-        self.msg_connect((self.blocks_tagged_stream_to_pdu_0, 'pdus'), (self.dbconnect_pdu_fillpath_cpp_0, 'in0'))    
-        self.msg_connect((self.blocks_tagged_stream_to_pdu_0_3, 'pdus'), (self.dbconnect_pdu_fillpath_cpp_0_0, 'in0'))    
-        self.msg_connect((self.blocks_tagged_stream_to_pdu_0_3_0, 'pdus'), (self.dbconnect_pdu_fillpath_cpp_0_0_0, 'in0'))    
-        self.msg_connect((self.blocks_tagged_stream_to_pdu_0_3_1, 'pdus'), (self.dbconnect_pdu_fillpath_cpp_0_0_1, 'in0'))    
-        self.msg_connect((self.dbconnect_pktgen_0, 'cmd'), (self.blocks_message_debug_0, 'print'))    
-        self.msg_connect((self.dbconnect_pktgen_0, 'out0'), (self.blocks_pdu_to_tagged_stream_0, 'pdus'))    
-        self.msg_connect((self.dbconnect_pktgen_0, 'out1'), (self.blocks_pdu_to_tagged_stream_0_0, 'pdus'))    
-        self.msg_connect((self.dbconnect_pktgen_0, 'out2'), (self.blocks_pdu_to_tagged_stream_0_0_0, 'pdus'))    
-        self.msg_connect((self.dbconnect_pktgen_0, 'out3'), (self.blocks_pdu_to_tagged_stream_0_0_1, 'pdus'))    
+        self.msg_connect((self.blocks_tagged_stream_to_pdu_0, 'pdus'), (self.dbconnect_pdu_fillpath_cpp_0, 'in0'))
+        self.msg_connect((self.blocks_tagged_stream_to_pdu_0_3, 'pdus'), (self.dbconnect_pdu_fillpath_cpp_0_0, 'in0'))
+        self.msg_connect((self.blocks_tagged_stream_to_pdu_0_3_0, 'pdus'), (self.dbconnect_pdu_fillpath_cpp_0_0_0, 'in0'))
+        self.msg_connect((self.blocks_tagged_stream_to_pdu_0_3_1, 'pdus'), (self.dbconnect_pdu_fillpath_cpp_0_0_1, 'in0'))
+        self.msg_connect((self.dbconnect_pktgen_0, 'cmd'), (self.blocks_message_debug_0, 'print'))
+        self.msg_connect((self.dbconnect_pktgen_0, 'out0'), (self.blocks_pdu_to_tagged_stream_0, 'pdus'))
+        self.msg_connect((self.dbconnect_pktgen_0, 'out1'), (self.blocks_pdu_to_tagged_stream_0_0, 'pdus'))
+        self.msg_connect((self.dbconnect_pktgen_0, 'out2'), (self.blocks_pdu_to_tagged_stream_0_0_0, 'pdus'))
+        self.msg_connect((self.dbconnect_pktgen_0, 'out3'), (self.blocks_pdu_to_tagged_stream_0_0_1, 'pdus'))
         self.msg_connect((self.dbconnect_pktgen_0, 'cmd'), (self.uhd_usrp_sink_0, 'command'))
-        self.connect((self.analog_sig_source_x_0, 0), (self.blocks_multiply_xx_0, 1))    
-        self.connect((self.analog_sig_source_x_0_1, 0), (self.blocks_multiply_xx_0_1, 1))    
-        self.connect((self.analog_sig_source_x_0_2, 0), (self.blocks_multiply_xx_0_2, 1))    
-        self.connect((self.analog_sig_source_x_0_3, 0), (self.blocks_multiply_xx_0_3, 1))    
-        self.connect((self.blocks_add_xx_2, 0), (self.blocks_multiply_const_vxx_0, 0))    
-        self.connect((self.blocks_multiply_const_vxx_0, 0), (self.blocks_throttle_0, 0))    
+        self.connect((self.analog_sig_source_x_0, 0), (self.blocks_multiply_xx_0, 1))
+        self.connect((self.analog_sig_source_x_0_1, 0), (self.blocks_multiply_xx_0_1, 1))
+        self.connect((self.analog_sig_source_x_0_2, 0), (self.blocks_multiply_xx_0_2, 1))
+        self.connect((self.analog_sig_source_x_0_3, 0), (self.blocks_multiply_xx_0_3, 1))
+        self.connect((self.blocks_add_xx_2, 0), (self.blocks_multiply_const_vxx_0, 0))
+        self.connect((self.blocks_multiply_const_vxx_0, 0), (self.blocks_throttle_0, 0))
         self.connect((self.blocks_multiply_const_vxx_0, 0), (self.uhd_usrp_sink_0, 0))
-        self.connect((self.blocks_multiply_xx_0, 0), (self.blocks_add_xx_2, 0))    
-        self.connect((self.blocks_multiply_xx_0_1, 0), (self.blocks_add_xx_2, 1))    
-        self.connect((self.blocks_multiply_xx_0_2, 0), (self.blocks_add_xx_2, 2))    
-        self.connect((self.blocks_multiply_xx_0_3, 0), (self.blocks_add_xx_2, 3))    
-        self.connect((self.blocks_pdu_to_tagged_stream_0, 0), (self.digital_ofdm_tx_0, 0))    
-        self.connect((self.blocks_pdu_to_tagged_stream_0_0, 0), (self.digital_ofdm_tx_0_0, 0))    
-        self.connect((self.blocks_pdu_to_tagged_stream_0_0_0, 0), (self.digital_ofdm_tx_0_1, 0))    
-        self.connect((self.blocks_pdu_to_tagged_stream_0_0_1, 0), (self.digital_ofdm_tx_0_2, 0))    
-        self.connect((self.blocks_throttle_0, 0), (self.qtgui_time_sink_x_0, 0))    
-        self.connect((self.dbconnect_pdu_fillpath_cpp_0, 0), (self.rational_resampler_xxx_0_0, 0))    
-        self.connect((self.dbconnect_pdu_fillpath_cpp_0_0, 0), (self.rational_resampler_xxx_0_0_1, 0))    
-        self.connect((self.dbconnect_pdu_fillpath_cpp_0_0_0, 0), (self.rational_resampler_xxx_0_0_1_0, 0))    
-        self.connect((self.dbconnect_pdu_fillpath_cpp_0_0_1, 0), (self.rational_resampler_xxx_0_0_1_1, 0))    
-        self.connect((self.digital_ofdm_tx_0, 0), (self.blocks_tagged_stream_to_pdu_0, 0))    
-        self.connect((self.digital_ofdm_tx_0_0, 0), (self.blocks_tagged_stream_to_pdu_0_3, 0))    
-        self.connect((self.digital_ofdm_tx_0_1, 0), (self.blocks_tagged_stream_to_pdu_0_3_0, 0))    
-        self.connect((self.digital_ofdm_tx_0_2, 0), (self.blocks_tagged_stream_to_pdu_0_3_1, 0))    
-        self.connect((self.rational_resampler_xxx_0_0, 0), (self.blocks_multiply_xx_0, 0))    
-        self.connect((self.rational_resampler_xxx_0_0_1, 0), (self.blocks_multiply_xx_0_1, 0))    
-        self.connect((self.rational_resampler_xxx_0_0_1_0, 0), (self.blocks_multiply_xx_0_2, 0))    
-        self.connect((self.rational_resampler_xxx_0_0_1_1, 0), (self.blocks_multiply_xx_0_3, 0))    
+        self.connect((self.blocks_multiply_xx_0, 0), (self.blocks_add_xx_2, 0))
+        self.connect((self.blocks_multiply_xx_0_1, 0), (self.blocks_add_xx_2, 1))
+        self.connect((self.blocks_multiply_xx_0_2, 0), (self.blocks_add_xx_2, 2))
+        self.connect((self.blocks_multiply_xx_0_3, 0), (self.blocks_add_xx_2, 3))
+        self.connect((self.blocks_pdu_to_tagged_stream_0, 0), (self.digital_ofdm_tx_0, 0))
+        self.connect((self.blocks_pdu_to_tagged_stream_0_0, 0), (self.digital_ofdm_tx_0_0, 0))
+        self.connect((self.blocks_pdu_to_tagged_stream_0_0_0, 0), (self.digital_ofdm_tx_0_1, 0))
+        self.connect((self.blocks_pdu_to_tagged_stream_0_0_1, 0), (self.digital_ofdm_tx_0_2, 0))
+        self.connect((self.blocks_throttle_0, 0), (self.qtgui_time_sink_x_0, 0))
+        self.connect((self.dbconnect_pdu_fillpath_cpp_0, 0), (self.rational_resampler_xxx_0_0, 0))
+        self.connect((self.dbconnect_pdu_fillpath_cpp_0_0, 0), (self.rational_resampler_xxx_0_0_1, 0))
+        self.connect((self.dbconnect_pdu_fillpath_cpp_0_0_0, 0), (self.rational_resampler_xxx_0_0_1_0, 0))
+        self.connect((self.dbconnect_pdu_fillpath_cpp_0_0_1, 0), (self.rational_resampler_xxx_0_0_1_1, 0))
+        self.connect((self.digital_ofdm_tx_0, 0), (self.blocks_tagged_stream_to_pdu_0, 0))
+        self.connect((self.digital_ofdm_tx_0_0, 0), (self.blocks_tagged_stream_to_pdu_0_3, 0))
+        self.connect((self.digital_ofdm_tx_0_1, 0), (self.blocks_tagged_stream_to_pdu_0_3_0, 0))
+        self.connect((self.digital_ofdm_tx_0_2, 0), (self.blocks_tagged_stream_to_pdu_0_3_1, 0))
+        self.connect((self.rational_resampler_xxx_0_0, 0), (self.blocks_multiply_xx_0, 0))
+        self.connect((self.rational_resampler_xxx_0_0_1, 0), (self.blocks_multiply_xx_0_1, 0))
+        self.connect((self.rational_resampler_xxx_0_0_1_0, 0), (self.blocks_multiply_xx_0_2, 0))
+        self.connect((self.rational_resampler_xxx_0_0_1_1, 0), (self.blocks_multiply_xx_0_3, 0))
 
     def closeEvent(self, event):
         self.settings = Qt.QSettings("GNU Radio", "tx_ofdm")

@@ -157,7 +157,7 @@ multichannelrx::multichannelrx(const RadioParameter params) :
     // sanity checks
     assert(params_.num_channels == channels_.size());
 
-    std::cout << boost::format("Using %d channels.") % usrp_rx->get_rx_num_channels() << std::endl;
+    std::cout << boost::format("This setup supports %d channels.") % usrp_rx->get_rx_num_channels() << std::endl;
     if (params_.num_channels > usrp_rx->get_rx_num_channels()) {
         throw std::runtime_error("Invalid channel(s) specified.");
     }

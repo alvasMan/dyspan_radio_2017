@@ -19,7 +19,7 @@ string return_current_time_and_date()
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
 
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %X");
+    ss << "TODO"; //std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %X");
     return ss.str();
 }
 
@@ -45,17 +45,17 @@ void TrainingJsonManager::read()
 json merge_two_json_entries(json& jscenario, json& jnew, vector<int> channel_occupancy)
 {
     json j;
-    
+
     for(json::iterator it = jnew.begin(); it != jnew.end(); ++it)
     {
         std::unique_ptr<JsonScenarioMonitor> monitor_ptr = monitor_utils::make_scenario_monitor(it.key());
         if(jscenario.find(monitor_ptr->json_key())!=jscenario.end())
             monitor_ptr->from_json(jscenario[monitor_ptr->json_key()]);
         monitor_ptr->merge_json(jnew[monitor_ptr->json_key()], channel_occupancy);
-        
+
         j[monitor_ptr->json_key()] = monitor_ptr->to_json();
     }
-    
+
     return j;
 }
 
@@ -64,7 +64,7 @@ void TrainingJsonManager::merge_new_data()
     assert(is_read_flag==true);
     j_write["scenario_data"] = j_read["scenario_data"];
     j_write["new_data"] = json::array();
-    
+
     for(auto& new_el : j_read["new_data"])
     //for(auto it = j_read["new_data"].begin(); it != j_read["new_data"].end(); ++it)
     {
@@ -74,7 +74,7 @@ void TrainingJsonManager::merge_new_data()
         if(scenario_defined==true && channels_defined==true)
         {// it is valid and ready to merge
             int scenario_idx = new_el["scenario"].get<int>();
-            auto it2 = find_if(j_write["scenario_data"].begin(), j_write["scenario_data"].end(), 
+            auto it2 = find_if(j_write["scenario_data"].begin(), j_write["scenario_data"].end(),
                  [&](decltype(*j_write["scenario_data"].begin())& a)
                  {
                     return a["scenario"].get<int>()==scenario_idx;
@@ -113,16 +113,16 @@ void TrainingJsonManager::write(json& j)
         {"channel_occupancy", v},
         {"monitor_data", j}
     };
-    
+
     // read a JSON file
     std::ofstream ofptr(w_file);
     if(ofptr.is_open()==false)
     {
         throw std::runtime_error("ERROR1: SavingLearningToFile: Unable to open file");
     }
-    
+
     j_write["new_data"].push_back(j_new);
-    
+
     ofptr << std::setw(4) << j_write;
     ofptr.close();
     cout << "STATUS: Successfully wrote learned data to json file " << w_file << endl;
