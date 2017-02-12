@@ -57,31 +57,6 @@ typedef std::pair<double, std::vector<float> > ChPowers;        ///< timestamp +
 #ifndef CHANNELPOWERESTIMATOR_HPP
 #define CHANNELPOWERESTIMATOR_HPP
 
-class PacketDetector;
-
-class SpectrogramGenerator
-{
-public:
-    SpectrogramGenerator() = delete;
-    SpectrogramGenerator(const SpectrogramGenerator&) = delete;
-    SpectrogramGenerator(const SpectrogramGenerator&&) = delete;
-    SpectrogramGenerator(int n_channels, int siz) : results(1000),
-    Nch(n_channels), step_size(siz), mov_avg(n_channels, MovingAverage<float>(siz))
-    {
-        assert(n_channels>0);
-        assert(siz>0);
-    }
-    
-    void work(double tstamp, const std::vector<float>& ch_pwrs);
-    
-    buffer_utils::bounded_buffer<ChPowers> results;
-private:
-    int Nch;
-    int step_size;
-    int mavg_count = 0;
-    std::vector< MovingAverage<float> > mov_avg;
-};
-
 
 struct BinMask
 {
@@ -113,6 +88,32 @@ struct BinMask
     vector<SectionProperties> section_props;
     SectionProperties ignored_section_props;
     int Nch;
+};
+
+class PacketDetector;
+
+class SpectrogramGenerator
+{
+public:
+    SpectrogramGenerator() = delete;
+    SpectrogramGenerator(const SpectrogramGenerator&) = delete;
+    SpectrogramGenerator(const SpectrogramGenerator&&) = delete;
+    SpectrogramGenerator(const BinMask& bmask, int siz) : results(1000), bin_mask(bmask),
+    Nch(bmask.n_sections()), step_size(siz), mov_avg(bmask.n_sections(), MovingAverage<float>(siz))
+    {
+        assert(Nch>0);
+        assert(siz>0);
+    }
+    
+    void work(double tstamp, const std::vector<float>& ch_pwrs);
+    
+    buffer_utils::bounded_buffer<ChPowers> results;
+    BinMask bin_mask;
+private:
+    int Nch;
+    int step_size;
+    int mavg_count = 0;
+    std::vector< MovingAverage<float> > mov_avg;
 };
 
 class ChannelPowerEstimator 
@@ -201,9 +202,9 @@ public:
 
 namespace sensing_utils
 {
-BinMask generate_bin_mask(int Nch, int nBins);
-BinMask generate_bin_mask(int Nch, int nBins, float non_guard_percentage);
-BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage);
+BinMask generate_bin_mask_no_guard(int Nch, int nBins, bool cancel_DC_offset = true);
+BinMask generate_bin_mask(int Nch, int nBins, float non_guard_percentage, bool cancel_DC_offset = true);
+BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage, bool cancel_DC_offset = true);
 vector<float> relative_channel_powers(const BinMask& bmask, const vector<float> &ch_powers);
 };
 

@@ -3,6 +3,7 @@
 
 #include "ChannelPowerEstimator.h"
 #include "general_utils.hpp"
+#include "sensing_components.h"
 
 using namespace std;
 
@@ -22,7 +23,7 @@ BOOST_AUTO_TEST_CASE(test1)
 	int nBins = 512;
 	int Nch = 4;
 
-	auto mask1 = sensing_utils::generate_bin_mask(Nch, nBins);
+	auto mask1 = sensing_utils::generate_bin_mask_no_guard(Nch, nBins);
 	auto mask2 = sensing_utils::generate_bin_mask(Nch, nBins, 1.0);
 	BOOST_REQUIRE(mask1.size()==nBins);
 	BOOST_REQUIRE(mask2.size()==nBins);
@@ -101,6 +102,13 @@ BOOST_AUTO_TEST_CASE(test3)
     
     BOOST_REQUIRE(maskprops.Nch==Nch);
     
+    SpectrogramResizer s_resizer(maskprops,64);
+    vector<float> in_vec = {1,0.5,1.1, 1.4,3,1.2, 1.1,10,1.3, 1.2,100,1.1};
+    vector<float> out_vec(64);
+    
+    s_resizer.resize_line(out_vec, in_vec);
+    cout << "Input vector to the resizer: " << print_range(in_vec) << endl;
+    cout << "Output vector of the resizer: " << print_range(out_vec) << endl;
 }
 
 BOOST_AUTO_TEST_SUITE_END()

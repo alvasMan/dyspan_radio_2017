@@ -56,6 +56,21 @@ public:
     SituationalAwarenessApi *pu_scenario_api;
 };
 
+class SpectrogramResizer
+{
+public:
+    SpectrogramResizer(const BinMask& bmask, int n_out = 64) : bin_mask(bmask), Nout(n_out)
+    {
+        setup();
+    }
+    void setup();
+    void resize_line(vector<float>& out_vec, const vector<float>& in_vec);
+    BinMask bin_mask;
+    int Nout = 64;
+private:
+    vector<float> out_mat_frac;
+};
+
 namespace sensing_utils
 {
 SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::string json_read_filename,
