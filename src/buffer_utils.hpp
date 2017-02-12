@@ -30,7 +30,8 @@
 #include <boost/thread/thread.hpp>
 #include <boost/call_traits.hpp>
 #include <boost/bind.hpp>
-#include <boost/move/move.hpp>
+//#include <boost/move/move.hpp>
+#include <utility>
 
 #ifndef BUFFER_UTILS_HPP
 #define BUFFER_UTILS_HPP
@@ -59,22 +60,36 @@ public:
     {
     }
 
-    void get_rdataset(rdataset<T>& ret)
+    rdataset<T> get_rdataset()
     {
         boost::mutex::scoped_lock lock(m_mutex);
         while (n_written == 0)
             m_not_empty.wait(lock);
         r_idx = (r_idx + 1) % buf.size();
-        ret.set(this, buf[r_idx]);
+        //std::cout << "Someone is reading at " << r_idx << " n_written: " << n_written << std::endl;
+        return std::move(rdataset<T>(this, buf[r_idx]));
     }
 
-    void get_wdataset(wdataset<T>& ret)
+    bool try_get_rdataset(rdataset<T>& ret)
+    {
+        boost::mutex::scoped_lock lock(m_mutex);
+        if(n_written == 0)
+            return false;
+        r_idx = (r_idx + 1) % buf.size();
+        ret.set(this, buf[r_idx]);
+        return true;
+    }
+    
+    wdataset<T> get_wdataset()
     {
         boost::mutex::scoped_lock lock(m_mutex);
         while (n_written == buf.size())
             m_not_full.wait(lock);
         w_idx = (w_idx + 1) % buf.size();
-        ret.set(this, buf[w_idx]);
+        //ret.set(this, buf[w_idx]);
+        //std::cout << "w_idx: " << w_idx << ", n_written: " << n_written << std::endl;
+
+        return std::move(wdataset<T>(this, buf[w_idx]));
     }
 
     bool try_get_wdataset(wdataset<T>& ret)
@@ -110,6 +125,7 @@ public:
 
     bool empty()
     {
+        boost::mutex::scoped_lock lock(m_mutex);
         return n_written == 0;
     }
 
@@ -134,6 +150,12 @@ public:
 
     wdataset(bounded_buffer<T>* b, T& t) : buf(b), data(&t)
     {
+    }
+    
+    wdataset(wdataset<T>&& w) : buf(w.buf), data(w.data) 
+    {
+        w.buf = NULL;
+        w.data = NULL;
     }
 
     inline void release()   // explicit release
@@ -163,7 +185,7 @@ protected:
         data = &t;
     }
 private:
-    wdataset(wdataset<T>& w); // non-copyable
+    wdataset(wdataset<T>& w) = delete; // non-copyable
     wdataset<T>& operator=(wdataset<T>& w); // non-copyable
     bounded_buffer<T> *buf;
     T* data;
@@ -182,6 +204,14 @@ public:
     rdataset(bounded_buffer<T>* b, T& t) : buf(b), data(&t)
     {
     }
+    
+    rdataset(rdataset<T>&& r) : buf(r.buf), data(r.data) 
+    {
+        r.buf = NULL;
+        r.data = NULL;
+    }
+    
+    inline bool empty() const {return data == NULL || buf==NULL;}
 
     inline T& operator()()
     {
@@ -210,7 +240,7 @@ protected:
         data = &t;
     }
 private:
-    rdataset(wdataset<T>& w);
+    rdataset(wdataset<T>& w) = delete;
     rdataset<T>& operator=(wdataset<T>& w);
 
     bounded_buffer<T> *buf;

@@ -38,6 +38,9 @@
 #include "channels.h"
 #include "ChannelPowerEstimator.h"
 #include "sensing_components.h"
+#include "context_awareness.h"
+#include "database_comms.h"
+#include "json_utils.h"
 
 class OfdmTransceiver : public DyspanRadio
 {
@@ -98,9 +101,14 @@ private:
     Buffer<boost::shared_ptr<CplxFVec> > frame_buffer;
 
     // receiver objects
-    ChannelPowerEstimator e_detec;
+    SensingHandler shandler;
+    
+    // situational awareness objects
+    std::unique_ptr<RFEnvironmentData> pu_data;
+    std::unique_ptr<SituationalAwarenessApi> pu_scenario_api;
+    DatabaseApi database_api;
+    
     //std::pair<double,bool> DwellEst(DwellTimeEstimator &Dwell, double &previous_dwelltime, int &dwell_counter, int steady_state, double steady_state_Th);
-    bool learning;
     uhd::time_spec_t timestamp_;
 
     // member functions
@@ -108,7 +116,6 @@ private:
     void random_transmit_function(); // this is just a test function which randomly transmits on every available channel
     void modulation_function();
     void receive_function();
-    void sensing_function();
     void launch_change_places();
     void reconfigure_usrp(const int num, bool tune_lo);
     std::pair<bool,double> dwelltimer();

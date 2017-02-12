@@ -8,7 +8,11 @@ file(GLOB sources
     multichannelrx.cpp
     multichannelrx_pfb.cpp
     ChannelPowerEstimator.cpp
-    sensing_components.cpp)
+    sensing_components.cpp
+    context_awareness.cpp
+    database_comms.cpp
+    json_utils.cpp
+    markov_chain_components.cpp)
 
 file(GLOB headers
     dyspanradio.h
@@ -23,4 +27,4 @@ file(GLOB headers
 
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/clientlib)
 ADD_EXECUTABLE(dyspanradio ${sources} ${headers})
-TARGET_LINK_LIBRARIES(dyspanradio clientlib ${FFTW3F_LIBRARIES} ${UHD_LIBRARIES} ${Boost_LIBRARIES} ${LIQUIDDSP_LIBRARIES})
+TARGET_LINK_LIBRARIES(dyspanradio clientlib ${FFTW3F_LIBRARIES} ${UHD_LIBRARIES} ${Boost_LIBRARIES} ${LIQUIDDSP_LIBRARIES} ${PYTHON_LIBRARIES})

@@ -1,0 +1,85 @@
+{
+    "new_data": [
+        {
+            "channel_occupancy": [
+                -1,
+                -1,
+                -1,
+                -1
+            ],
+            "current_time": "2017-02-11 18:02:27",
+            "monitor_data": {
+                "ChannelPacketRateMonitor": {
+                    "Nch": 4,
+                    "channel_free": {
+                        "count": [
+                            0,
+                            0,
+                            0,
+                            0
+                        ],
+                        "sum": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0
+                        ]
+                    },
+                    "channel_stats": {
+                        "count": [
+                            0,
+                            0,
+                            3924,
+                            0
+                        ],
+                        "sum": [
+                            0.0,
+                            0.0,
+                            35.9841792,
+                            0.0
+                        ]
+                    }
+                }
+            },
+            "scenario": "unknown"
+        }
+    ],
+    "scenario_data": [
+        {
+            "monitor_data": {
+                "ChannelPacketRateMonitor": {
+                    "Nch": 4,
+                    "channel_free": {
+                        "count": [
+                            0,
+                            0,
+                            0,
+                            0
+                        ],
+                        "sum": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0
+                        ]
+                    },
+                    "channel_stats": {
+                        "count": [
+                            0,
+                            0,
+                            0,
+                            0
+                        ],
+                        "sum": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0
+                        ]
+                    }
+                }
+            },
+            "scenario": -1
+        }
+    ]
+}

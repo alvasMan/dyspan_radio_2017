@@ -72,7 +72,7 @@ spectrum_eror_t __attribute__((visibility("default"))) spectrum_getRadioNumber(s
 	return 1;
 }
 
-spectrum_eror_t __attribute__((visibility("default"))) spectrum_connect(spectrum* ctx, char* hostname, uint16_t port, uint16_t requestedPacketLen, uint8_t isTransmitter){
+spectrum_eror_t __attribute__((visibility("default"))) spectrum_connect(spectrum* ctx, const char* hostname, uint16_t port, uint16_t requestedPacketLen, uint8_t isTransmitter){
 	if(!ctx) return ERROR_INVALID;
 	if(!hostname) return ERROR_INVALID;
 	if(isTransmitter) isTransmitter=1;

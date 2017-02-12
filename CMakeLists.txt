@@ -27,6 +27,7 @@ SET(CMAKE_CXX_FLAGS_RELEASE "-O2 -pipe -march=native -mtune=native -ffast-math -
 FIND_PACKAGE(UHD REQUIRED)
 FIND_PACKAGE(FFTW3F REQUIRED)
 FIND_PACKAGE(LIQUIDDSP REQUIRED)
+FIND_PACKAGE(PythonLibs REQUIRED)
 
 ########################################################################
 # Setup Boost
@@ -38,6 +39,8 @@ SET(BOOST_REQUIRED_COMPONENTS
     program_options
     system
     thread
+    filesystem
+    unit_test_framework
 )
 
 IF(UNIX AND NOT BOOST_ROOT AND EXISTS "/usr/lib64")
@@ -60,7 +63,8 @@ SET(Boost_ADDITIONAL_VERSIONS
 )
 FIND_PACKAGE(Boost 1.46 COMPONENTS ${BOOST_REQUIRED_COMPONENTS})
 
-INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS}
+                    ${PYTHON_INCLUDE_DIR})
 LINK_DIRECTORIES(${Boost_LIBRARY_DIRS} ${CMAKE_SOURCE_DIR}/clientlib)
 
 MESSAGE(STATUS "Boost include directories: ${Boost_INCLUDE_DIRS}")
@@ -70,3 +74,5 @@ MESSAGE(STATUS "Boost libraries: ${Boost_LIBRARIES}")
 # Adding source directory
 ADD_SUBDIRECTORY(clientlib)
 ADD_SUBDIRECTORY(src)
+
+ADD_SUBDIRECTORY(test)
