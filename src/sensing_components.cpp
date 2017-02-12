@@ -164,7 +164,7 @@ namespace sensing_utils
 {
 SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::string json_read_filename,
                                              std::string json_write_filename, SituationalAwarenessApi *pu_scenario_api, 
-                                    bool has_sensing, bool has_deep_learning)
+                                    bool has_sensing, bool has_learning)
 {
     SensingHandler shandler;
     
@@ -177,7 +177,7 @@ SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::st
         shandler.pwr_estim.reset(new ChannelPowerEstimator());
         //shandler.pwr_estim->set_parameters(moving_average_size, Nfft, shandler.Nch);
         //auto maskprops = sensing_utils::generate_bin_mask(shandler.Nch, Nfft, 0.8);
-        auto maskprops = sensing_utils::generate_bin_mask_and_reference(shandler.Nch, Nfft, 0.8, 0.15);
+        auto maskprops = sensing_utils::generate_bin_mask_and_reference(shandler.Nch, Nfft, 0.8, 0.12);
         assert(maskprops.bin_mask.size()==Nfft);
         shandler.pwr_estim->set_parameters(moving_average_size, maskprops);
         //shandler.pwr_estim->set_parameters(16, 512, 4, 0.4, 0.4);//(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
@@ -188,9 +188,12 @@ SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::st
         shandler.json_learning_manager->read(); // reads the config file
         
         // SETUP USRP Reader to PowerChannelEstimator input
-        shandler.sensing_module.reset(new SensingModule(shandler.pwr_estim.get()));
+        if(has_learning==false)
+            shandler.sensing_module.reset(new SensingModule(shandler.pwr_estim.get()));
+        else
+            shandler.sensing_module.reset(new SensingModule(shandler.pwr_estim.get(),true));
         
-        if(has_deep_learning)
+        if(has_learning)
             shandler.spectrogram_module.reset(new SpectrogramGenerator(maskprops, moving_average_size));
         
         shandler.channel_rate_tester.reset(new ChannelPacketRateTester(pu_scenario_api));
@@ -323,7 +326,7 @@ void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler
             
             // Move data to spectrogram
             if(shandler->spectrogram_module)
-                shandler->spectrogram_module->work(shandler->pwr_estim->current_tstamp, shandler->pwr_estim->output_ch_pwrs);
+                shandler->spectrogram_module->push_line(shandler->pwr_estim->current_tstamp, shandler->pwr_estim->output_ch_pwrs);
             
             // clear the just detected packets
             packet_detector.detected_pulses.clear();
@@ -380,10 +383,18 @@ void launch_spectrogram_to_file_thread(SensingHandler* shandler)
             boost::this_thread::interruption_point();
             
             //blocks waiting
-            buffer_utils::rdataset<ChPowers>  ch_powers = shandler->spectrogram_module->results.get_rdataset();
+            buffer_utils::rdataset<ChPowers>  ch_powers = shandler->spectrogram_module->pop_line();
             
-            if(ch_powers.empty())
-                boost::this_thread::sleep(boost::posix_time::milliseconds(500));
+            // convert to dB ----> Only after the averaging
+//            for(int i = 0; i < ch_powers().second.size(); ++i)
+//                if(ch_powers().second[i]!=0)
+//                    ch_powers().second[i] = 10*log10(ch_powers().second[i]);
+//                else
+//                    ch_powers().second[i] = -240;
+            
+            
+//            if(ch_powers.empty())
+//                boost::this_thread::sleep(boost::posix_time::milliseconds(500));
             
             assert(ch_powers().second.size()>0);
             

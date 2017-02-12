@@ -76,7 +76,7 @@ namespace sensing_utils
 {
 SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::string json_read_filename,
                                              std::string json_write_filename, SituationalAwarenessApi *pu_scenario_api, 
-                                    bool has_sensing, bool has_deep_learning);
+                                    bool has_sensing, bool has_learning);
 
 void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler* shandler);
 

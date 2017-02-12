@@ -93,7 +93,7 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     if (params_.has_sensing)
     {
         shandler = sensing_utils::make_sensing_handler(4, params_.project_folder, params_.read_learning_file,
-                                             params_.write_learning_file, pu_scenario_api.get(), true, true);
+                                             params_.write_learning_file, pu_scenario_api.get(), true, params_.has_learning);
     }
 
     if (params_.use_db)
@@ -243,8 +243,8 @@ void OfdmTransceiver::modulation_function(void)
             boost::shared_ptr<CplxFVec> usrp_buffer( new CplxFVec(frame_size) );
             unsigned int bytes_written = 0;
             while (num_symbols--) {
-                ofdmflexframegen_writesymbol(fg, fgbuffer);
-                //ofdmflexframegen_write(fg, fgbuffer, fgbuffer_len);
+                //ofdmflexframegen_writesymbol(fg, fgbuffer);
+                ofdmflexframegen_write(fg, fgbuffer, fgbuffer_len);
                 // copy symbol and apply gain
                 for (int i = 0; i < fgbuffer_len; i++)
                     (*usrp_buffer.get())[bytes_written + i] = fgbuffer[i] * tx_gain;

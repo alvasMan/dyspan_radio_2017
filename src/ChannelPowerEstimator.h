@@ -105,7 +105,8 @@ public:
         assert(siz>0);
     }
     
-    void work(double tstamp, const std::vector<float>& ch_pwrs);
+    void push_line(double tstamp, const std::vector<float>& ch_pwrs);
+    buffer_utils::rdataset<ChPowers> pop_line();
     
     buffer_utils::bounded_buffer<ChPowers> results;
     BinMask bin_mask;

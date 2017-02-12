@@ -400,7 +400,7 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
     sort(detected_pulses.begin(), detected_pulses.end(), [](DetectedPacket& a, DetectedPacket &b){return get<0>(a) < get<0>(b);});
 }
 
-void SpectrogramGenerator::work(double tstamp, const vector<float>& ch_pwrs)
+void SpectrogramGenerator::push_line(double tstamp, const vector<float>& ch_pwrs)
 {
     assert(ch_pwrs.size()==mov_avg.size());
     assert(mov_avg[0].size()>0);
@@ -418,13 +418,20 @@ void SpectrogramGenerator::work(double tstamp, const vector<float>& ch_pwrs)
         
         for(uint16_t j = 0; j < mov_avg.size(); j++) 
         {
-            d().second[j] = mov_avg[j].get_avg();//ch_pwr_ma_last_outputs[j].max(); 
+            d().second[j] = mov_avg[j].get_avg();
         }
         
         assert(d().second.size()>0);
         
         mavg_count = 0;
     }
+}
+
+buffer_utils::rdataset<ChPowers> SpectrogramGenerator::pop_line()
+{
+    buffer_utils::rdataset<ChPowers> ch_powers = results.get_rdataset();
+    
+    return std::move(ch_powers);
 }
 
 void ForgetfulChannelMonitor::work(const std::vector<float>& ch_pwrs)

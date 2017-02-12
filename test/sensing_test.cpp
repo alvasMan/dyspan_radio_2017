@@ -98,7 +98,7 @@ BOOST_AUTO_TEST_CASE(test3)
 {   
     int Nch = 4;
     int Nfft =512;
-    auto maskprops = sensing_utils::generate_bin_mask_and_reference(Nch, Nfft, 0.8, 0.15);
+    auto maskprops = sensing_utils::generate_bin_mask_and_reference(Nch, Nfft, 0.8, 0.12);
     
     BOOST_REQUIRE(maskprops.Nch==Nch);
     
