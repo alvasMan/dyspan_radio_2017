@@ -175,8 +175,10 @@ void OfdmTransceiver::start(void)
                 threads_.push_back(new boost::thread(sensing_utils::launch_spectrogram_to_file_thread, &shandler));
         }
         else
+        {
             threads_.push_back(new boost::thread(sensing_utils::launch_sensing_thread, usrp_tx, &shandler));
-        threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
+            threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
+        }
         //threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, pu_scenario_api.get()));
     }
     else

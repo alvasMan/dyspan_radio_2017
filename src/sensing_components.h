@@ -22,7 +22,7 @@ class SensingModule
 {
 public:
 
-    SensingModule(ChannelPowerEstimator* estim) : pwr_estim(estim)
+    SensingModule(ChannelPowerEstimator* estim, bool crash_flag = false) : pwr_estim(estim), crash_on_overflow(crash_flag)
     {
     } // copy
     void setup_rx_chain(uhd::usrp::multi_usrp::sptr utx); ///< Configure the rx_stream
@@ -40,6 +40,7 @@ private:
     uhd::rx_streamer::sptr rx_stream;
     bool overflow_message = true;
     uhd::rx_metadata_t metadata;
+    bool crash_on_overflow;
 };
 
 class SituationalAwarenessApi;
@@ -59,7 +60,7 @@ public:
 class SpectrogramResizer
 {
 public:
-    SpectrogramResizer(const BinMask& bmask, int n_out = 64) : bin_mask(bmask), Nout(n_out)
+    SpectrogramResizer(const BinMask& bmask, int n_out = 64) : bin_mask(bmask), Nout(n_out), out_mat_frac(Nout*bmask.n_sections(),-1)
     {
         setup();
     }

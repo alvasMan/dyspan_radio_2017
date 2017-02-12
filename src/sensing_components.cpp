@@ -49,6 +49,8 @@ bool SensingModule::recv_fft_pwrs()
             overflow_message = false;
             std::cerr << boost::format("Got an overflow indication, please reduce sample rate.");
         }
+        if(crash_on_overflow==true)
+            throw std::runtime_error("Samples are corrupted now");
         return true;
     }
     else if (metadata.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE)
@@ -103,22 +105,42 @@ void SpectrogramResizer::setup()
 {
     float mask_interp_factor = bin_mask.size() / Nout;
     
+    int nBins = bin_mask.size();
     int n_cols = bin_mask.n_sections();
     vector<int> out_mat_count(Nout*n_cols,0);
     for(int i = 0; i < bin_mask.size(); ++i)
     {
+        int shift_idx = (i+nBins/2)%nBins;
         if(bin_mask[i]<0)
             continue;
-        int out_idx = std::floor(i/mask_interp_factor);
+        int out_idx = std::floor(shift_idx/mask_interp_factor);
         out_mat_count[out_idx*n_cols + bin_mask[i]]++;
     }
     
-    out_mat_frac.resize(Nout*n_cols,0);
+    out_mat_frac = std::vector<float>(Nout*n_cols,0);
     for(int i = 0; i < Nout; ++i)
     {
         int tot = std::accumulate(&out_mat_count[i*n_cols],&out_mat_count[(i+1)*n_cols],0);
-        for(int j = 0; j < n_cols; ++j)
-            out_mat_frac[i*n_cols+j] = out_mat_count[i*n_cols+j] / tot;
+        if(tot>0)
+            for(int j = 0; j < n_cols; ++j)
+                out_mat_frac[i*n_cols+j] = out_mat_count[i*n_cols+j] / (float)tot;
+    }
+    for(int i = 0; i < Nout; ++i)
+    {
+        bool all_zeros = std::find_if(&out_mat_frac[i*n_cols], &out_mat_frac[(i+1)*n_cols], [](float f){return f>0;})==&out_mat_frac[(i+1)*n_cols];
+        if(all_zeros)
+        {
+            int n = i;
+            while(n<Nout && out_mat_frac[n*n_cols]==-1)
+                n++;
+            if(i>0 && n!=Nout)
+            {
+                for(int j = 0; j < Nout; ++j)
+                {
+                    out_mat_frac[i*n_cols+j] = (1-1/(2.0*n))*out_mat_frac[(i-1)*n_cols+j] + (1/(2.0*n))*out_mat_frac[n*n_cols+j];
+                }
+            }
+        }
     }
 }
 
@@ -312,6 +334,7 @@ void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler
             {
                 cout << "STATUS: Packet Arrival Periods per Channel: " << monitor_utils::print_packet_period(par_monitor) << endl;
                 cout << "STATUS: Packet Power per Channel: " << print_range(ch_monitor.channel_energy, [](float f){return 10*log10(f);}) << endl;
+                cout << "STATUS: Buffer at " << shandler->spectrogram_module->results.estimated_size()*100.0f/shandler->spectrogram_module->results.capacity() << "%" << endl;
                 t1 = t2;
             }
         }
@@ -334,6 +357,14 @@ void launch_spectrogram_to_file_thread(SensingHandler* shandler)
     
     std::ofstream of;
     of.open(filename, std::ios::out | std::ios::binary);
+    
+    long n_ffts_read = 0;
+    long skip_n = std::ceil(1.0 / (shandler->pwr_estim->nBins/10.0e6));
+    long max_written = std::ceil(120.0 / (shandler->pwr_estim->nBins/10.0e6)) + skip_n;
+    
+    cout << "Writing Spectrogram to file." << endl;
+    cout << "Going to write a total of " << max_written << " fft lines" << endl;
+    cout << "Going to skip the first " << skip_n << " fft lines" << endl;
     
     if(of.is_open()==false)
     {
@@ -364,8 +395,17 @@ void launch_spectrogram_to_file_thread(SensingHandler* shandler)
             
             // i can't max to 1 here
             
-            // write to file
-            of.write((char*)&resized_pwr_outputsdB[0], resized_pwr_outputsdB.size()*sizeof(float));
+            n_ffts_read++;
+            if(n_ffts_read>=skip_n)
+            {    
+                // write to file
+                of.write((char*)&resized_pwr_outputsdB[0], resized_pwr_outputsdB.size()*sizeof(float));
+                if(n_ffts_read>=max_written)
+                {
+                    cout << "STATUS: Spectrogram successfully written to file." << endl;
+                    break;
+                }
+            }
         }
     }
     catch(boost::thread_interrupted)
@@ -374,6 +414,7 @@ void launch_spectrogram_to_file_thread(SensingHandler* shandler)
     }
     
     of.close();
+    cout << "STATUS: Closing thread dedicated to writing the spectrogram to a file." << endl;
 }
 
 
