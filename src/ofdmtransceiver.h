@@ -96,6 +96,7 @@ private:
     float tx_gain;                  // soft transmit gain (linear)
     uint32_t seq_no_;
     std::chrono::time_point<std::chrono::system_clock> last_ch_tstamp = std::chrono::system_clock::now(); // time since last channel hop
+    std::chrono::time_point<std::chrono::system_clock> last_mod_change = std::chrono::system_clock::now(); // time since last modulation update
 
     //boost::ptr_deque<CplxFVec> frame_buffer;
     Buffer<boost::shared_ptr<CplxFVec> > frame_buffer;
@@ -106,7 +107,6 @@ private:
     // situational awareness objects
     std::unique_ptr<RFEnvironmentData> pu_data;
     std::unique_ptr<SituationalAwarenessApi> pu_scenario_api;
-    DatabaseApi database_api;
     
     //std::pair<double,bool> DwellEst(DwellTimeEstimator &Dwell, double &previous_dwelltime, int &dwell_counter, int steady_state, double steady_state_Th);
     uhd::time_spec_t timestamp_;
@@ -117,6 +117,7 @@ private:
     void modulation_function();
     void receive_function();
     void launch_change_places();
+    void change_ofdm_mod();
     void reconfigure_usrp(const int num, bool tune_lo);
     std::pair<bool,double> dwelltimer();
     void process_sensing(std::vector<float> ChPowers);

@@ -114,6 +114,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("fec1",po::value<std::string>(&params.fec1)->default_value("h128"),"FEC for payload")
         ("crc",po::value<std::string>(&params.crc)->default_value("crc32"),"CRC")
         ("mod",po::value<std::string>(&params.mod)->default_value("qpsk"),"Modulation scheme")
+        ("change_mod_period",po::value<unsigned long>(&params.change_mod_period)->default_value(2000),"Change mod period in ms.")
 
         ("challenge", po::value<bool>(&params.use_db)->default_value(false), "Whether to connect and use challenge database")
         ("db_ip", po::value<std::string>(&params.db_ip)->default_value("127.0.0.1"), "Database IP")

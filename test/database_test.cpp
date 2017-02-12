@@ -62,18 +62,17 @@ BOOST_AUTO_TEST_CASE(test1)
 	spectrum_waitForState(specRx, 3, -1);
 	std::cout << "Stage 3 has started." << std::endl;;
 
-   DatabaseApi db(10);
-   boost::thread th(boost::bind(launch_database_thread, &db, specTx, radio_number, 100));
+	boost::thread th(boost::bind(launch_database_thread, specTx, radio_number, 100));
 
-   // Everything created. Now simulate TX and RX in the database
+	// Everything created. Now simulate TX and RX in the database
 	int c = 0;
-   while (c++ < 10)
-   {
-			  get_pkt(specTx, radio_number);
-			  put_pkt(specRx, radio_number);
+	while (c++ < 10)
+	{
+		get_pkt(specTx, radio_number);
+		put_pkt(specRx, radio_number);
 
-           boost::this_thread::sleep(boost::posix_time::milliseconds(100));
-			  std::cout << "score: " << db.current_score() << std::endl;
+		boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+		std::cout << "score: " << DatabaseApi::getInstance().current_score() << std::endl;
 	}
 }
 
