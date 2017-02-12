@@ -10,8 +10,10 @@
 using std::cout;
 using std::endl;
 
+
+// private CTOR 
 DatabaseApi::DatabaseApi(int cap): 
-   _Tsu_provided(cap),
+        _Tsu_provided(cap),
 	_Tpu_provided(cap),
 	_Tsu(cap),
 	_Tpu(cap)
@@ -19,8 +21,10 @@ DatabaseApi::DatabaseApi(int cap):
 }
 
 // NOTE: this is just for testing
-void launch_mock_database_thread(DatabaseApi* db_api)
+void launch_mock_database_thread()
 {
+    DatabaseApi &db_api = DatabaseApi::getInstance();
+
     float tsu = 0;
     float tpu = 0;
     try
@@ -30,10 +34,10 @@ void launch_mock_database_thread(DatabaseApi* db_api)
             boost::this_thread::interruption_point();
             
     //        std::cout << "DEBUG: Gonna update database score" << endl;
-            db_api->push_Tsu(DbReply(tsu));
-            db_api->push_Tsu_provided(DbReply(tsu*1.1));
-            db_api->push_Tpu(DbReply(tpu));
-            db_api->push_Tpu_provided(DbReply(tpu*1.1));
+            db_api.push_Tsu(DbReply(tsu));
+            db_api.push_Tsu_provided(DbReply(tsu*1.1));
+            db_api.push_Tpu(DbReply(tpu));
+            db_api.push_Tpu_provided(DbReply(tpu*1.1));
 
     //        std::cout << "DEBUG: Updated database score" << endl;
 
@@ -49,8 +53,10 @@ void launch_mock_database_thread(DatabaseApi* db_api)
 }
 
 // TODO: Write it
-void launch_database_thread(DatabaseApi* db_api, spectrum* spec, int radio_number, unsigned int sleep_time)
+void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep_time)
 {
+    DatabaseApi &db_api = DatabaseApi::getInstance();
+
     float tsu = 0;
     float tsu_provided = 0;
 
@@ -77,11 +83,11 @@ void launch_database_thread(DatabaseApi* db_api, spectrum* spec, int radio_numbe
 #endif
 
           // TODO: Update throughputs
-          db_api->push_Tsu(DbReply(tsu));
-          db_api->push_Tsu_provided(DbReply(tsu_provided));
+          db_api.push_Tsu(DbReply(tsu));
+          db_api.push_Tsu_provided(DbReply(tsu_provided));
 
-          db_api->push_Tpu(DbReply(tpu));
-          db_api->push_Tpu_provided(DbReply(tpu_provided));
+          db_api.push_Tpu(DbReply(tpu));
+          db_api.push_Tpu_provided(DbReply(tpu_provided));
 
           // Is sleep needed?
           boost::this_thread::sleep(boost::posix_time::milliseconds(sleep_time));

@@ -155,11 +155,11 @@ void OfdmTransceiver::start(void)
     if(params_.use_db)
     {
         int radio_id = spectrum_getRadioNumber(tx_);
-        threads_.push_back(new boost::thread(boost::bind(launch_database_thread, &database_api, tx_, radio_id, 5000)));
+        threads_.push_back(new boost::thread(boost::bind(launch_database_thread, tx_, radio_id, 5000)));
     }
     else
     {
-        threads_.push_back(new boost::thread(launch_mock_database_thread, &database_api));
+        threads_.push_back(new boost::thread(launch_mock_database_thread));
     }
 
 
@@ -200,6 +200,14 @@ void OfdmTransceiver::modulation_function(void)
 
         while (true) {
             boost::this_thread::interruption_point();
+
+			// Check if params_.change_mod_period ms passed.
+			if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_mod_change).count()) > params_.change_mod_period)
+			{
+            	change_ofdm_mod();
+				last_mod_change = std::chrono::system_clock::now();
+			}
+
 
             // write header (first four bytes sequence number, remaining are random)
             // TODO: also use remaining 4 bytes for payload
@@ -263,6 +271,54 @@ void OfdmTransceiver::modulation_function(void)
     {
         cout << "Modulation thread interrupted." << endl;
     }
+}
+
+void OfdmTransceiver::change_ofdm_mod()
+{
+
+    float current_score = DatabaseApi::getInstance().current_score();
+
+	static modulation_scheme mod_scheme = static_cast<modulation_scheme>(fgprops.mod_scheme);
+	switch (mod_scheme)
+    {
+
+		case LIQUID_MODEM_BPSK:
+			mod_scheme = modulation_scheme::LIQUID_MODEM_QPSK;
+			break;
+		case LIQUID_MODEM_QPSK:
+			mod_scheme = modulation_scheme::LIQUID_MODEM_QAM4;
+			break;
+		case LIQUID_MODEM_QAM4:
+			mod_scheme = modulation_scheme::LIQUID_MODEM_QAM8;
+			break;
+		case LIQUID_MODEM_QAM8:
+			mod_scheme = modulation_scheme::LIQUID_MODEM_QAM16;
+			break;
+		case LIQUID_MODEM_QAM16:
+			mod_scheme = modulation_scheme::LIQUID_MODEM_QAM32;
+			break;
+		case LIQUID_MODEM_QAM32:
+			mod_scheme = modulation_scheme::LIQUID_MODEM_QAM64;
+			break;
+		case LIQUID_MODEM_QAM64:
+			mod_scheme = modulation_scheme::LIQUID_MODEM_QAM128;
+			break;
+		case LIQUID_MODEM_QAM128:
+			mod_scheme = modulation_scheme::LIQUID_MODEM_QAM256;
+			break;
+		case LIQUID_MODEM_QAM256:
+			mod_scheme = LIQUID_MODEM_BPSK;
+			break;
+
+		default:
+			throw std::runtime_error("Unknown modulation scheme requested");
+    }
+
+	fgprops.mod_scheme = mod_scheme;
+
+#ifdef DEBUG_MODE
+	std::cout << __FUNCTION__ << ": " << "Changing Modulation to " << modulation_types[mod_scheme].name << std::endl;
+#endif
 }
 
 void OfdmTransceiver::transmit_function(void)
@@ -455,7 +511,7 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
         reconfigure_usrp(channel_map[current_channel]%channels_.size());
         //reconfigure_usrp(current_channel);
 
-        cout << "Current Challenge Score: " << database_api.current_score() << endl;
+        cout << "Current Challenge Score: " << DatabaseApi::getInstance().current_score() << endl;
         cout << "Current Challenge Scenario: " << pu_scenario_api->PU_scenario_idx() << endl;
     }
 }

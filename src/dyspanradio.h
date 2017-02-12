@@ -79,6 +79,8 @@ typedef struct
     std::string crc;
     std::string mod;
 
+    unsigned long change_mod_period;
+
     // challenge database parameters
     bool use_db;
     std::string db_ip;

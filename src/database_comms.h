@@ -35,10 +35,21 @@ public:
     system_clock::time_point tstamp;
 };
 
+
+// This is a Singleton class
 class DatabaseApi
 {
 public:
-    DatabaseApi(int cap = 10);
+    static DatabaseApi & getInstance()
+    {
+	static DatabaseApi instance(10);
+
+	return instance;
+    }
+
+    // Remove copy CTOR and assigment operator. This is a singleton after all.
+    DatabaseApi(DatabaseApi const &) = delete;
+    void operator=(DatabaseApi const &) = delete;
 
     // setters
     void push_Tsu_provided(const DbReply& r)
@@ -105,10 +116,13 @@ private:
     boost::circular_buffer<DbReply> _Tpu;
     
     std::mutex mut;
+
+    // Singleton classics: private CTOR and pointer to instance
+    DatabaseApi(int cap = 10);
 };
 
-void launch_mock_database_thread(DatabaseApi* db_api);
-void launch_database_thread(DatabaseApi* db_api, spectrum* spec, int radio_number, unsigned int sleep_time);
+void launch_mock_database_thread();
+void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep_time);
 
 #endif /* DATABASE_H */
 
