@@ -25,6 +25,7 @@
  */
 
 #include "ofdmtransceiver.h"
+#include "modulation_search_api.h"
 #include <boost/assign.hpp>
 
 #include <iostream>
@@ -190,6 +191,7 @@ void OfdmTransceiver::start(void)
 // This function creates new frames and pushes them on a shared buffer
 void OfdmTransceiver::modulation_function(void)
 {
+    ModulationSearchApi &mod_api = ModulationSearchApi::getInstance(); //There is probably a better place to initialize this, it will be here for now.
     boost::this_thread::sleep(boost::posix_time::seconds(2));
     try {
         unsigned char header[8];
@@ -199,12 +201,16 @@ void OfdmTransceiver::modulation_function(void)
         while (true) {
             boost::this_thread::interruption_point();
 
-			// Check if params_.change_mod_period ms passed.
-			if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_mod_change).count()) > params_.change_mod_period)
-			{
-            	change_ofdm_mod();
-				last_mod_change = std::chrono::system_clock::now();
-			}
+            // Check if params_.change_mod_period ms passed.
+            if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_mod_change).count()) > params_.change_mod_period)
+            {
+                modulation_scheme mod_scheme = ModulationSearchApi::getInstance().changeOfdmMod();
+                fgprops.mod_scheme = mod_scheme;
+                last_mod_change = std::chrono::system_clock::now();
+                #ifdef DEBUG_MODE
+                	std::cout << __FUNCTION__ << ": " << "Changing Modulation to " << modulation_types[mod_scheme].name << std::endl;
+                #endif
+            }
 
 
             // write header (first four bytes sequence number, remaining are random)
@@ -271,6 +277,7 @@ void OfdmTransceiver::modulation_function(void)
     }
 }
 
+/*
 void OfdmTransceiver::change_ofdm_mod()
 {
 
@@ -318,7 +325,7 @@ void OfdmTransceiver::change_ofdm_mod()
 	std::cout << __FUNCTION__ << ": " << "Changing Modulation to " << modulation_types[mod_scheme].name << std::endl;
 #endif
 }
-
+*/
 void OfdmTransceiver::transmit_function(void)
 {
   try {

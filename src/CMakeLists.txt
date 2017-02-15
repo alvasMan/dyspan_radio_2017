@@ -11,6 +11,7 @@ file(GLOB sources
     sensing_components.cpp
     context_awareness.cpp
     database_comms.cpp
+    modulation_search_api.cpp
     json_utils.cpp
     markov_chain_components.cpp)
 
