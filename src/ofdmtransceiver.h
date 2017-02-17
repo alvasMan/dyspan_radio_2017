@@ -41,6 +41,7 @@
 #include "context_awareness.h"
 #include "database_comms.h"
 #include "json_utils.h"
+#include "Power.hpp"
 
 class OfdmTransceiver : public DyspanRadio
 {
@@ -103,7 +104,9 @@ private:
 
     // receiver objects
     SensingHandler shandler;
-
+    PowerSearcher power_controller;
+    int current_gain;
+    
     // situational awareness objects
     std::unique_ptr<RFEnvironmentData> pu_data;
     std::unique_ptr<SituationalAwarenessApi> pu_scenario_api;

@@ -44,7 +44,8 @@ using std::endl;
 OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     DyspanRadio(params),
     seq_no_(0),
-    payload_len_(1500)
+    payload_len_(1500),
+        power_controller(5,-1)
 {
     assert(payload_len_ <= MAX_PAYLOAD_LEN);
 
@@ -76,7 +77,8 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     set_tx_freq(params_.f_center);
     set_tx_rate(params_.channel_rate);
     set_tx_gain_soft(params_.tx_gain_soft);
-    set_tx_gain_uhd(params_.tx_gain_uhd);
+    current_gain = params_.tx_gain_uhd;
+    set_tx_gain_uhd(current_gain);
 
     // tune to first channel with setting the LO
     assert(channels_.size() > 0);
@@ -212,7 +214,15 @@ void OfdmTransceiver::modulation_function(void)
                 #endif
             }
 
+            int new_gain = power_controller.CCompute(current_gain);
 
+            if(new_gain != current_gain)
+            {
+                cout << "Changing Powers! " << new_gain << endl;
+                set_tx_gain_uhd(new_gain);
+                current_gain = new_gain;
+            }   
+                
             // write header (first four bytes sequence number, remaining are random)
             // TODO: also use remaining 4 bytes for payload
             header[0] = (seq_no_ >> 24) & 0xff;
@@ -508,6 +518,7 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
     {
         cout << "time elapsed " << elapsed_seconds.count() << endl;
         cout << "CHAAAAAAAAAAANGE PLACES!" << endl;
+        cout << "Changing Powers! " << current_gain << endl;
 
         // channel map will be defined by learning code
         constexpr int channel_map[] = {2, 0, 3, 1};

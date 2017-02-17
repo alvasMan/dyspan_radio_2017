@@ -24,7 +24,9 @@ file(GLOB headers
     channels.h
     Buffer.h
     buffer_factory.h
-    packetLib.h)
+    packetLib.h
+    Power.hpp
+	)
 
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/clientlib)
 ADD_EXECUTABLE(dyspanradio ${sources} ${headers})
