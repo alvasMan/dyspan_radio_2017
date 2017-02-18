@@ -42,6 +42,7 @@
 #include "database_comms.h"
 #include "json_utils.h"
 #include "SU_parameters.h"
+#include "Power.hpp"
 #include <boost/optional.hpp>
 
 class OfdmTransceiver : public DyspanRadio
@@ -109,6 +110,8 @@ private:
     std::vector<std::unique_ptr<buffer_utils::bounded_buffer<ChPowers>>> ch_pwrs_buffers;
     boost::optional<Spectrogram2SocketThreadHandler> deep_learning_chain;
     boost::optional<Spectrogram2FileThreadHandler> spectrogram2file_chain;
+    PowerSearcher power_controller;
+    int current_gain;
     
     // Awareness/config classes for thread communication
     std::unique_ptr<RFEnvironmentData> pu_data;

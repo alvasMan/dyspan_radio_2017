@@ -11,6 +11,7 @@ file(GLOB sources
     sensing_components.cpp
     context_awareness.cpp
     database_comms.cpp
+    modulation_search_api.cpp
     json_utils.cpp
     markov_chain_components.cpp
     monitor_components.cpp
@@ -25,7 +26,9 @@ file(GLOB headers
     channels.h
     Buffer.h
     buffer_factory.h
-    packetLib.h)
+    packetLib.h
+    Power.hpp
+	)
 
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/clientlib)
 ADD_EXECUTABLE(dyspanradio ${sources} ${headers})

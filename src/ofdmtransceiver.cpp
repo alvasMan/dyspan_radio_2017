@@ -25,6 +25,7 @@
  */
 
 #include "ofdmtransceiver.h"
+#include "modulation_search_api.h"
 #include <boost/assign.hpp>
 
 #include <iostream>
@@ -43,7 +44,8 @@ using std::endl;
 OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     DyspanRadio(params),
     seq_no_(0),
-    payload_len_(1500)
+    payload_len_(1500),
+        power_controller(5,-1)
 {
     assert(payload_len_ <= MAX_PAYLOAD_LEN);
 
@@ -75,7 +77,8 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     set_tx_freq(params_.f_center);
     set_tx_rate(params_.channel_rate);
     set_tx_gain_soft(params_.tx_gain_soft);
-    set_tx_gain_uhd(params_.tx_gain_uhd);
+    current_gain = params_.tx_gain_uhd;
+    set_tx_gain_uhd(current_gain);
 
     // tune to first channel with setting the LO
     assert(channels_.size() > 0);
@@ -232,6 +235,7 @@ void OfdmTransceiver::start(void)
 // This function creates new frames and pushes them on a shared buffer
 void OfdmTransceiver::modulation_function(void)
 {
+    ModulationSearchApi &mod_api = ModulationSearchApi::getInstance(); //There is probably a better place to initialize this, it will be here for now.
     boost::this_thread::sleep(boost::posix_time::seconds(2));
     try {
         unsigned char header[8];
@@ -241,14 +245,26 @@ void OfdmTransceiver::modulation_function(void)
         while (true) {
             boost::this_thread::interruption_point();
 
-			// Check if params_.change_mod_period ms passed.
-			if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_mod_change).count()) > params_.change_mod_period)
-			{
-            	change_ofdm_mod();
-				last_mod_change = std::chrono::system_clock::now();
-			}
+            // Check if params_.change_mod_period ms passed.
+            if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_mod_change).count()) > params_.change_mod_period)
+            {
+                modulation_scheme mod_scheme = ModulationSearchApi::getInstance().changeOfdmMod();
+                fgprops.mod_scheme = mod_scheme;
+                last_mod_change = std::chrono::system_clock::now();
+                #ifdef DEBUG_MODE
+                	std::cout << __FUNCTION__ << ": " << "Changing Modulation to " << modulation_types[mod_scheme].name << std::endl;
+                #endif
+            }
 
+            int new_gain = power_controller.CCompute(current_gain);
 
+            if(new_gain != current_gain)
+            {
+                cout << "Changing Powers! " << new_gain << endl;
+                set_tx_gain_uhd(new_gain);
+                current_gain = new_gain;
+            }   
+                
             // write header (first four bytes sequence number, remaining are random)
             // TODO: also use remaining 4 bytes for payload
             header[0] = (seq_no_ >> 24) & 0xff;
@@ -313,6 +329,7 @@ void OfdmTransceiver::modulation_function(void)
     }
 }
 
+/*
 void OfdmTransceiver::change_ofdm_mod()
 {
 
@@ -360,7 +377,7 @@ void OfdmTransceiver::change_ofdm_mod()
 	std::cout << __FUNCTION__ << ": " << "Changing Modulation to " << modulation_types[mod_scheme].name << std::endl;
 #endif
 }
-
+*/
 void OfdmTransceiver::transmit_function(void)
 {
   try {
@@ -549,6 +566,7 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
     {
         cout << "time elapsed " << elapsed_seconds.count() << endl;
         cout << "CHAAAAAAAAAAANGE PLACES!" << endl;
+        cout << "Changing Powers! " << current_gain << endl;
 
         // channel map will be defined by learning code
         constexpr int channel_map[] = {2, 0, 3, 1};
