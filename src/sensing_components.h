@@ -11,12 +11,21 @@
  * Created on 31 January 2017, 14:35
  */
 #include "ChannelPowerEstimator.h"
-#include <uhd/usrp/multi_usrp.hpp>
 #include "../utils/json.hpp"
+#include "monitor_components.h"
+#include "SU_parameters.h"
+#include "matrix_utils.h"
 #include <map>
+#include <boost/optional.hpp>
+#include <boost/asio.hpp>
+#include "usrp_components.h"
+
+using std::vector;
+using std::string;
 
 #ifndef SENSINGMODULE_H
 #define SENSINGMODULE_H
+
 
 class SensingModule
 {
@@ -45,16 +54,49 @@ private:
 
 class SituationalAwarenessApi;
 
-class SensingHandler
+class SensingThreadHandler
 {
 public:
-    int Nch = 4;
-    std::unique_ptr<SensingModule> sensing_module;
-    std::unique_ptr<ChannelPowerEstimator> pwr_estim;
-    std::unique_ptr<SpectrogramGenerator> spectrogram_module;
-    std::unique_ptr<TrainingJsonManager> json_learning_manager;
-    std::unique_ptr<ChannelPacketRateTester> channel_rate_tester;
-    SituationalAwarenessApi *pu_scenario_api;
+    int Nch;
+    ChannelPowerEstimator pwr_estim;
+    USRPReader usrp_reader;
+    PacketDetector packet_detector;
+    ChannelPacketRateMonitor rate_monitor;
+    ForgetfulChannelMonitor pwr_monitor;
+    ChannelPacketRateTester channel_rate_tester;
+    
+    SensingThreadHandler() = default;
+    void setup(SituationalAwarenessApi *pu_scenario_api, SU_tx_params* su_params, 
+                vector<std::unique_ptr<buffer_utils::bounded_buffer<ChPowers>>>& bufs, 
+                int _Nch = 4, int Nfft = 512);
+    void run(uhd::usrp::multi_usrp::sptr& usrp_tx);
+
+private:
+    SituationalAwarenessApi* pu_api = nullptr;
+    SU_tx_params* su_api = nullptr;
+    vector<std::unique_ptr<buffer_utils::bounded_buffer<ChPowers>>> *spectrogram_buffers = nullptr;
+};
+
+class LearningThreadHandler
+{
+public:
+    string project_folder = "";
+    string json_read_filename = "";
+    string json_write_filename = "";
+    
+    int Nch;
+    USRPReader usrp_reader;
+    ChannelPowerEstimator pwr_estim;
+    PacketDetector packet_detector;
+    ChannelPacketRateMonitor rate_monitor;
+    boost::optional<TrainingJsonManager> json_learning_manager;
+    
+    void setup_filepaths(const string& folder_name, const string& json_rfile, const string& json_wfile);
+    void setup(vector<std::unique_ptr<buffer_utils::bounded_buffer<ChPowers>>>& bufs, int _Nch = 4, int Nfft = 512);
+    void run(uhd::usrp::multi_usrp::sptr& usrp_tx);
+    
+private:
+    vector<std::unique_ptr<buffer_utils::bounded_buffer<ChPowers>>> *spectrogram_buffers;
 };
 
 class SpectrogramResizer
@@ -70,6 +112,58 @@ public:
     int Nout = 64;
 private:
     vector<float> out_mat_frac;
+};
+
+class Spectrogram2FileThreadHandler
+{
+private:
+    buffer_utils::bounded_buffer<ChPowers>* sensing_buffer = NULL;
+    pair<int,int> CNNdims = {0,0};
+    SpectrogramResizer sp_resizer;
+    VectorMovingAverage mov_avg;
+    Matrix<float> mat;
+    size_t current_row = 0;
+    size_t current_imgno = 0;
+public:
+    Spectrogram2FileThreadHandler(buffer_utils::bounded_buffer<ChPowers>* buf, 
+               const BinMask& bmask, pair<int,int> CNN_dim = {64,64}, int step_size = 15);
+    void run();
+};
+
+class Spectrogram2SocketThreadHandler
+{
+private:
+    SituationalAwarenessApi *pu_api = NULL;
+    buffer_utils::bounded_buffer<ChPowers>* sensing_buffer = NULL;
+    pair<int,int> CNNdims = {0,0};
+    SpectrogramResizer sp_resizer;
+    size_t moving_average_step = 15;
+    Matrix<float> mat;
+    size_t current_row = 0;
+    size_t current_imgno = 0;
+    
+    buffer_utils::bounded_buffer<std::pair<size_t, std::chrono::system_clock::time_point>> time_buffer{1000};
+    
+    boost::asio::io_service io_service;
+    std::unique_ptr<boost::asio::ip::tcp::socket> soc;
+public:
+    Spectrogram2SocketThreadHandler(SituationalAwarenessApi* api, 
+               buffer_utils::bounded_buffer<ChPowers>* buf, 
+               const BinMask& bmask, pair<int,int> CNN_dim = {64,64}, int step_size = 15);
+    void run_send();
+    void run_recv();
+};
+
+class SensingHandler
+{
+public:
+    int Nch = 4;
+    std::unique_ptr<SensingModule> sensing_module;
+    std::unique_ptr<ChannelPowerEstimator> pwr_estim;
+    std::unique_ptr<SpectrogramGenerator> spectrogram_module;
+    std::unique_ptr<TrainingJsonManager> json_learning_manager;
+    std::unique_ptr<ChannelPacketRateTester> channel_rate_tester;
+    SituationalAwarenessApi *pu_scenario_api;
 };
 
 namespace sensing_utils

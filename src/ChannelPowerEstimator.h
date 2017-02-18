@@ -92,14 +92,31 @@ struct BinMask
 
 class PacketDetector;
 
+class VectorMovingAverage
+{
+public:
+    VectorMovingAverage() = default;
+    VectorMovingAverage(int vector_dim, int mov_avg_size, int s_size) : mov_avg(vector_dim, MovingAverage<float>(mov_avg_size))
+    , step_size(s_size)
+    {
+    }
+    bool work(const vector<float>& data);
+    void read_line(vector<float>& out);
+    
+    std::vector< MovingAverage<float> > mov_avg;
+    int step_size;
+    int step_count = 0;
+};
+
 class SpectrogramGenerator
 {
 public:
     SpectrogramGenerator() = delete;
     SpectrogramGenerator(const SpectrogramGenerator&) = delete;
     SpectrogramGenerator(const SpectrogramGenerator&&) = delete;
-    SpectrogramGenerator(const BinMask& bmask, int siz) : results(1000), bin_mask(bmask),
-    Nch(bmask.n_sections()), step_size(siz), mov_avg(bmask.n_sections(), MovingAverage<float>(siz))
+    SpectrogramGenerator(const BinMask& bmask, int siz) :
+                results(1000), bin_mask(bmask), Nch(bmask.n_sections()), step_size(siz), 
+                mov_avg(bmask.n_sections(), MovingAverage<float>(siz))
     {
         assert(Nch>0);
         assert(siz>0);
@@ -177,6 +194,7 @@ class PacketDetector
     };
     
 public:
+    PacketDetector() = default;
     PacketDetector(int n_channels, int packet_length, float t = 1.5) :
             mov_avg(n_channels,MovingAverage<float>(packet_length, packet_length)), mov_max(n_channels,std::make_pair(-1,-1)),
             max_plen(packet_length), Nch(n_channels), thres(t),
@@ -209,89 +227,7 @@ BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_perc
 vector<float> relative_channel_powers(const BinMask& bmask, const vector<float> &ch_powers);
 };
 
-class ForgetfulChannelMonitor
-{
-public:
-    ForgetfulChannelMonitor(int n_channels, float alpha_x = 0.1) : Nch(n_channels), alpha(alpha_x), channel_energy(Nch)
-    {
-    }
-    
-    void work(const std::vector<float>& ch_pwrs);
-    std::vector<size_t> ch_sorted_by_energy();
-    
-    int Nch;
-    float alpha;
-    
-    std::vector<float> channel_energy;
-};
 
-#define TDELAY_MAX 0.1
-
-class ChannelPacketRateMonitorInterface
-{
-public:
-    ChannelPacketRateMonitorInterface() = default;
-    ChannelPacketRateMonitorInterface(int n_channels) : Nch(n_channels) {}
-    virtual time_format packet_arrival_period(int i) const = 0;
-    virtual time_format packet_arrival_rate(int i) const = 0;    
-    virtual bool is_occupied(int i) const = 0;
-    virtual ~ChannelPacketRateMonitorInterface() {}
-    
-    int Nch = -1;
-};
-
-class ChannelPacketRateMonitor : public ChannelPacketRateMonitorInterface, public JsonScenarioMonitor
-{
-public:
-    ChannelPacketRateMonitor() = default;
-    ChannelPacketRateMonitor(int n_channels, time_format t_max) : 
-                ChannelPacketRateMonitorInterface(n_channels), 
-                tdelay_sum(n_channels,std::make_pair(0,0)), tdelay_free_sum(n_channels,std::make_pair(0,0)),
-                prev_packet_tstamp(n_channels,0) 
-    {
-    }
-    void work(const std::vector<DetectedPacket>& packets);
-    inline time_format packet_arrival_period(int i) const final
-    {
-        return (tdelay_sum[i].first>0) ? tdelay_sum[i].second/tdelay_sum[i].first : std::numeric_limits<time_format>::max();
-    }
-    inline time_format packet_arrival_rate(int i) const  final
-    {
-        return (tdelay_sum[i].first>0) ? 1.0/tdelay_sum[i].second/tdelay_sum[i].first : 0;
-    }
-     // NOTE: Coarse estimation of availability of the channel. If Pfa is high, this wont work.
-    inline bool is_occupied(int i) const final {return packet_arrival_period(i) < TDELAY_MAX;}
-    
-    // json utils
-    std::string json_key() {return "ChannelPacketRateMonitor";}
-    nlohmann::json to_json() final;
-    void from_json(nlohmann::json& j, std::vector<int> ch_occupancy = {}) final;
-    void merge_json(nlohmann::json& j2, std::vector<int> ch_occupancy = {}) final;
-    
-    std::vector<std::pair<long,time_format>> tdelay_sum;
-    std::vector<std::pair<long,time_format>> tdelay_free_sum;
-    
-    std::vector<time_format> prev_packet_tstamp;
-};
-
-class ChannelPacketRateTester
-{
-public:
-    ChannelPacketRateTester(SituationalAwarenessApi* api) : pu_api(api)
-    {
-    }
-    SituationalAwarenessApi* pu_api;
-    
-    std::vector<ExpandedScenarioDescriptor> possible_expanded_scenarios(const ChannelPacketRateMonitorInterface* m, int forbidden_channel = -1);
-    std::vector<scenario_number_type> possible_scenario_idxs(const std::vector<ExpandedScenarioDescriptor>& possible_expanded_scenarios);
-    std::vector<scenario_number_type> possible_scenario_idxs(const ChannelPacketRateMonitorInterface* m, int forbidden_channel = -1);
-};
-
-namespace monitor_utils
-{
-std::string print_packet_rate(const ChannelPacketRateMonitor& p);
-std::string print_packet_period(const ChannelPacketRateMonitor& p);
-};
 
 
 #endif

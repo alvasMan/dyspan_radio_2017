@@ -125,6 +125,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("debug", po::value<bool>(&params.debug)->default_value(false), "Whether to print debug messages")
         ("sensing", po::value<bool>(&params.has_sensing)->default_value(true), "Whether to start sensing thread")
         ("learning", po::value<bool>(&params.has_learning)->default_value(false), "Whether to train your algorithms")
+        ("deep_learning", po::value<bool>(&params.has_deep_learning)->default_value(false), "Whether to use deep learning")
         ("sensing_to_file", po::value<bool>(&params.sensing_to_file)->default_value(false), "Whether to store spectrogram in binary file")
         ("project_folder", po::value<std::string>(&params.project_folder)->default_value("../../"), "Needed to find config files")
         ("read_learning_file", po::value<std::string>(&params.read_learning_file)->default_value("learned_data.json"), "Which file to configure context algorithms")

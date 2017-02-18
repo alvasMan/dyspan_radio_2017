@@ -116,7 +116,7 @@ void pktgen_impl:: tx_connect(const std::string &host, int port)
 		spectrum_errorToText(demoTx, retVal, d_errorBuf, sizeof(d_errorBuf));
 		dout << "TX connect:" << d_errorBuf << std::endl;
 		d_myRadio = spectrum_getRadioNumber(demoTx);
-		dout << "Radio number:" << d_myRadio << std::endl;
+		std::cout << "PRIMARY USER Radio number:" << d_myRadio << std::endl;
 		delete[] d_host;
 
 	}

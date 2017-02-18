@@ -51,7 +51,6 @@ template<class T>
 class bounded_buffer
 {
 public:
-
     bounded_buffer(int size) : buf(size), n_written(0), w_idx(-1), r_idx(-1)
     {
     }

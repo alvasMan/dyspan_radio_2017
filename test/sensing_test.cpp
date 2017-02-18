@@ -2,6 +2,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include "ChannelPowerEstimator.h"
+#include "monitor_components.h"
 #include "general_utils.hpp"
 #include "sensing_components.h"
 

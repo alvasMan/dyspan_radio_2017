@@ -41,6 +41,8 @@
 #include "context_awareness.h"
 #include "database_comms.h"
 #include "json_utils.h"
+#include "SU_parameters.h"
+#include <boost/optional.hpp>
 
 class OfdmTransceiver : public DyspanRadio
 {
@@ -102,11 +104,16 @@ private:
     Buffer<boost::shared_ptr<CplxFVec> > frame_buffer;
 
     // receiver objects
-    SensingHandler shandler;
+    boost::optional<SensingThreadHandler> sensing_chain;
+    boost::optional<LearningThreadHandler> learning_chain;
+    std::vector<std::unique_ptr<buffer_utils::bounded_buffer<ChPowers>>> ch_pwrs_buffers;
+    boost::optional<Spectrogram2SocketThreadHandler> deep_learning_chain;
+    boost::optional<Spectrogram2FileThreadHandler> spectrogram2file_chain;
     
-    // situational awareness objects
+    // Awareness/config classes for thread communication
     std::unique_ptr<RFEnvironmentData> pu_data;
     std::unique_ptr<SituationalAwarenessApi> pu_scenario_api;
+    std::unique_ptr<SU_tx_params> su_params_api;
     
     //std::pair<double,bool> DwellEst(DwellTimeEstimator &Dwell, double &previous_dwelltime, int &dwell_counter, int steady_state, double steady_state_Th);
     uhd::time_spec_t timestamp_;
