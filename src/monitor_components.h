@@ -105,6 +105,10 @@ public:
     {
         return tdelay_acc[i].mean();
     }
+    inline time_format packet_arrival_period_var(int i) const final
+    {
+        return tdelay_acc[i].var();
+    }
     inline time_format packet_arrival_rate(int i) const  final
     {
         auto t = tdelay_acc[i].mean();
@@ -143,6 +147,7 @@ namespace monitor_utils
 {
 string print_packet_rate(const ChannelPacketRateMonitor& p);
 string print_packet_period(const ChannelPacketRateMonitor& p);
+string print_packet_delay_variance(const ChannelPacketRateMonitor& p);
 };
 
 #endif /* MONITOR_COMPONENTS_H */

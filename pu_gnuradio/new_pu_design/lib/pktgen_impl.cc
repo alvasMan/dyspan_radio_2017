@@ -168,7 +168,7 @@ pktgen_impl::run(pktgen_impl *instance) {
 	int d_inter_per2=0;
 	int d_inter_per3=0;
 	int d_inter_gain=0;
-	int d_dist_per=1000000; // i have to change this from 0 to a high value bc the organizers are idiots
+	int d_dist_per=0;
 	int chan=0;
 	int idx=0;
 	/*
@@ -226,6 +226,25 @@ pktgen_impl::run(pktgen_impl *instance) {
 		}
 		occ_2_chan[1] = schan;
 	}
+
+
+	//select hopping channels
+	hopping_2_chan[0] = d_dist1(d_gen1); 
+	int schan = d_dist1(d_gen1);
+	while( schan == hopping_2_chan[0])
+	{
+		schan = d_dist1(d_gen1); 
+	}
+	hopping_2_chan[1] = schan; 
+	//select occupied channels
+	occ_2_chan[0] = d_dist1(d_gen1); 
+	schan = d_dist1(d_gen1);
+	while( schan == occ_2_chan[0])
+	{
+		schan = d_dist1(d_gen1); 
+	}
+	occ_2_chan[1] = schan; 
+
 
 	//set to first scenario from the array
 	dist_type = scenearr[0];
@@ -829,6 +848,7 @@ pktgen_impl::run(pktgen_impl *instance) {
                 else
                     d_gain = d_static_gain;
 				message_port_pub(pmt::mp("cmd"), pmt::cons(pmt::mp("gain"), pmt::mp(d_gain)));
+				
 			}
 
 
@@ -907,3 +927,4 @@ pktgen_impl::is_running() {
 
   } /* namespace dbconnect */
 } /* namespace gr */
+

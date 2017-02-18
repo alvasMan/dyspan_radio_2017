@@ -694,13 +694,15 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
             auto t2 = system_clock::now();
             if(std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count() > 2)
             {
-                cout << "STATUS: Packet Arrival Periods per Channel: " << monitor_utils::print_packet_period(rate_monitor) << endl;
-                cout << "STATUS: Packet Power per Channel: " << print_range(pwr_monitor.channel_energy, [](float f){return 10*log10(f);}) << endl;
+                cout << "\nSTATUS: Sensing Statistics"
+                     << "\n> Packet Arrival Periods per Channel: \t" << monitor_utils::print_packet_period(rate_monitor)
+                     << "\n> Packet Arrival Variances per Channel: " << monitor_utils::print_packet_delay_variance(rate_monitor)
+                     << "\n> Packet Power per Channel: \t\t" << print_range(pwr_monitor.channel_energy, ",\t", [](float f){return 10*log10(f);}) << endl;
                 vector<float> noise_pwr;
                 for(auto& e : packet_detector.params)
                     noise_pwr.push_back(e.noise_floor);
-                cout << "STATUS: Noise Floor per Channel: " << print_range(noise_pwr, [](float f){return 10*log10(f);}) << endl;
-                cout << "STATUS: Number of detected per channel: " << print_range(ch_counter) << endl;
+                cout << "> Noise Floor per Channel: \t\t" << print_range(noise_pwr, ",\t", [](float f){return 10*log10(f);}) << endl;
+                cout << "> Number of detected per channel: \t" << print_range(ch_counter) << endl;
                 //cout << "STATUS: Scenario " << old_scenario_number << endl;
 //                vector<float> d(512);
 //                for(int i = 0; i < 512; ++i)

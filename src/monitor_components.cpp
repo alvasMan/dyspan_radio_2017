@@ -8,6 +8,7 @@
 #include <sstream>
 #include <set>
 #include <algorithm>
+#include <complex>
 
 using namespace std;
 using namespace nlohmann;
@@ -147,10 +148,15 @@ std::vector<ExpandedScenarioDescriptor> ChannelPacketRateTester::possible_expand
             auto true_delay = (expanded_l[i].ch_occupied_mask[n]) ? delay : UNOCCUPIED_DELAY;
             bool poisson = expanded_l[i].scenario->poisson_flag;
             auto d = m->is_occupied(n) ? m->packet_arrival_period(n) : UNOCCUPIED_DELAY; 
-            auto dstd = m->is_occupied(n) ? m->packet_arrival_period_var(n) : UNOCCUPIED_DELAY;
             auto err_mean = std::norm(d - true_delay);
-            auto err_var = (poisson==true) ? std::norm(dstd-true_delay) : std::norm(dstd-0);
-            err_acum += (1-ALPHA_VAR)*err_mean + ALPHA_VAR*err_var;
+            auto dvar =  m->is_occupied(n) ? m->packet_arrival_period_var(n) : UNOCCUPIED_DELAY;
+            if(dvar==delay_stats::NaN())
+                err_acum += err_mean;
+            else
+            {
+                auto err_var = (poisson==true) ? std::norm(dvar-true_delay) : std::norm(dvar-0);
+                err_acum += (1-ALPHA_VAR)*err_mean + ALPHA_VAR*err_var;
+            }
         }
         if(err_acum < min_err_acum)
         {
@@ -163,6 +169,8 @@ std::vector<ExpandedScenarioDescriptor> ChannelPacketRateTester::possible_expand
         }
         //std::cout << "DEBUG: scenario error distance (" << expanded_l[i].scenario_idx << "," << i << ")=" << err_acum << endl;
     }
+    
+    assert(min_idxs.size()>0);
     
     vector<ExpandedScenarioDescriptor> possible_scens;
     possible_scens.reserve(min_idxs.size());
@@ -194,9 +202,9 @@ std::string print_packet_rate(const ChannelPacketRateMonitor& p)
     os << "[";
     for(int i = 0; i < p.Nch-1; ++i)
         if(p.is_occupied(i))
-            os << p.packet_arrival_rate(i) << ",";
+            os << p.packet_arrival_rate(i) << ",\t";
         else
-            os << "free,";
+            os << "free,\t";
     if(p.is_occupied(p.Nch-1))
         os << p.packet_arrival_rate(p.Nch-1) << "]";
     else
@@ -209,11 +217,31 @@ std::string print_packet_period(const ChannelPacketRateMonitor& p)
     os << "[";
     for(int i = 0; i < p.Nch-1; ++i)
         if(p.is_occupied(i))
-            os << p.packet_arrival_period(i) << ",";
+            os << p.packet_arrival_period(i) << ",\t";
         else
-            os << "free,";
+            os << "free,\t";
     if(p.is_occupied(p.Nch-1))
         os << p.packet_arrival_period(p.Nch-1) << "]";
+    else
+        os << "free]";
+    return os.str();
+}
+std::string print_packet_delay_variance(const ChannelPacketRateMonitor& p)
+{
+    stringstream os;
+    os << "[";
+    float var;
+    for(int i = 0; i < p.Nch-1; ++i)
+    {
+        var = p.packet_arrival_period_var(i);
+        if(p.is_occupied(i) && var!=delay_stats::NaN())
+            os << p.packet_arrival_period_var(i) << ",\t";
+        else
+            os << "free,\t";
+    }
+    var = p.packet_arrival_period_var(p.Nch-1);
+    if(p.is_occupied(p.Nch-1) && var!=delay_stats::NaN())
+        os << p.packet_arrival_period_var(p.Nch-1) << "]";
     else
         os << "free]";
     return os.str();

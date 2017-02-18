@@ -42,6 +42,18 @@ std::string print_container(Iterator vec_begin, Iterator vec_end, Op func)
     return os.str();
 }
 
+template<typename Iterator, typename Op> 
+std::string print_container(Iterator vec_begin, Iterator vec_end, const std::string& separator, Op func)
+{
+    std::ostringstream os;
+    Iterator it = vec_begin;
+    os << "[" << func(*vec_begin);
+    for (++it; it != vec_end; it++)
+        os << separator << func(*it);
+    os << "]";
+    return os.str();
+}
+
 template<typename It>
 std::string print_container_dB(const It itbegin, const It itend) 
 {
@@ -63,6 +75,11 @@ std::string print_range(const Range& r, Op func)
     return print_container(r.begin(), r.end(), func);
 }
 
+template<typename Range, typename Op> 
+std::string print_range(const Range& r, const std::string& separator, Op func)
+{
+    return print_container(r.begin(), r.end(), separator, func);
+}
 
 template<typename Range>
 std::string print_range_dB(const Range& r) 
