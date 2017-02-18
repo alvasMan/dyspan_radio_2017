@@ -32,6 +32,7 @@ public:
     {
     }
     virtual time_format packet_arrival_period(int i) const = 0;
+    virtual time_format packet_arrival_period_var(int i) const = 0;
     virtual time_format packet_arrival_rate(int i) const = 0;    
     virtual bool is_occupied(int i) const = 0;
     virtual ~ChannelPacketRateMonitorInterface() {}

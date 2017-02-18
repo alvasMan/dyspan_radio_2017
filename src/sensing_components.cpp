@@ -622,6 +622,7 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
 {
     auto t1 = system_clock::now();
     
+    short current_channel = -1;
     scenario_number_type old_scenario_number = -1;
     time_format last_tstamp = -1000000;
     vector<int> ch_counter(Nch,0);
@@ -648,8 +649,8 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
             assert(ch_snrs.size()==Nch);
             
             if(su_api)
-            {
-                short current_channel = su_api->channel();       
+            {   // set the PU channel to -1 just to ignore it
+                current_channel = su_api->channel();       
                 ch_snrs[current_channel] = -1;
             }
             
@@ -671,9 +672,9 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
             }
             
             // Check the list of possible scenarios
-            if(false && (!packet_detector.detected_pulses.empty() || (pwr_estim.current_tstamp-last_tstamp)>2))
+            if((!packet_detector.detected_pulses.empty() || (pwr_estim.current_tstamp-last_tstamp)>2))
             {
-                auto possible_scenario_numbers = channel_rate_tester.possible_scenario_idxs(&rate_monitor);
+                auto possible_scenario_numbers = channel_rate_tester.possible_scenario_idxs(&rate_monitor, current_channel);
             
                 // If update, update the API
                 if(old_scenario_number != possible_scenario_numbers[0])

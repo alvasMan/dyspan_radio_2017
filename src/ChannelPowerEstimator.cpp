@@ -329,13 +329,20 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
 {
     for(int i = 0; i < vals.size(); ++i)
     {
+        if(vals[i]<0)   // it is the SU-Tx channel
+        {
+            params[i].counter_block = 0;
+            params[i].pu_detected = false; // just keep sure it is not caught in between detecting a packet
+            continue;
+        }
+
         // compute average pwr
 //        avg_pwr[i].first++;
 //        avg_pwr[i].second = avg_pwr[i].second + (vals[i]-avg_pwr[i].second)/avg_pwr[i].first;
         
         float old_sample = mov_avg[i].push(vals[i]);
         
-        if(params[i].counter_block>0 || vals[i] < pow(10,-90/10))
+        if(params[i].counter_block>0) // || vals[i] < pow(10,-90/10)
         {        
             params[i].counter_block--;
             continue;

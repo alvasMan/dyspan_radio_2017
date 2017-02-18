@@ -16,7 +16,8 @@ void ForgetfulChannelMonitor::work(const vector<float>& ch_pwrs)
 {
     // make kind of a fosphor thing
     for(int i = 0; i < channel_energy.size(); ++i)
-        channel_energy[i] = alpha*ch_pwrs[i] + (1-alpha)*channel_energy[i];
+        if(ch_pwrs[i]>=0) // not SU-Tx transmitting
+            channel_energy[i] = alpha*ch_pwrs[i] + (1-alpha)*channel_energy[i];
 }
 
 // returns the indexes sorted by probability of being occupied (descending)
@@ -125,6 +126,7 @@ void ChannelPacketRateMonitor::merge_json(nlohmann::json& j2, std::vector<int> c
 }
 
 #define UNOCCUPIED_DELAY 0.1
+#define ALPHA_VAR 0.1
 
 std::vector<ExpandedScenarioDescriptor> ChannelPacketRateTester::possible_expanded_scenarios(const ChannelPacketRateMonitorInterface* m, int forbidden_channel)
 {
@@ -143,8 +145,12 @@ std::vector<ExpandedScenarioDescriptor> ChannelPacketRateTester::possible_expand
             if(n==forbidden_channel)
                 continue;
             auto true_delay = (expanded_l[i].ch_occupied_mask[n]) ? delay : UNOCCUPIED_DELAY;
+            bool poisson = expanded_l[i].scenario->poisson_flag;
             auto d = m->is_occupied(n) ? m->packet_arrival_period(n) : UNOCCUPIED_DELAY; 
-            err_acum += pow(abs(d - true_delay),2);
+            auto dstd = m->is_occupied(n) ? m->packet_arrival_period_var(n) : UNOCCUPIED_DELAY;
+            auto err_mean = std::norm(d - true_delay);
+            auto err_var = (poisson==true) ? std::norm(dstd-true_delay) : std::norm(dstd-0);
+            err_acum += (1-ALPHA_VAR)*err_mean + ALPHA_VAR*err_var;
         }
         if(err_acum < min_err_acum)
         {

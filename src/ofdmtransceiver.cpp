@@ -451,7 +451,7 @@ void OfdmTransceiver::reconfigure_usrp(const int num, bool tune_lo = false)
     request.dsp_freq = channels_.at(internal_num).dsp_freq;
     request.args = uhd::device_addr_t("mode_n=integer");
     uhd::tune_result_t result = usrp_tx->set_tx_freq(request);
-    if(su_params_api)
+    if(su_params_api)   // sets the SU-TX channel so the sensing sees it
         su_params_api->set_channel(num);
 
     if (params_.debug) {
