@@ -221,8 +221,8 @@ void OfdmTransceiver::modulation_function(void)
                 cout << "Changing Powers! " << new_gain << endl;
                 set_tx_gain_uhd(new_gain);
                 current_gain = new_gain;
-            }   
-                
+            }
+
             // write header (first four bytes sequence number, remaining are random)
             // TODO: also use remaining 4 bytes for payload
             header[0] = (seq_no_ >> 24) & 0xff;
@@ -265,8 +265,8 @@ void OfdmTransceiver::modulation_function(void)
             boost::shared_ptr<CplxFVec> usrp_buffer( new CplxFVec(frame_size) );
             unsigned int bytes_written = 0;
             while (num_symbols--) {
-                ofdmflexframegen_writesymbol(fg, fgbuffer);
-                //ofdmflexframegen_write(fg, fgbuffer, fgbuffer_len);
+                //ofdmflexframegen_writesymbol(fg, fgbuffer);
+                ofdmflexframegen_write(fg, fgbuffer, fgbuffer_len);
                 // copy symbol and apply gain
                 for (int i = 0; i < fgbuffer_len; i++)
                     (*usrp_buffer.get())[bytes_written + i] = fgbuffer[i] * tx_gain;
