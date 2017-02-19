@@ -524,11 +524,12 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
         constexpr int channel_map[] = {2, 0, 3, 1};
 
         last_ch_tstamp = std::chrono::system_clock::now();
-        reconfigure_usrp(channel_map[current_channel]%channels_.size());
+        int ch = 0;//channel_map[current_channel]%channels_.size();
+        reconfigure_usrp(ch);
         //reconfigure_usrp(current_channel);
 
-        cout << "Current Challenge Score: " << DatabaseApi::getInstance().current_score() << endl;
-        cout << "Current Challenge Scenario: " << pu_scenario_api->PU_scenario_idx() << endl;
+       //cout << "Current Challenge Score: " << DatabaseApi::getInstance().current_score() << endl;
+        //cout << "Current Challenge Scenario: " << pu_scenario_api->PU_scenario_idx() << endl;
     }
 }
 
