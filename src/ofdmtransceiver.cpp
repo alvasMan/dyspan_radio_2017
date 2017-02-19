@@ -258,16 +258,16 @@ void OfdmTransceiver::modulation_function(void)
                 	std::cout << __FUNCTION__ << ": " << "Changing Modulation to " << modulation_types[mod_scheme].name << std::endl;
                 #endif
             }*/
-
-            int new_gain = power_controller.CCompute(current_gain);
-
-            if(new_gain != current_gain)
-            {
+            else{
+              //Not calibrating, use power control
+              int new_gain = power_controller.CCompute(current_gain);
+              if(new_gain != current_gain)
+              {
                 cout << "Changing Powers! " << new_gain << endl;
                 set_tx_gain_uhd(new_gain);
                 current_gain = new_gain;
+              }
             }
-
             // write header (first four bytes sequence number, remaining are random)
             // TODO: also use remaining 4 bytes for payload
             header[0] = (seq_no_ >> 24) & 0xff;
