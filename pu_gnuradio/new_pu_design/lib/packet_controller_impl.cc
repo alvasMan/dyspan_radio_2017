@@ -1,17 +1,17 @@
 /* -*- c++ -*- */
-/* 
+/*
  * Copyright 2017 <+YOU OR YOUR COMPANY+>.
- * 
+ *
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3, or (at your option)
  * any later version.
- * 
+ *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this software; see the file COPYING.  If not, write to
  * the Free Software Foundation, Inc., 51 Franklin Street,
@@ -25,28 +25,42 @@
 #include <gnuradio/io_signature.h>
 #include "packet_controller_impl.h"
 #include <random>
+#include <sstream>
 #define dout  false && std::cout
+
+template<typename It>
+std::string print_range(It b, It e)
+{
+	std::stringstream ss;
+	auto it = b;
+	ss << "[" << *it;
+	for(++it; it != e; ++it)
+		std::cout << ", " << *it;
+	ss << "]" << std::endl;
+
+	return ss.str();
+}
 
 namespace gr {
 	namespace dbconnect {
 
 		packet_controller::sptr
-			packet_controller::make(float  samp_rate, const std::vector<int> swtime, int delay_1, int delay_2, 
-					int tconst, int mean1, int mean2, int mean3, int seed, int gain_period, 
-					const std::vector<int> &gain_vals, const std::vector<int> &scen_list, bool rand_scen)
+			packet_controller::make(float  samp_rate, const std::vector<int> swtime, int delay_1, int delay_2,
+					int tconst, int mean1, int mean2, int mean3, int seed, int gain_period,
+					const std::vector<int> &gain_vals, const std::vector<int> &scen_list, bool rand_scen, int ch1, int ch2)
 			{
 				return gnuradio::get_initial_sptr
-					(new packet_controller_impl(samp_rate, swtime, delay_1, delay_2, 
-												tconst, mean1, mean2, mean3, seed, gain_period, 
-												gain_vals, scen_list, rand_scen));
+					(new packet_controller_impl(samp_rate, swtime, delay_1, delay_2,
+												tconst, mean1, mean2, mean3, seed, gain_period,
+												gain_vals, scen_list, rand_scen, ch1, ch2));
 			}
 
 		/*
 		 * The private constructor
 		 */
-		packet_controller_impl::packet_controller_impl(float samp_rate, const std::vector<int> swtime, int delay_1, int delay_2, 
-				int tconst, int mean1, int mean2, int mean3, int seed, int gain_period, 
-				const std::vector<int> &gain_vals, const std::vector<int> &scen_list, bool rand_scen)
+		packet_controller_impl::packet_controller_impl(float samp_rate, const std::vector<int> swtime, int delay_1, int delay_2,
+				int tconst, int mean1, int mean2, int mean3, int seed, int gain_period,
+				const std::vector<int> &gain_vals, const std::vector<int> &scen_list, bool rand_scen, int ch1, int ch2)
 			: gr::block("packet_controller",
 					gr::io_signature::make(0, 0,0),
 					gr::io_signature::make(4, 4, sizeof(gr_complex))),
@@ -60,7 +74,9 @@ namespace gr {
 			d_seed(seed),
 			d_gain_period(gain_period),
 			d_gain_vals(gain_vals),
-			d_rand_scen(rand_scen)
+			d_rand_scen(rand_scen),
+			d_ch1(ch1),
+			d_ch2(ch2)
 		{
 			message_port_register_in(pmt::mp("in0"));
 			message_port_register_out(pmt::mp("cmd"));
@@ -69,10 +85,10 @@ namespace gr {
 
 			d_msg_queue = new gr::messages::msg_queue(0);
 			d_gen1 = new std::default_random_engine(d_seed);
-			d_gen2 = new std::default_random_engine(d_seed); 
-			d_gen3 = new std::default_random_engine(d_seed); 
-			d_gen4 = new std::default_random_engine(d_seed); 
-			d_gen5 = new std::default_random_engine(d_seed); 
+			d_gen2 = new std::default_random_engine(d_seed);
+			d_gen3 = new std::default_random_engine(d_seed);
+			d_gen4 = new std::default_random_engine(d_seed);
+			d_gen5 = new std::default_random_engine(d_seed);
 			d_dist1 = new std::uniform_int_distribution<int> (0,3);
 			d_dist2 = new std::poisson_distribution<int> (d_mean1);
 			d_dist3 = new std::poisson_distribution<int> (d_mean2);
@@ -102,27 +118,38 @@ namespace gr {
 				std::random_shuffle(d_scenearr.begin(), d_scenearr.end());
 			}
 
-			//select hopping channels
-			d_hopping_2_chan[0] = (*d_dist1)(*d_gen1); 
-			int schan = (*d_dist1)(*d_gen1);
-			while( schan == d_hopping_2_chan[0])
-			{
-				schan = (*d_dist1)(*d_gen1); 
-			}
-			d_hopping_2_chan[1] = schan;
+			std::cout << "Gains: " << print_range(d_gain_vals.begin(), d_gain_vals.end()) << std::endl;
 
-			//select occupied channels
-			d_occ_2_chan[0] = (*d_dist1)(*d_gen1); 
-			schan = (*d_dist1)(*d_gen1);
-			while( schan == d_occ_2_chan[0])
+			//select hopping channels
+			if(d_ch1<0 && d_ch2<0)
 			{
-				schan = (*d_dist1)(*d_gen1); 
+				d_hopping_2_chan[0] = (*d_dist1)(*d_gen1);
+				int schan = (*d_dist1)(*d_gen1);
+				while( schan == d_hopping_2_chan[0])
+				{
+					schan = (*d_dist1)(*d_gen1);
+				}
+				d_hopping_2_chan[1] = schan;
+
+				//select occupied channels
+				d_occ_2_chan[0] = (*d_dist1)(*d_gen1);
+				schan = (*d_dist1)(*d_gen1);
+				while( schan == d_occ_2_chan[0])
+				{
+					schan = (*d_dist1)(*d_gen1);
+				}
+				d_occ_2_chan[1] = schan;
 			}
-			d_occ_2_chan[1] = schan; 
+			else
+			{
+				d_hopping_2_chan[0] = d_ch1;
+				d_hopping_2_chan[1] = d_ch2;
+				d_occ_2_chan[0] = d_ch1;
+				d_occ_2_chan[1] = d_ch2;
+			}
 
 			d_dist_type = d_scenearr[d_scncnt];
 			update_channels(d_dist_type);
-
 		}
 
 		/*
@@ -133,10 +160,10 @@ namespace gr {
 
 			delete d_msg_queue;
 			delete d_gen1 ;
-			delete d_gen2 ; 
-			delete d_gen3 ; 
-			delete d_gen4 ; 
-			delete d_gen5 ; 
+			delete d_gen2 ;
+			delete d_gen3 ;
+			delete d_gen4 ;
+			delete d_gen5 ;
 			delete d_dist1;
 			delete d_dist2;
 			delete d_dist3;
@@ -216,66 +243,69 @@ namespace gr {
 				case 0:
 				case 1:
 				case 3:
-					d_sel_chan[0] = false;  
-					d_sel_chan[1] = false;  
-					d_sel_chan[2] = false;  
-					d_sel_chan[3] = false;  
-					chan = (*d_dist1)(*d_gen1);
+					d_sel_chan[0] = false;
+					d_sel_chan[1] = false;
+					d_sel_chan[2] = false;
+					d_sel_chan[3] = false;
+					if(d_ch1<0 || dist_type==3)
+						chan = (*d_dist1)(*d_gen1);
+					else
+						chan = d_ch1;
 					switch(chan){
 						case 0:
-							d_sel_chan[0] = true;  
+							d_sel_chan[0] = true;
 							break;
 						case 1:
-							d_sel_chan[1] = true;  
+							d_sel_chan[1] = true;
 							break;
 						case 2:
-							d_sel_chan[2] = true;  
+							d_sel_chan[2] = true;
 							break;
 						case 3:
-							d_sel_chan[3] = true;  
+							d_sel_chan[3] = true;
 							break;
 					}
 					break;
 				case 2:
 					idx = (*d_dist5)(*d_gen5);
-					d_sel_chan[0] = false;  
-					d_sel_chan[1] = false;  
-					d_sel_chan[2] = false;  
-					d_sel_chan[3] = false;  
+					d_sel_chan[0] = false;
+					d_sel_chan[1] = false;
+					d_sel_chan[2] = false;
+					d_sel_chan[3] = false;
 					switch(d_hopping_2_chan[idx]){
 						case 0:
-							d_sel_chan[0] = true;  
+							d_sel_chan[0] = true;
 							break;
 						case 1:
-							d_sel_chan[1] = true;  
+							d_sel_chan[1] = true;
 							break;
 						case 2:
-							d_sel_chan[2] = true;  
+							d_sel_chan[2] = true;
 							break;
 						case 3:
-							d_sel_chan[3] = true;  
+							d_sel_chan[3] = true;
 							break;
 					}
 					break;
 				case 4:
-					d_sel_chan[0] = false;  
-					d_sel_chan[1] = false;  
-					d_sel_chan[2] = false;  
-					d_sel_chan[3] = false;  
+					d_sel_chan[0] = false;
+					d_sel_chan[1] = false;
+					d_sel_chan[2] = false;
+					d_sel_chan[3] = false;
 					for(int j=0; j<2; j++)
 					{
 						switch(d_occ_2_chan[j]){
 							case 0:
-								d_sel_chan[0] = true;  
+								d_sel_chan[0] = true;
 								break;
 							case 1:
-								d_sel_chan[1] = true;  
+								d_sel_chan[1] = true;
 								break;
 							case 2:
-								d_sel_chan[2] = true;  
+								d_sel_chan[2] = true;
 								break;
 							case 3:
-								d_sel_chan[3] = true;  
+								d_sel_chan[3] = true;
 								break;
 						}
 					}
@@ -285,10 +315,10 @@ namespace gr {
 				case 7:
 				case 8:
 				case 9:
-					d_sel_chan[0] = true;  
-					d_sel_chan[1] = true;  
-					d_sel_chan[2] = true;  
-					d_sel_chan[3] = true;  
+					d_sel_chan[0] = true;
+					d_sel_chan[1] = true;
+					d_sel_chan[2] = true;
+					d_sel_chan[3] = true;
 					break;
 				default:
 					break;
@@ -339,12 +369,12 @@ namespace gr {
 					//make all delays=0 while switching scenarios
 					for(int i=0; i<4; i++)
 					{
-						d_inter_per[i] = 0; 
+						d_inter_per[i] = 0;
 					}
 					d_swcnt = (d_swcnt+1)%d_swtime.size();
 					d_swtime_in_samp = d_swtime[d_swcnt] * d_samp_rate * 0.001;
 				}
-			
+
 				if(d_gsamp_cnt>=d_gain_period_samp)
 				{
 					d_gsamp_cnt=0;
@@ -453,4 +483,3 @@ namespace gr {
 
 	} /* namespace dbconnect */
 } /* namespace gr */
-

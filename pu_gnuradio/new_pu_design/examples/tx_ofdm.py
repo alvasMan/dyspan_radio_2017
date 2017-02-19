@@ -172,8 +172,8 @@ class tx_ofdm(gr.top_block, Qt.QWidget):
         	  debug_log=False,
         	  scramble_bits=False
         	 )
-        self.dbconnect_pktgen_0 = dbconnect.pktgen(1, packet_len, False, False, False, "127.0.0.1", 5003, 5, 10, 2, 20, 50, 100, 60000, 0.05, 6643, 5, 30, 2000, 2,\
-        0,3,-1,5) # scenario,ch1,ch2,gain. Use -1 for default challenge
+        self.dbconnect_pktgen_0 = dbconnect.pktgen(1, packet_len, False, False, False, pu_params.db_ip, 5003, 5, 10, 2, 20, 50, 100, 60000, 0.05, 6643, 5, 30, 2000, 2,\
+        pu_params.scenario,pu_params.channel1,pu_params.channel2,pu_params.gain) # scenario,ch1,ch2,gain. Use -1 for default challenge
         self.dbconnect_pdu_fillpath_cpp_0_0_1 = dbconnect.pdu_fillpath_cpp()
         self.dbconnect_pdu_fillpath_cpp_0_0_0 = dbconnect.pdu_fillpath_cpp()
         self.dbconnect_pdu_fillpath_cpp_0_0 = dbconnect.pdu_fillpath_cpp()

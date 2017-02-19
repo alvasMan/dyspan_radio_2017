@@ -30,7 +30,11 @@ from optparse import OptionParser
 import dbconnect
 import sys
 import time
+import arg_parser
 
+# create the object that will have the config
+pu_params = arg_parser.Params()
+pu_params.parse_arguments()
 
 class tx_ofdm_newv(gr.top_block, Qt.QWidget):
 
@@ -62,7 +66,7 @@ class tx_ofdm_newv(gr.top_block, Qt.QWidget):
         ##################################################
         self.samp_rate = samp_rate = 10e6
         self.taps = taps = filter.firdes.low_pass(1,samp_rate, 0.98e6,0.5e6)
-        self.sync_word2 = sync_word2 = [0, 0, 0, 0, 0, 0, -1, -1, -1, -1, 1, 1, -1, -1, -1, 1, -1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, 1, -1, -1, 1, -1, 0, 1, -1, 1, 1, 1, -1, 1, 1, 1, -1, 1, 1, 1, 1, -1, 1, -1, -1, -1, 1, -1, 1, -1, -1, -1, -1, 0, 0, 0, 0, 0] 
+        self.sync_word2 = sync_word2 = [0, 0, 0, 0, 0, 0, -1, -1, -1, -1, 1, 1, -1, -1, -1, 1, -1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, 1, -1, -1, 1, -1, 0, 1, -1, 1, 1, 1, -1, 1, 1, 1, -1, 1, 1, 1, 1, -1, 1, -1, -1, -1, 1, -1, 1, -1, -1, -1, -1, 0, 0, 0, 0, 0]
         self.sync_word1 = sync_word1 = [0., 0., 0., 0., 0., 0., 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., -1.41421356, 0., -1.41421356, 0., -1.41421356, 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., -1.41421356, 0., -1.41421356, 0., -1.41421356, 0., -1.41421356, 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., 1.41421356, 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., 1.41421356, 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., 1.41421356, 0., 1.41421356, 0., 0., 0., 0., 0., 0.]
         self.pilot_symbols = pilot_symbols = ((1, 1, 1, -1,),)
         self.pilot_carriers = pilot_carriers = ((-21, -7, 7, 21,),)
@@ -125,8 +129,14 @@ class tx_ofdm_newv(gr.top_block, Qt.QWidget):
         	  debug_log=False,
         	  scramble_bits=False
         	 )
-        self.dbconnect_packet_controller_0 = dbconnect.packet_controller(samp_rate/interp_factor, (10000,), 5, 10, 2, 20, 10, 5, 6643, 30000, (10,20,30), (0,1,2), True)
-        self.dbconnect_cmd_pktgen_0 = dbconnect.cmd_pktgen("127.0.0.1", 5002, 64, True)
+        if pu_params.scenario<0:
+            pu_params.scenario = (0,1,2,3,4,5,6,7,8,9)#(0,1,2)
+        if pu_params.gain<0:
+            pu_params.gain = (10,20,30)
+            gain_period = 30000
+        gain_period = 5000
+        self.dbconnect_packet_controller_0 = dbconnect.packet_controller(samp_rate/interp_factor, (10000,), 5, 10, 2, 20, 10, 5, 6643, gain_period, pu_params.gain, pu_params.scenario, True, pu_params.channel1, pu_params.channel2)
+        self.dbconnect_cmd_pktgen_0 = dbconnect.cmd_pktgen(pu_params.db_ip, 5003, 64, True)
         self.blocks_tagged_stream_to_pdu_0 = blocks.tagged_stream_to_pdu(blocks.complex_t, "packet_len")
         self.blocks_pdu_to_tagged_stream_0 = blocks.pdu_to_tagged_stream(blocks.byte_t, "packet_len")
         self.blocks_multiply_xx_0_3 = blocks.multiply_vcc(1)
@@ -144,30 +154,34 @@ class tx_ofdm_newv(gr.top_block, Qt.QWidget):
         ##################################################
         # Connections
         ##################################################
-        self.msg_connect((self.blocks_tagged_stream_to_pdu_0, 'pdus'), (self.dbconnect_packet_controller_0, 'in0'))    
-        self.msg_connect((self.dbconnect_cmd_pktgen_0, 'out0'), (self.blocks_pdu_to_tagged_stream_0, 'pdus'))    
-        self.msg_connect((self.dbconnect_packet_controller_0, 'gcmd'), (self.blocks_message_debug_0, 'print'))    
-        self.msg_connect((self.dbconnect_packet_controller_0, 'cmd'), (self.dbconnect_cmd_pktgen_0, 'cmd'))    
-        self.connect((self.analog_sig_source_x_0, 0), (self.blocks_multiply_xx_0, 1))    
-        self.connect((self.analog_sig_source_x_0_1, 0), (self.blocks_multiply_xx_0_1, 1))    
-        self.connect((self.analog_sig_source_x_0_2, 0), (self.blocks_multiply_xx_0_2, 1))    
-        self.connect((self.analog_sig_source_x_0_3, 0), (self.blocks_multiply_xx_0_3, 1))    
-        self.connect((self.blocks_add_xx_2, 0), (self.blocks_multiply_const_vxx_0, 0))    
-        self.connect((self.blocks_multiply_const_vxx_0, 0), (self.uhd_usrp_sink_0, 0))    
-        self.connect((self.blocks_multiply_xx_0, 0), (self.blocks_add_xx_2, 0))    
-        self.connect((self.blocks_multiply_xx_0_1, 0), (self.blocks_add_xx_2, 1))    
-        self.connect((self.blocks_multiply_xx_0_2, 0), (self.blocks_add_xx_2, 2))    
-        self.connect((self.blocks_multiply_xx_0_3, 0), (self.blocks_add_xx_2, 3))    
-        self.connect((self.blocks_pdu_to_tagged_stream_0, 0), (self.digital_ofdm_tx_0, 0))    
-        self.connect((self.dbconnect_packet_controller_0, 0), (self.rational_resampler_xxx_0_0, 0))    
-        self.connect((self.dbconnect_packet_controller_0, 1), (self.rational_resampler_xxx_0_0_1, 0))    
-        self.connect((self.dbconnect_packet_controller_0, 2), (self.rational_resampler_xxx_0_0_1_0, 0))    
-        self.connect((self.dbconnect_packet_controller_0, 3), (self.rational_resampler_xxx_0_0_1_1, 0))    
-        self.connect((self.digital_ofdm_tx_0, 0), (self.blocks_tagged_stream_to_pdu_0, 0))    
-        self.connect((self.rational_resampler_xxx_0_0, 0), (self.blocks_multiply_xx_0, 0))    
-        self.connect((self.rational_resampler_xxx_0_0_1, 0), (self.blocks_multiply_xx_0_1, 0))    
-        self.connect((self.rational_resampler_xxx_0_0_1_0, 0), (self.blocks_multiply_xx_0_2, 0))    
-        self.connect((self.rational_resampler_xxx_0_0_1_1, 0), (self.blocks_multiply_xx_0_3, 0))    
+        self.msg_connect((self.blocks_tagged_stream_to_pdu_0, 'pdus'), (self.dbconnect_packet_controller_0, 'in0'))
+        self.msg_connect((self.dbconnect_cmd_pktgen_0, 'out0'), (self.blocks_pdu_to_tagged_stream_0, 'pdus'))
+        self.msg_connect((self.dbconnect_packet_controller_0, 'gcmd'), (self.blocks_message_debug_0, 'print'))
+        self.msg_connect((self.dbconnect_packet_controller_0, 'cmd'), (self.dbconnect_cmd_pktgen_0, 'cmd'))
+
+        # added new gain
+        self.msg_connect((self.dbconnect_packet_controller_0, 'gcmd'), (self.uhd_usrp_sink_0, 'command'))
+
+        self.connect((self.analog_sig_source_x_0, 0), (self.blocks_multiply_xx_0, 1))
+        self.connect((self.analog_sig_source_x_0_1, 0), (self.blocks_multiply_xx_0_1, 1))
+        self.connect((self.analog_sig_source_x_0_2, 0), (self.blocks_multiply_xx_0_2, 1))
+        self.connect((self.analog_sig_source_x_0_3, 0), (self.blocks_multiply_xx_0_3, 1))
+        self.connect((self.blocks_add_xx_2, 0), (self.blocks_multiply_const_vxx_0, 0))
+        self.connect((self.blocks_multiply_const_vxx_0, 0), (self.uhd_usrp_sink_0, 0))
+        self.connect((self.blocks_multiply_xx_0, 0), (self.blocks_add_xx_2, 0))
+        self.connect((self.blocks_multiply_xx_0_1, 0), (self.blocks_add_xx_2, 1))
+        self.connect((self.blocks_multiply_xx_0_2, 0), (self.blocks_add_xx_2, 2))
+        self.connect((self.blocks_multiply_xx_0_3, 0), (self.blocks_add_xx_2, 3))
+        self.connect((self.blocks_pdu_to_tagged_stream_0, 0), (self.digital_ofdm_tx_0, 0))
+        self.connect((self.dbconnect_packet_controller_0, 0), (self.rational_resampler_xxx_0_0, 0))
+        self.connect((self.dbconnect_packet_controller_0, 1), (self.rational_resampler_xxx_0_0_1, 0))
+        self.connect((self.dbconnect_packet_controller_0, 2), (self.rational_resampler_xxx_0_0_1_0, 0))
+        self.connect((self.dbconnect_packet_controller_0, 3), (self.rational_resampler_xxx_0_0_1_1, 0))
+        self.connect((self.digital_ofdm_tx_0, 0), (self.blocks_tagged_stream_to_pdu_0, 0))
+        self.connect((self.rational_resampler_xxx_0_0, 0), (self.blocks_multiply_xx_0, 0))
+        self.connect((self.rational_resampler_xxx_0_0_1, 0), (self.blocks_multiply_xx_0_1, 0))
+        self.connect((self.rational_resampler_xxx_0_0_1_0, 0), (self.blocks_multiply_xx_0_2, 0))
+        self.connect((self.rational_resampler_xxx_0_0_1_1, 0), (self.blocks_multiply_xx_0_3, 0))
 
     def closeEvent(self, event):
         self.settings = Qt.QSettings("GNU Radio", "tx_ofdm_newv")

@@ -1,17 +1,17 @@
 /* -*- c++ -*- */
-/* 
+/*
  * Copyright 2017 <+YOU OR YOUR COMPANY+>.
- * 
+ *
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3, or (at your option)
  * any later version.
- * 
+ *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this software; see the file COPYING.  If not, write to
  * the Free Software Foundation, Inc., 51 Franklin Street,
@@ -50,8 +50,8 @@ namespace gr {
 	  int d_gcnt = 0;
 	  int d_swcnt= 0;
 	  int d_sum= 0;
-	  
-	  
+
+
 	  int d_samp_cnt=0;
 	  int d_gsamp_cnt=0;
 	  int d_dist_type=0;
@@ -61,6 +61,9 @@ namespace gr {
 	  int d_inter_per[4] = {0, 0, 0, 0};
 	  int d_hopping_2_chan[2]={0,1};
 	  int d_occ_2_chan[2]={0,1};
+
+      int d_ch1 = -1;
+      int d_ch2 = -1;
 
 	  //distributions
 	  std::default_random_engine *d_gen1;
@@ -73,16 +76,17 @@ namespace gr {
 	  std::poisson_distribution<int> *d_dist3;
 	  std::poisson_distribution<int> *d_dist4;
 	  std::uniform_int_distribution<int> *d_dist5;
-	  
+
 	  gr::messages::msg_queue* d_msg_queue;
 	  const std::vector<int> d_gain_vals;
 
      public:
-      packet_controller_impl(float samp_rate, const std::vector<int> swtime, int delay_1, int delay_2, int tconst, int mean1, int mean2, int mean3, int seed, int gain_period, const std::vector<int> &gain_vals, const std::vector<int> &scen_list, bool rand_scen);
+      packet_controller_impl(float samp_rate, const std::vector<int> swtime, int delay_1, int delay_2, int tconst, int mean1, int mean2, int mean3, int seed, int gain_period, const std::vector<int> &gain_vals, const std::vector<int> &scen_list, bool rand_scen,
+      int ch1, int ch2);
       ~packet_controller_impl();
 
 	  void get_packet(pmt::pmt_t msg);
-	  void request_cmd(int pktcnt); 
+	  void request_cmd(int pktcnt);
 	  int  get_delay(int dist_type);
 	  void update_channels(int dist_type);
 	  int min_delay(void);
@@ -100,4 +104,3 @@ namespace gr {
 } // namespace gr
 
 #endif /* INCLUDED_DBCONNECT_PACKET_CONTROLLER_IMPL_H */
-
