@@ -47,6 +47,11 @@ ModulationSearchApi::ModulationSearchApi()
     m_current_modulation = m_modulation_list.begin();
 }
 
+void
+ModulationSearchApi::setGainChanged(bool gain_changed)
+{
+    m_gain_changed = gain_changed;
+}
 std::tuple<bool,modulation_scheme>
 ModulationSearchApi::changeOfdmMod()
 {

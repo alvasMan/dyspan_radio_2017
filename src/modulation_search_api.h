@@ -54,6 +54,7 @@ public:
     void operator=(ModulationSearchApi const &) = delete;
 
     // setters
+    void setGainChanged(bool gain_changed);
     /*void push_Tsu_provided(const DbReply& r)
     {
         std::lock_guard<std::mutex> lk(mut);
