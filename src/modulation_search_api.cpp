@@ -47,7 +47,7 @@ ModulationSearchApi::ModulationSearchApi()
     m_current_modulation = m_modulation_list.begin();
 }
 
-modulation_scheme
+std::tuple<bool,modulation_scheme>
 ModulationSearchApi::changeOfdmMod()
 {
 
@@ -93,5 +93,5 @@ ModulationSearchApi::changeOfdmMod()
     //*/
     m_previous_tsu = su_throughput;
     m_current_modulation = next_modulation;
-	return *next_modulation;
+	return std::make_tuple(m_stop_searching, *next_modulation);
 }

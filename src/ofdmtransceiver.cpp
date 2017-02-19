@@ -66,7 +66,9 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     cout << boost::format("Creating the usrp device with: %s...") % params_.args << endl;
     usrp_tx = uhd::usrp::multi_usrp::make(params_.args);
     usrp_tx->set_tx_subdev_spec(params_.txsubdev);
+    tx_gain_range = usrp_tx->get_tx_gain_range(0);
     cout << boost::format("Using Device: %s") % usrp_tx->get_pp_string() << endl;
+
     usrp_rx = uhd::usrp::multi_usrp::make(params_.args);
     usrp_rx->set_rx_subdev_spec(params_.rxsubdev);
 
@@ -97,6 +99,26 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     {
         shandler = sensing_utils::make_sensing_handler(4, params_.project_folder, params_.read_learning_file,
                                              params_.write_learning_file, pu_scenario_api.get(), true, true);
+    }
+    if(params_.calibration)
+    {
+      if(!params_.use_db)
+        throw std::runtime_error("You cannot calibrate the radio without the Database running.");
+
+      //Initialize gain range
+      cout << "Gain Start ("<<tx_gain_range.start()<<")"<< endl;
+      cout << "Gain Step ("<<tx_gain_range.step()<<")" << endl;
+      cout << "Gain Stop ("<<tx_gain_range.stop()<<")" << endl;
+      std::vector<double> tx_gain_range_v;
+      for( double it = tx_gain_range.start(); it< tx_gain_range.stop(); it+tx_gain_range.step() )
+        tx_gain_range_v.push_back(it);
+
+      //create calibration file here
+      cal_file.open (params_.cal_file); //This file is closed on
+    }
+    else
+    {
+      //read power -> mod mapping file here.
     }
 
     if (params_.use_db)
@@ -135,7 +157,10 @@ OfdmTransceiver::~OfdmTransceiver()
     cout << "Transmitted " << seq_no_ << " frames." << endl;
     if (tx_)
         spectrum_delete(tx_);
+    if (params_.calibration)
+        cal_file.close();
     delete fgbuffer;
+
 }
 
 
@@ -203,8 +228,28 @@ void OfdmTransceiver::modulation_function(void)
         while (true) {
             boost::this_thread::interruption_point();
 
+            if(params_.calibration)
+            {
+              if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_mod_change).count()) > params_.change_mod_period)
+              {
+                //get next modulation
+                modulation_scheme mod_scheme;
+                bool mod_found;
+                std::tie(mod_found, mod_scheme) = ModulationSearchApi::getInstance().changeOfdmMod();
+                if ( mod_found )
+                {
+                  usrp_tx->set_tx_gain(*gain_it); //Change gain
+                  cal_file << *gain_it << " " << modulation_types[mod_scheme].name << std::endl;   //Save to calibration file
+                  if(gain_it == tx_gain_range_v.end() )
+                  {
+                    cout << "End of calibration" << std::endl;
+                    std::terminate();
+                  }
+                }
+              }
+            }
             // Check if params_.change_mod_period ms passed.
-            if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_mod_change).count()) > params_.change_mod_period)
+            /*if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_mod_change).count()) > params_.change_mod_period)
             {
                 modulation_scheme mod_scheme = ModulationSearchApi::getInstance().changeOfdmMod();
                 fgprops.mod_scheme = mod_scheme;
@@ -212,7 +257,7 @@ void OfdmTransceiver::modulation_function(void)
                 #ifdef DEBUG_MODE
                 	std::cout << __FUNCTION__ << ": " << "Changing Modulation to " << modulation_types[mod_scheme].name << std::endl;
                 #endif
-            }
+            }*/
 
             int new_gain = power_controller.CCompute(current_gain);
 

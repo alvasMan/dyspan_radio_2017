@@ -116,6 +116,8 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("mod",po::value<std::string>(&params.mod)->default_value("qpsk"),"Modulation scheme")
         ("change_mod_period",po::value<unsigned long>(&params.change_mod_period)->default_value(ULONG_MAX),"Change mod period in ms.")
 
+        ("calibration", po::value<bool>(&params.calibration)->default_value(false), "Whether to start calibration stage")
+        ("cal_file", po::value<std::string>(&params.cal_file)->default_value("cal_file.csv"), "File where to save calibration info")
         ("challenge", po::value<bool>(&params.use_db)->default_value(false), "Whether to connect and use challenge database")
         ("db_ip", po::value<std::string>(&params.db_ip)->default_value("127.0.0.1"), "Database IP")
         ("db_user", po::value<std::string>(&params.db_user)->default_value("?"), "Database user")
@@ -131,7 +133,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("write_learning_file", po::value<std::string>(&params.write_learning_file)->default_value("written_data.json"), "Which file to write output of context algorithms")
         ("dilv", "specify to disable inner-loop verbose")
     ;
-    
+
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);

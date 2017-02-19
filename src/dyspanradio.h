@@ -81,11 +81,16 @@ typedef struct
 
     unsigned long change_mod_period;
 
+    //Calibration stage parameters
+    bool calibration;
+    std::string cal_file;
     // challenge database parameters
     bool use_db;
     std::string db_ip;
     std::string db_user;
     std::string db_password;
+
+
 
     std::string project_folder;
     std::string read_learning_file;

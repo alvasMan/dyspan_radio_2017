@@ -26,6 +26,7 @@
 
 #include <mutex>
 #include <vector>
+#include <tuple>
 #include <liquid/liquid.h>
 
 #ifndef MODULATION_SEARCH_API_H
@@ -45,7 +46,7 @@ public:
     }
 
     //Linear search
-    modulation_scheme changeOfdmMod();
+    std::tuple<bool,modulation_scheme> changeOfdmMod();
     void changeOfdmModLinear();
 
     // Remove copy CTOR and assigment operator. This is a singleton after all.
