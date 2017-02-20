@@ -63,7 +63,7 @@ void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep
 
     float tpu = 0;
     float tpu_provided = 0;
-    uint16_t average_time = 10;
+    uint16_t average_time = 50;
 
     try {
        while(true)

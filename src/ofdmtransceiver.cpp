@@ -109,10 +109,12 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
       cout << "Gain Start ("<<tx_gain_range.start()<<")"<< endl;
       cout << "Gain Step ("<<tx_gain_range.step()<<")" << endl;
       cout << "Gain Stop ("<<tx_gain_range.stop()<<")" << endl;
-      std::vector<double> tx_gain_range_v;
       for( double it = tx_gain_range.start(); it < tx_gain_range.stop(); it=it+tx_gain_range.step() )
+      {
         tx_gain_range_v.push_back(it);
-
+        //cout<< it << endl;
+      }
+      gain_it = tx_gain_range_v.begin();
       //create calibration file here
       cout << "Opening Calibration File: "<< params_.cal_file << endl;
       cal_file.open (params_.cal_file); //This file is closed on
@@ -132,7 +134,7 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
         if (ret < 0) {
             throw std::runtime_error("Couldn't connect to challenge database");
         }
-
+        cout << "Connected to Database"<< endl;
         // get radio number
         int radio = spectrum_getRadioNumber(tx_);
         cout << boost::format("TX radio number: %d") % radio << endl;
@@ -231,22 +233,28 @@ void OfdmTransceiver::modulation_function(void)
 
             if(params_.calibration)
             {
+
               if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_mod_change).count()) > params_.change_mod_period)
               {
+                cout<<"Calibrating"<<std::endl;
                 //get next modulation
                 modulation_scheme mod_scheme;
                 bool mod_found;
                 std::tie(mod_found, mod_scheme) = ModulationSearchApi::getInstance().changeOfdmMod();
                 if ( mod_found )
                 {
-                  usrp_tx->set_tx_gain(*gain_it); //Change gain
-                  ModulationSearchApi::getInstance().setGainChanged(true);
-                  cal_file << *gain_it << " " << modulation_types[mod_scheme].name << std::endl;   //Save to calibration file
+                  gain_it++;
+                  cout<<"Found Mod, gain is:"<< (*gain_it) <<std::endl;
+
                   if(gain_it == tx_gain_range_v.end() )
                   {
                     cout << "End of calibration" << std::endl;
                     std::terminate();
                   }
+                  usrp_tx->set_tx_gain(*gain_it); //Change gain
+                  ModulationSearchApi::getInstance().setGainChanged(true);
+                  cal_file << (*gain_it) << " " << modulation_types[mod_scheme].name << std::endl;   //Save to calibration file
+
                 }
               }
             }
@@ -312,8 +320,8 @@ void OfdmTransceiver::modulation_function(void)
             boost::shared_ptr<CplxFVec> usrp_buffer( new CplxFVec(frame_size) );
             unsigned int bytes_written = 0;
             while (num_symbols--) {
-                ofdmflexframegen_writesymbol(fg, fgbuffer);
-                //ofdmflexframegen_write(fg, fgbuffer, fgbuffer_len);
+                //ofdmflexframegen_writesymbol(fg, fgbuffer);
+                ofdmflexframegen_write(fg, fgbuffer, fgbuffer_len);
                 // copy symbol and apply gain
                 for (int i = 0; i < fgbuffer_len; i++)
                     (*usrp_buffer.get())[bytes_written + i] = fgbuffer[i] * tx_gain;
