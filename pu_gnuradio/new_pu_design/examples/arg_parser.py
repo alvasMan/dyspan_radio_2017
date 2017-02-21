@@ -2,6 +2,18 @@
 
 import sys, getopt
 
+def longer_than_one(var):
+    if type(var) is list and len(var)>1:
+        return True
+    else:
+        return False
+
+def convert2num(var):
+    if type(var) is list and len(var)==1:
+        return var[0]
+    else:
+        return var
+
 class Params:
     def __init__(self):
         # these are the default values
@@ -14,12 +26,11 @@ class Params:
         self.frequency = 1.255e9
         self.antenna = "TX/RX"
         self.swtime = (10000,)
-        self.func_scripts = {"tx_ofdm_newv":self.process_tx_ofdm_newv,"tx_ofdm":self.process_tx_ofdm,"rx_ofdm":self.process_rx_ofdm}
 
     def parse_arguments(self, script_str = "tx_ofdm_newv"):
         help_str = '<executable> -d <database ip> -s <scenario number> -c <"channel1,channel2"> -g <gain>'
         try:
-            opts, args = getopt.getopt(sys.argv[1:],"hd:s:c:g:s:",["db_ip=","scenario=","channels=","gain=","swelltime="])
+            opts, args = getopt.getopt(sys.argv[1:],"hd:s:c:g:s:f:a:",["db_ip=","scenario=","channels=","gain=","swelltime="])
         except getopt.GetoptError:
             if len(sys.argv)>1:
                 print help_str
@@ -51,10 +62,15 @@ class Params:
             else:
                 print "ERROR: I don't know this option"
 
-        if len(self.scenario)==1:
+        if not longer_than_one(self.scenario):
             self.swtime = 1000000*1000
 
-        self.funcs_scripts[tx_ofdm_newv]()
+        if script_str=="tx_ofdm_newv":
+            self.process_tx_ofdm_newv()
+        elif script_str=="tx_ofdm":
+            self.process_tx_ofdm()
+        elif script_str=="rx_ofdm":
+            self.process_rx_ofdm()
 
         self.process_params()
         self.print_params()
@@ -62,27 +78,33 @@ class Params:
 
     def process_rx_ofdm(self):
         fail_tests = [False]*1
-        fail_tests[0] = len(self.gain)>1
+        fail_tests[0] = longer_than_one(self.gain)
+        self.gain=convert2num(self.gain)
         if self.gain<0:
             self.gain = 15
         if any(tests):
             print "ERROR: The provided rx_ofdm parameters are not valid"
 
     def process_tx_ofdm(self):
-        if pu_params.gain < 0:
-            pu_params.gain=range(5,30)
+        self.scenario=convert2num(self.scenario)
+        self.gain=convert2num(self.gain)
+        if self.gain < 0:
+            self.gain=range(5,30)
         pass
 
     def process_tx_ofdm_newv(self):
-        if pu_params.scenario<0:
-            pu_params.scenario = range(0,10)
-        if pu_params.gain<0:
-            pu_params.gain = range(0,30)
+        self.scenario=convert2num(self.scenario)
+        self.gain=convert2num(self.gain)
+        if self.scenario<0:
+            self.scenario = range(0,10)
+        if self.gain<0:
+            self.gain = range(0,30)
         pass
 
-    def process_param(self):
-        if self.scenario == -1 or len(self.scenario)>1:
-            self.gain_period = 1000000000 # never change gain if scenario is more than one
+    def process_params(self):
+        pass
+        #if self.scenario == -1 or longer_than_one(self.scenario):
+        #    self.gain_period = 1000000000 # never change gain if scenario is more than one
 
     def evaluate_arguments(self):
         scenarios_4_channels = [3,5,6,7,8,9,-1]

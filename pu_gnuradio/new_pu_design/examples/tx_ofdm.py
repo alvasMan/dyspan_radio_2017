@@ -172,16 +172,19 @@ class tx_ofdm(gr.top_block, Qt.QWidget):
         	  debug_log=False,
         	  scramble_bits=False
         	 )
-        if len(pu_params.gain)>1:
+        if type(pu_params.gain) is list and len(pu_params.gain)>1:
             gain_incr=pu_params.gain[1]-pu_params.gain[0]
             gain_max=pu_params.gain[-1]
             gain_min=pu_params.gain[0]
+            static_gain=-1
         else:
             gain_incr=0
             gain_max=pu_params.gain
             gain_min=pu_params.gain
+            static_gain=pu_params.gain
+            print "gain range: [", gain_min, ":", gain_incr, ":", gain_max, "]"
         self.dbconnect_pktgen_0 = dbconnect.pktgen(1, packet_len, False, False, False, pu_params.db_ip, 5003, 5, 10, 2, 20, 50, 100, 60000, 0.05, 6643, gain_min, gain_max, pu_params.gain_period, gain_incr,\
-        pu_params.scenario,pu_params.channel1,pu_params.channel2,pu_params.gain) # scenario,ch1,ch2,gain. Use -1 for default challenge
+        pu_params.scenario,pu_params.channel1,pu_params.channel2,static_gain) # scenario,ch1,ch2,gain. Use -1 for default challenge
         self.dbconnect_pdu_fillpath_cpp_0_0_1 = dbconnect.pdu_fillpath_cpp()
         self.dbconnect_pdu_fillpath_cpp_0_0_0 = dbconnect.pdu_fillpath_cpp()
         self.dbconnect_pdu_fillpath_cpp_0_0 = dbconnect.pdu_fillpath_cpp()
