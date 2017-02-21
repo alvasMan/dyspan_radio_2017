@@ -78,8 +78,7 @@ typedef struct
     std::string fec1;
     std::string crc;
     std::string mod;
-
-    unsigned long change_mod_period;
+    //unsigned long change_mod_period;
 
     //Calibration stage parameters
     bool calibration;
@@ -87,6 +86,7 @@ typedef struct
     // challenge database parameters
     bool use_db;
     std::string db_ip;
+    unsigned int db_period;
     std::string db_user;
     std::string db_password;
 

@@ -63,7 +63,7 @@ void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep
 
     float tpu = 0;
     float tpu_provided = 0;
-    uint16_t average_time = 50;
+    uint16_t average_time = sleep_time;
 
     try {
        while(true)
@@ -78,10 +78,12 @@ void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep
           tsu_provided = spectrum_getProvidedThroughput(spec, radio_number, average_time);
 
 //#ifdef DEBUG
+/*
           std::cout << "Tsu: "      << tsu          << std::endl;
           std::cout << "Tsu_real: " << tsu_provided << std::endl;
           std::cout << "Tpu: "      << tpu          << std::endl;
           std::cout << "Tpu_real: " << tpu_provided << std::endl;
+*/
 //#endif
 
           // TODO: Update throughputs

@@ -112,8 +112,9 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
       for( double it = tx_gain_range.start(); it < tx_gain_range.stop(); it=it+tx_gain_range.step() )
       {
         tx_gain_range_v.push_back(it);
-        //cout<< it << endl;
+        cout<< it << " ";
       }
+      cout << endl;
       gain_it = tx_gain_range_v.begin();
       //create calibration file here
       cout << "Opening Calibration File: "<< params_.cal_file << endl;
@@ -186,7 +187,7 @@ void OfdmTransceiver::start(void)
     if(params_.use_db)
     {
         int radio_id = spectrum_getRadioNumber(tx_);
-        threads_.push_back(new boost::thread(boost::bind(launch_database_thread, tx_, radio_id, 5000)));
+        threads_.push_back(new boost::thread(boost::bind(launch_database_thread, tx_, radio_id, params_.db_period)));
     }
     else
     {
@@ -233,14 +234,17 @@ void OfdmTransceiver::modulation_function(void)
 
             if(params_.calibration)
             {
-
-              if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_mod_change).count()) > params_.change_mod_period)
+              //cout<<"Calibrating Mode!!!"<<std::endl;
+              //Call call function when db is updated (TODO move to db thread?)
+              if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_mod_change).count()) > params_.db_period)
               {
-                cout<<"Calibrating"<<std::endl;
                 //get next modulation
                 modulation_scheme mod_scheme;
                 bool mod_found;
+                std::cout << "\t" << "Current UHD Gain: " << (*gain_it) << std::endl;
                 std::tie(mod_found, mod_scheme) = ModulationSearchApi::getInstance().changeOfdmMod();
+                last_mod_change = std::chrono::system_clock::now();
+                fgprops.mod_scheme = mod_scheme;
                 if ( mod_found )
                 {
                   gain_it++;
@@ -320,8 +324,8 @@ void OfdmTransceiver::modulation_function(void)
             boost::shared_ptr<CplxFVec> usrp_buffer( new CplxFVec(frame_size) );
             unsigned int bytes_written = 0;
             while (num_symbols--) {
-                //ofdmflexframegen_writesymbol(fg, fgbuffer);
-                ofdmflexframegen_write(fg, fgbuffer, fgbuffer_len);
+                ofdmflexframegen_writesymbol(fg, fgbuffer);
+                //ofdmflexframegen_write(fg, fgbuffer, fgbuffer_len);
                 // copy symbol and apply gain
                 for (int i = 0; i < fgbuffer_len; i++)
                     (*usrp_buffer.get())[bytes_written + i] = fgbuffer[i] * tx_gain;
@@ -557,10 +561,13 @@ void OfdmTransceiver::launch_change_places()
         // get data from socket. may block until result arrives
         //buffer_utils::rdataset<ChPowers> dset;
         //e_detec.pop_result(dset);
-        std::vector<float> ch_powers;
+        if(!params_.calibration)
+        {
+            std::vector<float> ch_powers;
 
-        // call the CHAAANGE PLACES
-        process_sensing(ch_powers);
+            // call the CHAAANGE PLACES
+            process_sensing(ch_powers);
+        }
     }
 }
 

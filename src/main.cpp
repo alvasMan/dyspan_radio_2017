@@ -114,12 +114,13 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("fec1",po::value<std::string>(&params.fec1)->default_value("h128"),"FEC for payload")
         ("crc",po::value<std::string>(&params.crc)->default_value("crc32"),"CRC")
         ("mod",po::value<std::string>(&params.mod)->default_value("qpsk"),"Modulation scheme")
-        ("change_mod_period",po::value<unsigned long>(&params.change_mod_period)->default_value(ULONG_MAX),"Change mod period in ms.")
+        //("change_mod_period",po::value<unsigned long>(&params.change_mod_period)->default_value(ULONG_MAX),"Change mod period in ms.")
 
         ("calibration", po::value<bool>(&params.calibration)->default_value(false), "Whether to start calibration stage")
         ("cal_file", po::value<std::string>(&params.cal_file)->default_value("cal_file.csv"), "File where to save calibration info")
         ("challenge", po::value<bool>(&params.use_db)->default_value(false), "Whether to connect and use challenge database")
         ("db_ip", po::value<std::string>(&params.db_ip)->default_value("127.0.0.1"), "Database IP")
+        ("db_period", po::value<unsigned int>(&params.db_period)->default_value(100), "Database query period in ms")
         ("db_user", po::value<std::string>(&params.db_user)->default_value("?"), "Database user")
         ("db_pass", po::value<std::string>(&params.db_password)->default_value("?"), "Database password")
 
