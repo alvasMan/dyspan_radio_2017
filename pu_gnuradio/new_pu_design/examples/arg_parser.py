@@ -82,7 +82,7 @@ class Params:
         self.gain=convert2num(self.gain)
         if self.gain<0:
             self.gain = 15
-        if any(tests):
+        if any(fail_tests):
             print "ERROR: The provided rx_ofdm parameters are not valid"
 
     def process_tx_ofdm(self):
