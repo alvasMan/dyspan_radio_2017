@@ -93,8 +93,6 @@ class Params:
         pass
 
     def process_tx_ofdm_newv(self):
-        self.scenario=convert2num(self.scenario)
-        self.gain=convert2num(self.gain)
         if self.scenario<0:
             self.scenario = range(0,10)
         if self.gain<0:
