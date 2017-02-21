@@ -35,7 +35,7 @@ import arg_parser
 
 # create the object that will have the config
 pu_params = arg_parser.Params()
-pu_params.parse_arguments()
+pu_params.parse_arguments("tx_ofdm")
 
 class tx_ofdm(gr.top_block, Qt.QWidget):
 
@@ -82,16 +82,16 @@ class tx_ofdm(gr.top_block, Qt.QWidget):
         # Blocks
         ##################################################
         self.uhd_usrp_sink_0 = uhd.usrp_sink(
-        	",".join(("addr=192.168.10.2", "")),
+        	"",#",".join(("addr=192.168.10.2", "")),
         	uhd.stream_args(
         		cpu_format="fc32",
         		channels=range(1),
         	),
         )
         self.uhd_usrp_sink_0.set_samp_rate(samp_rate)
-        self.uhd_usrp_sink_0.set_center_freq(2.49e9,0) #1255e6, 0)
+        self.uhd_usrp_sink_0.set_center_freq(pu_params.frequency,0)
         self.uhd_usrp_sink_0.set_gain(15, 0)
-        self.uhd_usrp_sink_0.set_antenna("J1", 0)
+        self.uhd_usrp_sink_0.set_antenna(pu_params.antenna, 0)
         self.rational_resampler_xxx_0_0_1_1 = filter.rational_resampler_ccc(
                 interpolation=interp_factor,
                 decimation=decim_factor,
@@ -172,7 +172,15 @@ class tx_ofdm(gr.top_block, Qt.QWidget):
         	  debug_log=False,
         	  scramble_bits=False
         	 )
-        self.dbconnect_pktgen_0 = dbconnect.pktgen(1, packet_len, False, False, False, pu_params.db_ip, 5003, 5, 10, 2, 20, 50, 100, 60000, 0.05, 6643, 5, 30, 2000, 2,\
+        if len(pu_params.gain)>1:
+            gain_incr=pu_params.gain[1]-pu_params.gain[0]
+            gain_max=pu_params.gain[-1]
+            gain_min=pu_params.gain[0]
+        else:
+            gain_incr=0
+            gain_max=pu_params.gain
+            gain_min=pu_params.gain
+        self.dbconnect_pktgen_0 = dbconnect.pktgen(1, packet_len, False, False, False, pu_params.db_ip, 5003, 5, 10, 2, 20, 50, 100, 60000, 0.05, 6643, gain_min, gain_max, pu_params.gain_period, gain_incr,\
         pu_params.scenario,pu_params.channel1,pu_params.channel2,pu_params.gain) # scenario,ch1,ch2,gain. Use -1 for default challenge
         self.dbconnect_pdu_fillpath_cpp_0_0_1 = dbconnect.pdu_fillpath_cpp()
         self.dbconnect_pdu_fillpath_cpp_0_0_0 = dbconnect.pdu_fillpath_cpp()

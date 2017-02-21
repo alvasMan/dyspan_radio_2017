@@ -77,7 +77,7 @@ public:
     void set_rx_freq(float _rx_freq);
     void set_rx_rate(float _rx_rate);
     void set_rx_gain_uhd(float _rx_gain_uhd);
-    void set_rx_antenna(char * _rx_antenna);
+    void set_rx_antenna(const std::string& _rx_antenna);
     void reset_rx();
     void start_rx();
     void stop_rx();

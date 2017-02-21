@@ -13,6 +13,7 @@
 #include "context_awareness.h"
 #include "json_utils.h"
 #include <vector>
+#include "stats.h"
 
 using std::vector;
 using std::pair;
@@ -31,6 +32,8 @@ public:
     ChannelPacketRateMonitorInterface(int n_channels) : Nch(n_channels)
     {
     }
+    static float NaN() {return std::numeric_limits<time_format>::max();}
+    
     virtual time_format packet_arrival_period(int i) const = 0;
     virtual time_format packet_arrival_period_var(int i) const = 0;
     virtual time_format packet_arrival_rate(int i) const = 0;    
@@ -92,7 +95,7 @@ class ChannelPacketRateMonitor : public ChannelPacketRateMonitorInterface, publi
 {
 public:
     ChannelPacketRateMonitor() = default;
-    ChannelPacketRateMonitor(int n_channels, time_format t_max) : 
+    ChannelPacketRateMonitor(int n_channels) : 
                 ChannelPacketRateMonitorInterface(n_channels), 
                 tdelay_acc(n_channels), tdelay_acc_free(n_channels),
                 prev_packet_tstamp(n_channels,0) 
@@ -100,7 +103,7 @@ public:
     }
 
     // ChannelPacketRateMonitorInterface
-    void work(const vector<DetectedPacket>& packets);
+    void work(const vector<DetectedPacket>& packets, time_format tstamp);
     inline time_format packet_arrival_period(int i) const final
     {
         return tdelay_acc[i].mean();
@@ -127,6 +130,49 @@ public:
     vector<delay_stats> tdelay_acc_free;
     
     vector<time_format> prev_packet_tstamp;
+    time_format current_tstamp = -1;
+};
+
+class SlidingChannelPacketRateMonitor : public ChannelPacketRateMonitorInterface
+{
+public:
+    SlidingChannelPacketRateMonitor() = default;
+    SlidingChannelPacketRateMonitor(int n_channels, int avg_size) : 
+                ChannelPacketRateMonitorInterface(n_channels), 
+                delays_mavg(n_channels, GrowingMovingAverage<time_format>(avg_size, 10*avg_size)), 
+                delays_m2(n_channels, GrowingMovingAverage<time_format>(avg_size, 10*avg_size)),
+                prev_packet_tstamp(n_channels,0) 
+    {
+    }
+    void work(const vector<DetectedPacket>& packets, time_format tstamp);
+    inline time_format packet_arrival_period(int i) const final
+    {
+        auto siz = delays_mavg[i].size();
+        if(current_tstamp-prev_packet_tstamp[i] > TDELAY_MAX || siz == 0)
+            return ChannelPacketRateMonitorInterface::NaN();
+        else
+            return delays_mavg[i].sum()/siz;
+    }
+    inline time_format packet_arrival_period_var(int i) const final
+    {
+        auto siz = delays_mavg[i].size();
+        if(current_tstamp-prev_packet_tstamp[i] > TDELAY_MAX || siz<=1)
+            return ChannelPacketRateMonitorInterface::NaN();
+        else
+            return (delays_m2[i].sum()-pow(delays_mavg[i].sum(),2)/siz)/(siz-1);
+    }
+    inline time_format packet_arrival_rate(int i) const  final
+    {
+        auto t = packet_arrival_period(i);
+        return (t != ChannelPacketRateMonitorInterface::NaN()) ? 1.0/t : 0;
+    }
+    inline bool is_occupied(int i) const final {return packet_arrival_period(i) < TDELAY_MAX;}
+    
+    vector<GrowingMovingAverage<time_format>> delays_mavg;
+    vector<GrowingMovingAverage<time_format>> delays_m2;
+    
+    time_format current_tstamp;
+    vector<time_format> prev_packet_tstamp;
 };
 
 class ChannelPacketRateTester
@@ -148,6 +194,9 @@ namespace monitor_utils
 string print_packet_rate(const ChannelPacketRateMonitor& p);
 string print_packet_period(const ChannelPacketRateMonitor& p);
 string print_packet_delay_variance(const ChannelPacketRateMonitor& p);
+
+string print_packet_period(const SlidingChannelPacketRateMonitor& p);
+string print_packet_delay_variance(const SlidingChannelPacketRateMonitor& p);
 };
 
 #endif /* MONITOR_COMPONENTS_H */

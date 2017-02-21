@@ -65,6 +65,8 @@ public:
     ForgetfulChannelMonitor pwr_monitor;
     ChannelPacketRateTester channel_rate_tester;
     
+    BinMask maskprops2;
+    
     SensingThreadHandler() = default;
     void setup(SituationalAwarenessApi *pu_scenario_api, SU_tx_params* su_params, 
                 vector<std::unique_ptr<buffer_utils::bounded_buffer<ChPowers>>>& bufs, 
@@ -85,6 +87,9 @@ public:
     string json_write_filename = "";
     
     int Nch;
+    BinMask maskprops2;
+    
+    // components
     USRPReader usrp_reader;
     ChannelPowerEstimator pwr_estim;
     PacketDetector packet_detector;
@@ -130,6 +135,10 @@ public:
     void run();
 };
 
+typedef boost::asio::ip::tcp::socket socket_type;
+//typedef boost::asio::local::stream_protocol::socket socket_type;
+typedef std::unique_ptr<socket_type> socket_ptr;
+
 class Spectrogram2SocketThreadHandler
 {
 private:
@@ -145,8 +154,10 @@ private:
     buffer_utils::bounded_buffer<std::pair<size_t, std::chrono::system_clock::time_point>> time_buffer{1000};
     
     boost::asio::io_service io_service;
-    std::unique_ptr<boost::asio::ip::tcp::socket> soc;
+    
+    socket_ptr soc;
 public:
+    Spectrogram2SocketThreadHandler(Spectrogram2SocketThreadHandler&) = delete;
     Spectrogram2SocketThreadHandler(SituationalAwarenessApi* api, 
                buffer_utils::bounded_buffer<ChPowers>* buf, 
                const BinMask& bmask, pair<int,int> CNN_dim = {64,64}, int step_size = 15);
@@ -168,16 +179,16 @@ public:
 
 namespace sensing_utils
 {
-SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::string json_read_filename,
-                                             std::string json_write_filename, SituationalAwarenessApi *pu_scenario_api, 
-                                    bool has_sensing, bool has_learning);
-
-void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler* shandler);
-
-void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler* shandler);
-//void launch_spectrogram_results_handler(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* estim);
-
-void launch_spectrogram_to_file_thread(SensingHandler* shandler);
+//SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::string json_read_filename,
+//                                             std::string json_write_filename, SituationalAwarenessApi *pu_scenario_api, 
+//                                    bool has_sensing, bool has_learning);
+//
+//void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler* shandler);
+//
+//void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler* shandler);
+////void launch_spectrogram_results_handler(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* estim);
+//
+//void launch_spectrogram_to_file_thread(SensingHandler* shandler);
 
 };
 

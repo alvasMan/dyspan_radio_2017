@@ -34,7 +34,7 @@ import arg_parser
 
 # create the object that will have the config
 pu_params = arg_parser.Params()
-pu_params.parse_arguments()
+pu_params.parse_arguments("tx_ofdm_newv")
 
 class tx_ofdm_newv(gr.top_block, Qt.QWidget):
 
@@ -81,16 +81,16 @@ class tx_ofdm_newv(gr.top_block, Qt.QWidget):
         # Blocks
         ##################################################
         self.uhd_usrp_sink_0 = uhd.usrp_sink(
-        	",".join(("addr=192.168.10.2", "")),
+        	"",#",".join(("addr=192.168.10.2", "")),
         	uhd.stream_args(
         		cpu_format="fc32",
         		channels=range(1),
         	),
         )
         self.uhd_usrp_sink_0.set_samp_rate(samp_rate)
-        self.uhd_usrp_sink_0.set_center_freq(2.49e9, 0) #1255e6, 0)
+        self.uhd_usrp_sink_0.set_center_freq(pu_params.frequency, 0)
         self.uhd_usrp_sink_0.set_gain(15, 0)
-        self.uhd_usrp_sink_0.set_antenna("J1", 0) # "TX/RX", 0)
+        self.uhd_usrp_sink_0.set_antenna(pu_params.antenna, 0)
         self.rational_resampler_xxx_0_0_1_1 = filter.rational_resampler_ccc(
                 interpolation=interp_factor,
                 decimation=decim_factor,
@@ -129,13 +129,9 @@ class tx_ofdm_newv(gr.top_block, Qt.QWidget):
         	  debug_log=False,
         	  scramble_bits=False
         	 )
-        if pu_params.scenario<0:
-            pu_params.scenario = (0,1,2,3,4,5,6,7,8,9)#(0,1,2)
-        if pu_params.gain<0:
-            pu_params.gain = (10,20,30)
-            gain_period = 30000
-        gain_period = 5000
-        self.dbconnect_packet_controller_0 = dbconnect.packet_controller(samp_rate/interp_factor, (10000,), 5, 10, 2, 20, 10, 5, 6643, gain_period, pu_params.gain, pu_params.scenario, True, pu_params.channel1, pu_params.channel2)
+
+        self.dbconnect_packet_controller_0 = dbconnect.packet_controller(samp_rate/interp_factor, (10000,), 5, 10, 2, 20, 10, 5, 6643, \
+        pu_params.gain_period, pu_params.gain, pu_params.scenario, True, pu_params.channel1, pu_params.channel2)
         self.dbconnect_cmd_pktgen_0 = dbconnect.cmd_pktgen(pu_params.db_ip, 5003, 64, True)
         self.blocks_tagged_stream_to_pdu_0 = blocks.tagged_stream_to_pdu(blocks.complex_t, "packet_len")
         self.blocks_pdu_to_tagged_stream_0 = blocks.pdu_to_tagged_stream(blocks.byte_t, "packet_len")

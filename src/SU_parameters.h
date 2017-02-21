@@ -30,8 +30,17 @@ public:
     {
         return channel_idx.load();
     }
+    inline void set_gain(int g)
+    {
+        gain_ = g;
+    }
+    inline int gain()
+    {
+        return gain_.load();
+    }
 private:
     std::atomic<short> channel_idx; //0-4
+    std::atomic<int> gain_; //0-4
 };
 
 #endif /* SU_PARAMETERS_H */

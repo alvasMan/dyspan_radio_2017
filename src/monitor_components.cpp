@@ -5,6 +5,7 @@
  */
 
 #include "monitor_components.h"
+#include "general_utils.hpp"
 #include <sstream>
 #include <set>
 #include <algorithm>
@@ -35,7 +36,7 @@ vector<size_t> ForgetfulChannelMonitor::ch_sorted_by_energy()
 
 //> Channel Packet Monitor
 
-void ChannelPacketRateMonitor::work(const std::vector<DetectedPacket>& packets)
+void ChannelPacketRateMonitor::work(const std::vector<DetectedPacket>& packets, time_format tstamp)
 {
     
     for(const auto& e : packets)
@@ -48,6 +49,7 @@ void ChannelPacketRateMonitor::work(const std::vector<DetectedPacket>& packets)
         }
         prev_packet_tstamp[ch_idx] = get<0>(e);
     }
+    current_tstamp = tstamp;
 }
 
 json to_json(const delay_stats& x)
@@ -124,6 +126,24 @@ void ChannelPacketRateMonitor::merge_json(nlohmann::json& j2, std::vector<int> c
             tdelay_acc_free[i] += m2.tdelay_acc_free[i];
         }
     }
+}
+
+//> SlidingChannelPacketRateMonitor
+
+void SlidingChannelPacketRateMonitor::work(const std::vector<DetectedPacket>& packets, time_format tstamp)
+{
+    for(const auto& e : packets)
+    {
+        int ch_idx = get<1>(e);
+        if(prev_packet_tstamp[ch_idx] > 0)
+        {
+            time_format tdelay = get<0>(e) - prev_packet_tstamp[ch_idx];
+            delays_mavg[ch_idx].push(tdelay);
+            delays_m2[ch_idx].push(pow(tdelay,2));
+        }
+        prev_packet_tstamp[ch_idx] = get<0>(e);
+    }
+    current_tstamp = tstamp;
 }
 
 #define UNOCCUPIED_DELAY 0.1
@@ -226,7 +246,20 @@ std::string print_packet_period(const ChannelPacketRateMonitor& p)
         os << "free]";
     return os.str();
 }
-std::string print_packet_delay_variance(const ChannelPacketRateMonitor& p)
+string print_packet_period(const SlidingChannelPacketRateMonitor& p)
+{
+    vector<int> range_idxs = ranges::make_range(p.Nch);
+    return containers::print(range_idxs.begin(), range_idxs.end(), ",\t", [&](int i)
+    {
+        std::stringstream ss;
+        if(p.is_occupied(i))
+            ss << boost::format("%1.11f") % p.packet_arrival_period(i);
+        else
+            ss << "free";
+        return ss.str();
+    });
+}
+string print_packet_delay_variance(const ChannelPacketRateMonitor& p)
 {
     stringstream os;
     os << "[";
@@ -245,6 +278,22 @@ std::string print_packet_delay_variance(const ChannelPacketRateMonitor& p)
     else
         os << "free]";
     return os.str();
+}
+string print_packet_delay_variance(const SlidingChannelPacketRateMonitor& p)
+{
+    vector<int> range_idxs = ranges::make_range(p.Nch);
+    //vector<int> range_idxs(p.Nch);
+    //std::iota(range_idxs.begin(), range_idxs.end());
+    return containers::print(range_idxs.begin(), range_idxs.end(), ",\t", [&](int i)
+    {
+        std::stringstream ss;
+        auto var = p.packet_arrival_period_var(i);
+        if(p.is_occupied(i) && var!=delay_stats::NaN())
+            ss << boost::format("%1.11f") % var;
+        else
+            ss << "free";
+        return ss.str();
+    });
 }
 
 std::unique_ptr<JsonScenarioMonitor> make_scenario_monitor(const std::string& type)

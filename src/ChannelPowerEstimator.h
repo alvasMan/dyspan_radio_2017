@@ -88,6 +88,7 @@ struct BinMask
     vector<SectionProperties> section_props;
     SectionProperties ignored_section_props;
     int Nch;
+    std::vector<float> ch_coeffs; // for fast division
 };
 
 class PacketDetector;
@@ -221,10 +222,12 @@ public:
 
 namespace sensing_utils
 {
-BinMask generate_bin_mask_no_guard(int Nch, int nBins, bool cancel_DC_offset = true);
+BinMask generate_bin_mask_no_guard(int Nch, int nBins, bool cancel_DC_offset = true, bool shift = true);
 BinMask generate_bin_mask(int Nch, int nBins, float non_guard_percentage, bool cancel_DC_offset = true);
-BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage, bool cancel_DC_offset = true);
+BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage, bool cancel_DC_offset = true, bool shift = true);
 vector<float> relative_channel_powers(const BinMask& bmask, const vector<float> &ch_powers);
+void apply_bin_mask(float* output, const Cplx* cplx_ptr, const BinMask& bmask, float extra_coeff = 1.0);
+void apply_bin_mask(float* output, const float* pwr_ptr, const BinMask& bmask);
 };
 
 

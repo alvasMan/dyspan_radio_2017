@@ -74,14 +74,14 @@ class rx_ofdm(gr.top_block, Qt.QWidget):
         # Blocks
         ##################################################
         self.uhd_usrp_source_1 = uhd.usrp_source(
-        	",".join(("addr=192.168.20.2", "")),
+        	"",
         	uhd.stream_args(
         		cpu_format="fc32",
         		channels=range(1),
         	),
         )
         self.uhd_usrp_source_1.set_samp_rate(usrp_samp_rate)
-        self.uhd_usrp_source_1.set_center_freq(1255e6, 0)
+        self.uhd_usrp_source_1.set_center_freq(2.49e9,0) #1255e6, 0)
         self.uhd_usrp_source_1.set_gain(5, 0)
         self.uhd_usrp_source_1.set_antenna("RX2", 0)
         self.freq_xlating_fft_filter_ccc_0_2 = filter.freq_xlating_fft_filter_ccc(decim_factor, (filter.firdes.low_pass(1,usrp_samp_rate, samp_rate/2.0*0.98, 5000)), -3.75e6, usrp_samp_rate)
@@ -152,7 +152,7 @@ class rx_ofdm(gr.top_block, Qt.QWidget):
         	  debug_log=False,
         	  scramble_bits=False
         	 )
-        self.dbconnect_pktrecv_0 = dbconnect.pktrecv("192.168.5.231", 5003, False)
+        self.dbconnect_pktrecv_0 = dbconnect.pktrecv("192.168.5.221", 5003, False)
         self.blocks_tagged_stream_to_pdu_0_2 = blocks.tagged_stream_to_pdu(blocks.byte_t, "rx_len")
         self.blocks_tagged_stream_to_pdu_0_1 = blocks.tagged_stream_to_pdu(blocks.byte_t, "rx_len")
         self.blocks_tagged_stream_to_pdu_0_0 = blocks.tagged_stream_to_pdu(blocks.byte_t, "rx_len")

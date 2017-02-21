@@ -89,7 +89,8 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     set_rx_freq(params_.f_center);
     set_rx_rate(rx_rf_rate);
     set_rx_gain_uhd(params_.rx_gain_uhd);
-    //set_rx_antenna("J1");
+    
+    set_rx_antenna(params_.rx_antenna);
 
     // Add PU parameters and scenarios
     pu_data = context_utils::make_rf_environment();    // this is gonna read files
@@ -670,9 +671,9 @@ void OfdmTransceiver::set_rx_gain_uhd(float _rx_gain_uhd)
 }
 
 // set receiver antenna
-void OfdmTransceiver::set_rx_antenna(char * _rx_antenna)
+void OfdmTransceiver::set_rx_antenna(const std::string& _rx_antenna)
 {
-    usrp_rx->set_rx_antenna(_rx_antenna);
+    usrp_rx->set_rx_antenna(_rx_antenna.c_str());
     cout << "Using RX Antenna: " << usrp_rx->get_rx_antenna() << endl;
 }
 

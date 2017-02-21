@@ -24,11 +24,13 @@
  *
  */
 
+#include <algorithm>
+#include <boost/circular_buffer.hpp>
+#include <boost/optional.hpp>
 
 #ifndef STATS_H
 #define	STATS_H
 
-#include <algorithm>
 
 struct val_stats {
     double val_sum;
@@ -118,6 +120,50 @@ public:
     inline const T& get_val(uint32_t pos) {
         pos = (pos+idx) % size();
         return buf[pos];
+    }
+};
+
+template <typename T>
+class GrowingMovingAverage
+{
+    boost::circular_buffer<T> buf;
+    T pwr_sum = 0;
+    uint16_t count_refresh = 0;
+    uint16_t refresh_period = 5;
+    
+public:
+    GrowingMovingAverage() = default;//delete;
+    GrowingMovingAverage(size_t siz) : buf(siz), refresh_period(3*siz) 
+    {
+    }
+    GrowingMovingAverage(size_t siz, uint32_t refresh_dur) : buf(siz), refresh_period(refresh_dur) 
+    {
+    }
+    inline boost::optional<T> push(const T &val) 
+    {
+        boost::optional<T> ret;
+        if(buf.size()==buf.capacity())
+        {
+            ret.emplace(buf.front());
+            pwr_sum += val - buf.front();
+            buf.push_back(val);
+        }
+        else
+        {
+            pwr_sum += val;
+            buf.push_back(val);
+        }
+        if(count_refresh++ >= refresh_period)
+            refresh();
+        return ret;
+    }
+    inline size_t size() const { return buf.size();}
+    inline T sum() const {return pwr_sum;}
+    inline double mean() const { return pwr_sum / (double)buf.size(); }
+    inline void refresh() 
+    {
+        pwr_sum = std::accumulate(buf.begin(), buf.end(), 0.0);
+        count_refresh = 0;
     }
 };
 

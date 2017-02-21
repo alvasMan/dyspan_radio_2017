@@ -56,6 +56,10 @@ BinMask::BinMask(const vector<int>& bmask)
         else
             ignored_section_props.count++;
     }
+    
+    ch_coeffs.resize(n_sections(), 1);
+    for(int j = 0; j < n_sections(); j++)
+        ch_coeffs[j] = 1.0/(section_props[j].count); // NOTE: when we do FFT we may also need to divide by nBins
 }
 
 BinMask::BinMask(const vector<int>& bmask, const vector<int>& channel_map, const vector<bool>& ref_map)
@@ -79,13 +83,17 @@ BinMask::BinMask(const vector<int>& bmask, const vector<int>& channel_map, const
             section_props[bin_mask[i]].count++;
         else
             ignored_section_props.count++;
-    }    
+    }
+    
+    ch_coeffs.resize(n_sections(), 1);
+    for(int j = 0; j < n_sections(); j++)
+        ch_coeffs[j] = 1.0/(section_props[j].count); // NOTE: when we do FFT we may also need to divide by nBins
 }
 
 void cancel_dc_offset(vector<int> &bin_mask)
 {
     int nBins = bin_mask.size();
-    int margin = 4;//7;
+    int margin = 7;//4;
     for(int i = -margin; i < margin; ++i)
         if(i < 0)
             bin_mask[nBins+i] = -1;
@@ -95,13 +103,14 @@ void cancel_dc_offset(vector<int> &bin_mask)
 
 namespace sensing_utils
 {
-BinMask generate_bin_mask_no_guard(int Nch, int nBins, bool cancel_DC_offset)
+BinMask generate_bin_mask_no_guard(int Nch, int nBins, bool cancel_DC_offset, bool shift)
 {
+    int shift_idxs = (shift==true)? nBins/2 : 0;
     vector<int> bin_mask(nBins);
     float inv_bins_per_channel = (float)Nch / nBins; // 1/bins_per_channel
     for(int i = 0; i < nBins; i++)
     {
-        bin_mask[i] = floor(((i + nBins/2) % nBins) * inv_bins_per_channel);
+        bin_mask[i] = floor(((i + shift_idxs) % nBins) * inv_bins_per_channel);
     }
     
     if(cancel_DC_offset)
@@ -133,8 +142,9 @@ BinMask generate_bin_mask(int Nch, int nBins, float non_guard_percentage, bool c
 
 // bin mask is equal to -1 for non assigned bins
 // non_reference_mask is false for the values of the bin mask which correspond to reference bins
-BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage, bool cancel_DC_offset)
+BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage, bool cancel_DC_offset, bool shift)
 {
+    int shift_idxs = (shift==true)? nBins/2 : 0;
     int Nbins_per_channel = nBins / Nch;
     int non_guard_bins = round(non_guard_percentage*Nbins_per_channel);
     int half_guard_bins = (Nbins_per_channel - non_guard_bins)/2;
@@ -148,8 +158,8 @@ BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_perc
     vector<bool> ref_map(3*Nch);
     for(int i = 0; i < nBins; i++)
     {
-        int ch_idx = ((i + nBins/2)%nBins) / Nbins_per_channel;
-        int j = ((i + nBins/2)%nBins) % Nbins_per_channel;
+        int ch_idx = ((i + shift_idxs)%nBins) / Nbins_per_channel;
+        int j = ((i + shift_idxs)%nBins) % Nbins_per_channel;
         if(j < half_reference_bins)
             bin_mask[i] = ch_idx*3;
         else if(j>= half_guard_bins && j < half_guard_bins + non_guard_bins)
@@ -201,6 +211,36 @@ vector<float> relative_channel_powers(const BinMask& bmask, const vector<float> 
     return rel_ch_powers;
 }
 
+void apply_bin_mask(float* output, const Cplx* cplx_ptr, const BinMask& bmask, float extra_coeff)
+{
+    for(size_t j = 0; j < bmask.n_sections(); ++j)
+        output[j] = 0;
+    
+    for(unsigned int i = 0; i < bmask.size(); i++)
+    {
+        if(bmask[i] >= 0)
+            output[bmask[i]] += cplx_ptr[i].real()*cplx_ptr[i].real() + cplx_ptr[i].imag()*cplx_ptr[i].imag();//norm(fftBins[i]);
+    }
+    
+    for(size_t j = 0; j < bmask.n_sections(); ++j)
+        output[j] *= (bmask.ch_coeffs[j] * extra_coeff);
+}
+
+void apply_bin_mask(float* output, const float* pwr_ptr, const BinMask& bmask)
+{
+    for(size_t j = 0; j < bmask.n_sections(); ++j)
+        output[j] = 0;
+    
+    for(unsigned int i = 0; i < bmask.size(); i++)
+    {
+        if(bmask[i] >= 0)
+            output[bmask[i]] += pwr_ptr[i];//norm(fftBins[i]);
+    }
+    
+    for(size_t j = 0; j < bmask.n_sections(); ++j)
+        output[j] *= bmask.ch_coeffs[j];
+}
+
 };
 
 ChannelPowerEstimator::ChannelPowerEstimator() : fftBins(NULL), fft(NULL)
@@ -238,9 +278,6 @@ void ChannelPowerEstimator::set_parameters(uint16_t _avg_win_size,
     Nch = _bin_mask.Nch;
     bin_mask = _bin_mask;       // Values in bin_mask must be within [0, number of channels] and size of bin_mask must be equal to nBins. No protection yet.
     nBins = bin_mask.size();
-
-    cout << "Bin mask:";
-    cout << print_range(bin_mask) << endl;
     
     setup();
 }
@@ -309,14 +346,16 @@ void ChannelPowerEstimator::process(double tstamp)
 //         << print_container_dB(&fftBins[0], &fftBins[nBins]) << endl;
     
     // Averages across bins belonging to the same channel
-    for(unsigned int i = 0; i < nBins; i++)
-    {
-        if(bin_mask[i] >= 0)
-            output_ch_pwrs[bin_mask[i]] += fftBins[i].real()*fftBins[i].real() + fftBins[i].imag()*fftBins[i].imag();//norm(fftBins[i]);
-    }
-    
-    for(unsigned int i = 0; i < bin_mask.n_sections(); ++i)
-        output_ch_pwrs[i] *= ch_avg_coeff[i];
+    sensing_utils::apply_bin_mask(&output_ch_pwrs[0], fftBins, bin_mask, 1.0/nBins);
+//    
+//    for(unsigned int i = 0; i < nBins; i++)
+//    {
+//        if(bin_mask[i] >= 0)
+//            output_ch_pwrs[bin_mask[i]] += fftBins[i].real()*fftBins[i].real() + fftBins[i].imag()*fftBins[i].imag();//norm(fftBins[i]);
+//    }
+//    
+//    for(unsigned int i = 0; i < bin_mask.n_sections(); ++i)
+//        output_ch_pwrs[i] *= ch_avg_coeff[i];
     
     current_tstamp = tstamp;
 }
