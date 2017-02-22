@@ -74,7 +74,7 @@ class rx_ofdm(gr.top_block, Qt.QWidget):
         # Blocks
         ##################################################
         self.uhd_usrp_source_1 = uhd.usrp_source(
-        	",".join(("addr=192.168.20.2", "")),
+        	",".join(("addr=192.168.10.2", "")),
         	uhd.stream_args(
         		cpu_format="fc32",
         		channels=range(1),
@@ -152,7 +152,7 @@ class rx_ofdm(gr.top_block, Qt.QWidget):
         	  debug_log=False,
         	  scramble_bits=False
         	 )
-        self.dbconnect_pktrecv_0 = dbconnect.pktrecv("127.0.0.1", 5002, False)
+        self.dbconnect_pktrecv_0 = dbconnect.pktrecv("192.168.5.231", 5002, False)
         self.blocks_tagged_stream_to_pdu_0_2 = blocks.tagged_stream_to_pdu(blocks.byte_t, "rx_len")
         self.blocks_tagged_stream_to_pdu_0_1 = blocks.tagged_stream_to_pdu(blocks.byte_t, "rx_len")
         self.blocks_tagged_stream_to_pdu_0_0 = blocks.tagged_stream_to_pdu(blocks.byte_t, "rx_len")

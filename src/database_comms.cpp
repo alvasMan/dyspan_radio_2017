@@ -77,14 +77,13 @@ void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep
           tsu = spectrum_getThroughput(spec, radio_number, average_time);
           tsu_provided = spectrum_getProvidedThroughput(spec, radio_number, average_time);
 
-//#ifdef DEBUG
-/*
+
+#ifdef DEBUG
           std::cout << "Tsu: "      << tsu          << std::endl;
           std::cout << "Tsu_real: " << tsu_provided << std::endl;
           std::cout << "Tpu: "      << tpu          << std::endl;
           std::cout << "Tpu_real: " << tpu_provided << std::endl;
-*/
-//#endif
+#endif
 
           // TODO: Update throughputs
           db_api.push_Tsu(DbReply(tsu));

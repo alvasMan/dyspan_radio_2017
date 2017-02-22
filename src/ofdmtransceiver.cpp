@@ -205,6 +205,7 @@ void OfdmTransceiver::start(void)
     {
         int radio_id = spectrum_getRadioNumber(tx_);
         threads_.push_back(new boost::thread(boost::bind(launch_database_thread, tx_, radio_id, params_.db_period)));
+
     }
     else
     {
@@ -603,11 +604,14 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
         constexpr int channel_map[] = {2, 0, 3, 1};
 
         last_ch_tstamp = std::chrono::system_clock::now();
-        //reconfigure_usrp(channel_map[current_channel]%channels_.size());
-        reconfigure_usrp(0);
 
-        cout << "Current Challenge Score: " << DatabaseApi::getInstance().current_score() << endl;
-        cout << "Current Challenge Scenario: " << pu_scenario_api->PU_scenario_idx() << endl;
+        int ch = 0;//channel_map[current_channel]%channels_.size();
+        reconfigure_usrp(ch);
+        //reconfigure_usrp(current_channel);
+
+
+       //cout << "Current Challenge Score: " << DatabaseApi::getInstance().current_score() << endl;
+        //cout << "Current Challenge Scenario: " << pu_scenario_api->PU_scenario_idx() << endl;
     }
 }
 

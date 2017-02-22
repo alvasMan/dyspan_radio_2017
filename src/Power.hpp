@@ -32,23 +32,33 @@ public:
         PreviousPuThru = 0;
         PreviousMaxPuThru = 0;
 
-
+zero_cnt = 0;
         CurrentSuThru = 0;
         MaxSuThru = 0;
     
         PreviousSuThru = 0;
         PreviousMaxSuThru = 0;
-        PowerHist.set_capacity(6);
-       
+        ScoreHist.set_capacity(6);
+       PowerHist.set_capacity(6);
         for(int i = 0; i<6; i++)
+        {
+            ScoreHist.push_back(-1);
             PowerHist.push_back(0);
-        
+        }
         
         Score = 0;
         ScorePrev = 0;
         direction = true;
-        hrys = Score*(0.05);
-         
+        hrys = Score*(0.1);
+        
+        wait_check = false;
+        wait_check_lower = false;
+        wait_check_higher= false;
+        wait_power = 0;
+        wait_score = 0;
+        wait_score_lower = 0;
+        wait_score_higher = 0;
+        wait_directions_checked = 0;
         
         
     };
@@ -58,7 +68,7 @@ public:
     int CCompute(int Power)
     {
         count++;
-        if (count == 200)
+        if (count == 100)//80)
         {
             count = 0;
             return Compute(Power);
@@ -79,96 +89,172 @@ public:
         
         PreviousMaxSuThru = MaxSuThru;
         PreviousSuThru = CurrentSuThru;
-        int myRadio;
-        //myRadio = spectrum_getRadioNumber(spec);
-        //spectrum_getThroughput(spectrum object pointer,radio number, duration (ms))
         
-        
-        //CurrentPuThru = spectrum_getThroughput(spec, 1,  10);
         CurrentPuThru = DatabaseApi::getInstance().Tpu();
-        
-        
-        //MaxPuThru = spectrum_getProvidedThroughput(spec,1,10);
         MaxPuThru = DatabaseApi::getInstance().Tpu_provided();
-        
-        
-        
-        //CurrentSuThru = spectrum_getThroughput(spec, 1,  10);
         CurrentSuThru = DatabaseApi::getInstance().Tsu();
-        
-        //MaxSuThru = spectrum_getProvidedThroughput(spec, 1, 10);
-        MaxSuThru = DatabaseApi::getInstance().Tsu_provided();
-        
-        
-        
+        MaxSuThru = DatabaseApi::getInstance().Tsu_provided();      
         std::cout << "[IN POWER ] SU throughput is :  "  << CurrentSuThru << "  out of a possible : " << MaxSuThru << std::endl;
         std::cout << "[IN POWER ]  PU throughput is :  "  << CurrentPuThru << "  out of a possible : " << MaxPuThru << std::endl;
+        
+        
+        
+        if(!wait_check)
         ScorePrev = Score;
         
         double expon = -10*((MaxPuThru - CurrentPuThru)/MaxPuThru);
-      
-        Score = CurrentSuThru*std::exp(expon);
-       
+        int x = (CurrentPuThru == 0)?0:1;
+        Score = CurrentSuThru*std::exp(expon)*x;
         double totScore = MaxSuThru * exp(-10*(0));
-        
         double ScoreDiff = Score - ScorePrev;
+        
+        if(!wait_check)
+        ScoreHist.push_back(Score);
+        
+        
+        
         double newPower;
-        hrys = Score*(0.1);
+        hrys = Score*(0.08);
+        
+        
+        
+        std::cout << "Score is :: " << Score << std::endl;
+        std::cout << "Score diff is  : " << ScoreDiff << std::endl;
+        std::cout << "hyrs is : " << hrys << std::endl;
+        if((Power <= 0 && direction == false))
+        {
+            Power = 0;
+            direction = true;
+        }
+        if((Power >= 32 && direction == true))
+        {
+            Power = 32;
+            direction = false;
+        }
+        bool change_direction = false;
+        if(Score == 0)
+        {
+            zero_cnt++;
+        }
+        if(CurrentPuThru == 0)
+            direction = false;
+        
+        
+        //std::cout << "state is : " << state << std::endl;
+        //std::cout << "wait check is : " << wait_check << std::endl;
         switch(state)
         {
             case CHANGE:
-                if(ScoreDiff < 0 && fabs(ScoreDiff) > hrys)
+                if((ScoreDiff < 0 && fabs(ScoreDiff) > hrys) || change_direction)
                 {
                     //double adjustment = ScalingFactor*Power*(fabs(ScoreDiff)/totScore); 
-                    //double adjustment = ScalingFactor*Power*(fabs(ScoreDiff)/ScorePrev);
-                    
-                    
+                    std::cout << "change state : change direction" << std::endl;
                     newPower = (direction) ? Power - 1 : Power + 1; 
-                    
                     PowerHist.push_back(newPower);
-                    //transitions.push_back(false);
-                    if(
-                       (PowerHist.at(5) == PowerHist.at(3)) &&
-                      (((PowerHist.at(4) - PowerHist.at(5) == 1) && direction) || ((PowerHist.at(5) - PowerHist.at(4) == 1) && !direction) ) 
-                      )
-                        
+                    if(//(PowerHist.at(5) == PowerHist.at(3)) && (PowerHist.at(4) == PowerHist.at(2)) && (PowerHist.at(5) != PowerHist.at(4)) 
+                       (PowerHist.at(5) == PowerHist.at(3)) &&(((PowerHist.at(4) - PowerHist.at(5) == 1) && direction) || ((PowerHist.at(5) - PowerHist.at(4) == 1) && !direction) ) 
+                      )      
                     {
                         state = WAIT;
                         std::cout << "************** go to wait state*****************" << std::endl;
                     }
                     direction = !direction;
-                    //return newPower;
                 }
                 else// wrong
                 {
-                    //transitions.push_back(true);
+                    std::cout << "change state : keep going" << std::endl;
                     newPower = (direction) ? Power + 1 : Power - 1;
-                    PowerHist.push_back(newPower);
-                    
+                    PowerHist.push_back(newPower);   
                 }
                 
                 
             break; 
             case WAIT:
-                if(ScoreDiff < 0 && fabs(ScoreDiff) > hrys)// might want some kind of hyresthesis to allow for noisey throughput calc
+                if((ScoreDiff < 0 && fabs(ScoreDiff) > hrys) && (!wait_check))// might want some kind of hyresthesis to allow for noisey throughput calc
                 {
-                    newPower = (direction) ? Power - 1 : Power + 1;
-                    PowerHist.push_back(newPower);
-                    state = CHANGE;
+                        newPower = (direction) ? Power - 1 : Power + 1;
+                        PowerHist.push_back(newPower);
+                        state = CHANGE;       
                 }
                 else
                 {
-                    newPower = Power;
+                    if(wait_check == true)
+                    {
+                        if(wait_check_lower)
+                        {
+                            std::cout << "wait lower checked" << std::endl;
+                            wait_directions_checked++;
+                            wait_score_lower = Score;
+                            double temp_diff = wait_score_lower - wait_score;
+                            
+                            if(temp_diff > hrys)
+                            {
+                                std::cout << "      {go lower}" << std::endl;
+                                newPower = Power;
+                                direction = false;
+                                wait_check = false;
+                                state = CHANGE;
+                                break;
+                            }
+                        }
+                        if(wait_check_higher)
+                        {
+                            std::cout << "wait higher checked" << std::endl;
+                            
+                            wait_directions_checked++;
+                            wait_score_higher = Score;
+                            double temp_diff = wait_score_higher - wait_score;
+                            if(temp_diff > hrys)
+                            {
+                                std::cout << "      {go higher}" << std::endl;
+                                newPower = Power;
+                                direction = true;
+                                wait_check = false;
+                                state = CHANGE;
+                                break;      
+                            }                         
+                        }
+                    }
+                    else
+                    {
+                        cout << "wait power is : " << wait_power << std::endl;
+                        wait_score = Score;
+                        wait_power = Power;
+                        
+                        newPower = (direction) ? Power + 1 : Power - 1;
+                        
+                        wait_check_lower = (direction)?false:true;
+                        wait_check_higher = (direction)?true:false;
+                        wait_check = true;
+                        break;
+                        
+                    }
+                    
+                    if(wait_directions_checked == 2)
+                    {
+                        std::cout << "wait directions checked " << std::endl;
+                        newPower = wait_power;
+                        wait_directions_checked = 0;
+                        wait_check = false;
+                        wait_check_higher = false;
+                        wait_check_lower = false;
+                        break;
+                        
+                    }
+                    newPower = (wait_check_lower)? Power + 2 : Power - 2;
+                    wait_check_lower = !wait_check_lower;
+                    wait_check_higher = !wait_check_higher;
+                    
+                    //newPower = Power;
                     //find logic to decide to search again
                 }
-                
             break;
             
             default:
             
             break;
         }
-       
+       std::cout << "newPower is : " << newPower << std::endl;
         return newPower;
         
     };
@@ -182,14 +268,12 @@ public:
     spectrum* spec;
     double PreviousPower;
     double CurrentPower;
-    //uhd::usrp::multi_usrp::sptr usrp;
     int count;
     double CurrentPuThru;
     double MaxPuThru;
     
     double PreviousPuThru;
     double PreviousMaxPuThru;
-
 
     double CurrentSuThru;
     double MaxSuThru;
@@ -202,7 +286,23 @@ public:
     int state;
     double ScalingFactor;
     boost::circular_buffer<double> PowerHist;
+    boost::circular_buffer<double> ScoreHist;
     bool direction;
     double hrys;
+    int zero_cnt;
+    
+    
+    
+    //////wait logic
+    bool wait_check;
+    bool wait_check_lower;
+    bool wait_check_higher;
+    
+    double wait_score;
+    int wait_power;
+    double wait_score_lower;
+    double wait_score_higher;
+    int wait_directions_checked;
+    
     
 };
