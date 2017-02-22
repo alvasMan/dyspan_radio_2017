@@ -35,11 +35,12 @@ ModulationSearchApi::ModulationSearchApi()
 : m_first_lookup(true),
   m_stop_searching(false),
   m_gain_changed(false),
-  m_mod_samples(4),
+  m_mod_samples(6),
   m_sample_counter(0),
   m_this_mod_tsu_v(m_mod_samples),
   m_previous_mod_tsu_v(m_mod_samples),
   m_modulation_list{
+    LIQUID_MODEM_QAM4,
     LIQUID_MODEM_QAM8,
     LIQUID_MODEM_QAM16,
     LIQUID_MODEM_QAM32,
@@ -90,8 +91,8 @@ ModulationSearchApi::linearModSearch()
 
     // First lookup, cannot compare with previous throughput.
     // Increment the mod and pass the collected throughput to the other vector.
-    if(!m_first_lookup)
-    {
+    //if(!m_first_lookup)
+    //{
         float sum_of_tsu_this=0;
         float sum_of_tsu_previous=0;
 
@@ -106,7 +107,7 @@ ModulationSearchApi::linearModSearch()
             cout << "\t Sum TSU previous:" <<sum_of_tsu_previous<<endl;
             cout << "\t Sum TSU this:" <<sum_of_tsu_this<<endl;
 
-            if (sum_of_tsu_this <= sum_of_tsu_previous) //End of constelation list, or previous mod was better
+            if (sum_of_tsu_this <= sum_of_tsu_previous || sum_of_tsu_this == 0) //End of constelation list, or previous mod was better
             {
                 --m_current_modulation;
                 m_stop_searching = true;
@@ -121,7 +122,7 @@ ModulationSearchApi::linearModSearch()
                 }
             }
         }
-    }
+    //}
     m_previous_mod_tsu_v.assign(m_this_mod_tsu_v.begin(),m_this_mod_tsu_v.end());
     m_first_lookup = false;
     return;

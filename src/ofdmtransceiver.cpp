@@ -109,7 +109,7 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
       cout << "Gain Start ("<<tx_gain_range.start()<<")"<< endl;
       cout << "Gain Step ("<<tx_gain_range.step()<<")" << endl;
       cout << "Gain Stop ("<<tx_gain_range.stop()<<")" << endl;
-      for( double it = tx_gain_range.start(); it < tx_gain_range.stop(); it=it+tx_gain_range.step() )
+      for( double it = tx_gain_range.start(); it < tx_gain_range.stop(); it=it+2*tx_gain_range.step() )
       {
         tx_gain_range_v.push_back(it);
         cout<< it << " ";
@@ -118,11 +118,28 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
       gain_it = tx_gain_range_v.begin();
       //create calibration file here
       cout << "Opening Calibration File: "<< params_.cal_file << endl;
-      cal_file.open (params_.cal_file); //This file is closed on
+      cal_file.open (params_.cal_file, std::ofstream::out | std::ofstream::trunc); //This file is closed on
     }
     else
     {
       //read power -> mod mapping file here.
+      cal_file.open (params_.cal_file);
+      std::string gain_str;
+      std::string mod_str;
+      std::map<float,modulation_scheme> gain_2_mod;
+      while(!cal_file.eof())
+      {
+          getline(cal_file, gain_str, ' ');
+          if(gain_str.size() == 0)
+              break;
+          getline(cal_file, mod_str);
+          //cout<<gain_str<<endl;
+          //float gain_float = std::atof(gain_str.c_str());
+          float gain_float = std::stof(gain_str);
+          gain_2_mod[gain_float]=liquid_getopt_str2mod(mod_str.c_str());
+          cout<<gain_str<<endl;
+          cout<<modulation_types[gain_2_mod[gain_float]].name<<endl;
+      }
     }
 
     if (params_.use_db)
@@ -586,8 +603,8 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
         constexpr int channel_map[] = {2, 0, 3, 1};
 
         last_ch_tstamp = std::chrono::system_clock::now();
-        reconfigure_usrp(channel_map[current_channel]%channels_.size());
-        //reconfigure_usrp(current_channel);
+        //reconfigure_usrp(channel_map[current_channel]%channels_.size());
+        reconfigure_usrp(0);
 
         cout << "Current Challenge Score: " << DatabaseApi::getInstance().current_score() << endl;
         cout << "Current Challenge Scenario: " << pu_scenario_api->PU_scenario_idx() << endl;

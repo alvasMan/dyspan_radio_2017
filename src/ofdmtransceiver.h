@@ -116,7 +116,7 @@ private:
     uhd::gain_range_t tx_gain_range;
     std::vector<double> tx_gain_range_v;
     std::vector<double>::const_iterator gain_it;
-    std::ofstream cal_file;
+    std::fstream cal_file;
 
     //std::pair<double,bool> DwellEst(DwellTimeEstimator &Dwell, double &previous_dwelltime, int &dwell_counter, int steady_state, double steady_state_Th);
     uhd::time_spec_t timestamp_;
