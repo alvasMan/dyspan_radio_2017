@@ -52,6 +52,7 @@ typedef struct
     bool debug;
     bool has_sensing;
     bool has_learning;
+    bool has_deep_learning;
     bool sensing_to_file;
     std::string mode;
     std::string args;

@@ -84,22 +84,52 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
 
     // tune to first channel with setting the LO
     assert(channels_.size() > 0);
+    if(params_.tx_enabled)
+        su_params_api.reset(new SU_tx_params());
     reconfigure_usrp(0, false);//true);
 
     set_rx_freq(params_.f_center);
     set_rx_rate(rx_rf_rate);
     set_rx_gain_uhd(params_.rx_gain_uhd);
-    //set_rx_antenna("J1");
+
+    set_rx_antenna(params_.rx_antenna);
 
     // Add PU parameters and scenarios
     pu_data = context_utils::make_rf_environment();    // this is gonna read files
     pu_scenario_api.reset(new SituationalAwarenessApi(*pu_data));
 
-    if (params_.has_sensing)
+    // Add SU config. API
+
+    // check if no weird configuration
+    assert(params_.has_sensing || (!params_.sensing_to_file && !params_.has_deep_learning && !params_.has_learning));
+
+    if(params_.sensing_to_file)
+        ch_pwrs_buffers.emplace_back(new bounded_buffer<ChPowers>(1000));
+    if(params_.has_deep_learning)
+        ch_pwrs_buffers.emplace_back(new bounded_buffer<ChPowers>(1000));
+
+    BinMask *bin_mask_ptr = NULL;
+    if(params_.has_sensing && params_.has_learning)
     {
-        shandler = sensing_utils::make_sensing_handler(4, params_.project_folder, params_.read_learning_file,
-                                             params_.write_learning_file, pu_scenario_api.get(), true, true);
+        learning_chain.emplace();
+        learning_chain->setup_filepaths(params_.project_folder, params_.read_learning_file, params_.write_learning_file);
+        learning_chain->setup(ch_pwrs_buffers, 4, 512);
+        bin_mask_ptr = &learning_chain->pwr_estim.bin_mask;
     }
+    else if(params_.has_sensing)
+    {
+        sensing_chain.emplace();
+        sensing_chain->setup(pu_scenario_api.get(), su_params_api.get(), ch_pwrs_buffers, 4, 512);
+        bin_mask_ptr = &sensing_chain->pwr_estim.bin_mask;
+    }
+
+    auto it = ch_pwrs_buffers.begin();
+    if(params_.sensing_to_file)
+    {
+        spectrogram2file_chain.emplace(it->get(), *bin_mask_ptr);
+        ++it;
+    }
+
     if(params_.calibration)
     {
       if(!params_.use_db)
@@ -141,6 +171,13 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
           cout<<modulation_types[gain_2_mod[gain_float]].name<<endl;
       }
     }
+
+    if(params_.has_deep_learning)
+    {
+        deep_learning_chain.emplace(pu_scenario_api.get(), it->get(), *bin_mask_ptr);
+        ++it;
+    }
+    assert(it==ch_pwrs_buffers.end());
 
     if (params_.use_db)
     {
@@ -198,6 +235,8 @@ void OfdmTransceiver::start(void)
         threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::modulation_function, this ) ) );
         threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );
         //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
+
+        threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
     }
 
     // Launch thread that handles database throughput queries
@@ -205,7 +244,6 @@ void OfdmTransceiver::start(void)
     {
         int radio_id = spectrum_getRadioNumber(tx_);
         threads_.push_back(new boost::thread(boost::bind(launch_database_thread, tx_, radio_id, params_.db_period)));
-
     }
     else
     {
@@ -220,13 +258,19 @@ void OfdmTransceiver::start(void)
         // the two threads communicate through the e_detec buffer
         if(params_.has_learning)
         {
-            threads_.push_back(new boost::thread(sensing_utils::launch_learning_thread, usrp_tx, &shandler));
+            threads_.push_back(new boost::thread(boost::bind(&LearningThreadHandler::run, &(*learning_chain), usrp_tx)));
             if(params_.sensing_to_file)
-                threads_.push_back(new boost::thread(sensing_utils::launch_spectrogram_to_file_thread, &shandler));
+                threads_.push_back(new boost::thread(boost::bind(&Spectrogram2FileThreadHandler::run,&(*spectrogram2file_chain))));
         }
         else
-            threads_.push_back(new boost::thread(sensing_utils::launch_sensing_thread, usrp_tx, &shandler));
-        threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
+        {
+            threads_.push_back(new boost::thread(boost::bind(&SensingThreadHandler::run, &(*sensing_chain), usrp_tx)));
+            if(params_.has_deep_learning)
+            {
+                threads_.push_back(new boost::thread(boost::bind(&Spectrogram2SocketThreadHandler::run_recv, &(*deep_learning_chain))));
+                threads_.push_back(new boost::thread(boost::bind(&Spectrogram2SocketThreadHandler::run_send, &(*deep_learning_chain))));
+            }
+        }
         //threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, pu_scenario_api.get()));
     }
     else
@@ -235,6 +279,11 @@ void OfdmTransceiver::start(void)
         threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, pu_scenario_api.get()));
     }
 }
+
+//void OfdmTransceiver::set_channel()
+//{
+//
+//}
 
 
 // This function creates new frames and pushes them on a shared buffer
@@ -300,6 +349,7 @@ void OfdmTransceiver::modulation_function(void)
                 current_gain = new_gain;
               }
             }
+
             // write header (first four bytes sequence number, remaining are random)
             // TODO: also use remaining 4 bytes for payload
             header[0] = (seq_no_ >> 24) & 0xff;
@@ -342,8 +392,8 @@ void OfdmTransceiver::modulation_function(void)
             boost::shared_ptr<CplxFVec> usrp_buffer( new CplxFVec(frame_size) );
             unsigned int bytes_written = 0;
             while (num_symbols--) {
-                ofdmflexframegen_writesymbol(fg, fgbuffer);
-                //ofdmflexframegen_write(fg, fgbuffer, fgbuffer_len);
+                //ofdmflexframegen_writesymbol(fg, fgbuffer);
+                ofdmflexframegen_write(fg, fgbuffer, fgbuffer_len);
                 // copy symbol and apply gain
                 for (int i = 0; i < fgbuffer_len; i++)
                     (*usrp_buffer.get())[bytes_written + i] = fgbuffer[i] * tx_gain;
@@ -435,7 +485,8 @@ void OfdmTransceiver::random_transmit_function(void)
         boost::this_thread::interruption_point();
 
         // get random channel
-        if (next_channel == 9) {
+        if (next_channel == 9)
+        {
           int num = rand() % channels_.size();
           reconfigure_usrp(num, false);
         }
@@ -450,34 +501,29 @@ void OfdmTransceiver::random_transmit_function(void)
     }
 }
 
-
+// change USRP frequency
 void OfdmTransceiver::reconfigure_usrp(const int num, bool tune_lo = false)
 {
+    static vector<int> channel_map = {3, 1, 0, 2};
     // construct tuning request
     current_channel = num;
     int internal_num = num;
 
-    if (channels_.size() > 1) {
-      // only do remapping for more channels
-      if(num == 0)
-        internal_num = 3;
-      if(num == 1)
-          internal_num = 1;
-      if(num == 2)
-          internal_num = 0;
-      if(num == 3)
-          internal_num = 2;
-    }
+    if (channels_.size() > 1)
+        internal_num = channel_map[num];
 
     uhd::tune_request_t request;
     // don't touch RF part
 
-    if (tune_lo) {
-      request.rf_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
-      request.rf_freq = channels_.at(internal_num).rf_freq;
-    } else {
-      request.rf_freq_policy = uhd::tune_request_t::POLICY_NONE;
-      request.rf_freq = 0;
+    if (tune_lo)
+    {
+        request.rf_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
+        request.rf_freq = channels_.at(internal_num).rf_freq;
+    }
+    else
+    {
+        request.rf_freq_policy = uhd::tune_request_t::POLICY_NONE;
+        request.rf_freq = 0;
     }
 
     // only tune DSP frequency
@@ -485,90 +531,96 @@ void OfdmTransceiver::reconfigure_usrp(const int num, bool tune_lo = false)
     request.dsp_freq = channels_.at(internal_num).dsp_freq;
     request.args = uhd::device_addr_t("mode_n=integer");
     uhd::tune_result_t result = usrp_tx->set_tx_freq(request);
+    if(su_params_api)   // sets the SU-TX channel so the sensing sees it
+        su_params_api->set_channel(num);
 
-    if (params_.debug) {
+    if (params_.debug)
+    {
         cout << result.to_pp_string() << endl;
     }
 }
 
 // COMMENT: To many payload invalid with this "new" transmit_packet()
-// void OfdmTransceiver::transmit_packet()
-// {
-//   boost::shared_ptr<CplxFVec> buffer;
-//   frame_buffer.popFront(buffer);
-//
-//   //setup metadata for the first packet
-//   uhd::tx_metadata_t md;
-//   md.start_of_burst = true;
-//   md.end_of_burst = false;
-//   md.has_time_spec = false;
-//
-//   //the first call to send() will block this many seconds before sending:
-//   double timeout = 1.5; //std::max(0 seconds_in_future) + 0.1; //timeout (delay before transmit + padding)
-//
-//   const size_t spb = tx_streamer->get_max_num_samps();
-//   size_t total_num_samps = buffer->size();
-//   size_t num_acc_samps = 0; //number of accumulated samples
-//   while(num_acc_samps < total_num_samps){
-//     size_t samps_to_send = total_num_samps - num_acc_samps;
-//     if (samps_to_send > spb)
-//     {
-//       samps_to_send = spb;
-//     } else {
-//       md.end_of_burst = true;
-//     }
-//
-//     //send a single packet
-//     size_t num_tx_samps = tx_streamer->send(
-//       &buffer->front()+num_acc_samps, samps_to_send, md, timeout
-//     );
-//
-//     //do not use time spec for subsequent packets
-//     md.has_time_spec = false;
-//     md.start_of_burst = false;
-//
-//     if (num_tx_samps < samps_to_send)
-//     {
-//       std::cerr << "Send timeout..." << endl;
-//     }
-//     //cout << boost::format("Sent packet: %u samples of %u") % num_tx_samps % total_num_samps << endl;
-//
-//     num_acc_samps += num_tx_samps;
-//   }
-// }
-
-
-void OfdmTransceiver::transmit_packet()
-{
-    // set up the metadata flags
-    metadata_tx.start_of_burst = false; // never SOB when continuous
-    metadata_tx.end_of_burst   = false; //
-    metadata_tx.has_time_spec  = false; // set to false to send immediately
-
-    boost::shared_ptr<CplxFVec> buffer;
+ void OfdmTransceiver::transmit_packet()
+ {
+   boost::shared_ptr<CplxFVec> buffer;
     frame_buffer.popFront(buffer);
 
-    // send samples to the device
-    usrp_tx->get_device()->send(
-        &buffer->front(), buffer->size(),
-        metadata_tx,
-        uhd::io_type_t::COMPLEX_FLOAT32,
-        uhd::device::SEND_MODE_FULL_BUFF
-    );
+    //setup metadata for the first packet
+    uhd::tx_metadata_t md;
+    md.start_of_burst = true;
+    md.end_of_burst = false;
+    md.has_time_spec = false;
 
-    // send a few extra samples and EOB to the device
-    // NOTE: this seems necessary to preserve last OFDM symbol in
-    //       frame from corruption
-    metadata_tx.start_of_burst = false;
-    metadata_tx.end_of_burst   = true;
-    CplxFVec dummy(NUM_PADDING_NULL_SAMPLES);
-    usrp_tx->get_device()->send(
-        &dummy.front(), dummy.size(),
-        metadata_tx,
-        uhd::io_type_t::COMPLEX_FLOAT32,
-        uhd::device::SEND_MODE_FULL_BUFF
-    );
-}
+    //the first call to send() will block this many seconds before sending:
+    double timeout = 1.5; //std::max(0 seconds_in_future) + 0.1; //timeout (delay before transmit + padding)
+
+    const size_t spb = tx_streamer->get_max_num_samps();
+    size_t total_num_samps = buffer->size();
+    size_t num_acc_samps = 0; //number of accumulated samples
+    while (num_acc_samps < total_num_samps)
+    {
+        size_t samps_to_send = total_num_samps - num_acc_samps;
+        if (samps_to_send > spb)
+        {
+            samps_to_send = spb;
+        }
+        else
+        {
+            md.end_of_burst = true;
+        }
+
+        //send a single packet
+        size_t num_tx_samps = tx_streamer->send(
+                                                &buffer->front() + num_acc_samps, samps_to_send, md, timeout
+                                                );
+
+        //do not use time spec for subsequent packets
+        md.has_time_spec = false;
+        md.start_of_burst = false;
+
+        if (num_tx_samps < samps_to_send)
+        {
+            std::cerr << "Send timeout..." << endl;
+        }
+        //cout << boost::format("Sent packet: %u samples of %u") % num_tx_samps % total_num_samps << endl;
+
+        num_acc_samps += num_tx_samps;
+    }
+ }
+
+
+//void OfdmTransceiver::transmit_packet()
+//{
+//    // set up the metadata flags
+//    metadata_tx.start_of_burst = false; // never SOB when continuous
+//    metadata_tx.end_of_burst   = false; //
+//    metadata_tx.has_time_spec  = false; // set to false to send immediately
+//
+//    boost::shared_ptr<CplxFVec> buffer;
+//    frame_buffer.popFront(buffer);
+//
+//    // send samples to the device
+//    usrp_tx->get_device()->send(
+//        &buffer->front(), buffer->size(),
+//        metadata_tx,
+//        uhd::io_type_t::COMPLEX_FLOAT32,
+//        uhd::device::SEND_MODE_FULL_BUFF
+//    );
+//
+//    // send a few extra samples and EOB to the device
+//    // NOTE: this seems necessary to preserve last OFDM symbol in
+//    //       frame from corruption
+//    metadata_tx.start_of_burst = false;
+//    metadata_tx.end_of_burst   = true;
+//    CplxFVec dummy(NUM_PADDING_NULL_SAMPLES);
+//    usrp_tx->get_device()->send(
+//        &dummy.front(), dummy.size(),
+//        metadata_tx,
+//        uhd::io_type_t::COMPLEX_FLOAT32,
+//        uhd::device::SEND_MODE_FULL_BUFF
+//    );
+//}
 
 void OfdmTransceiver::launch_change_places()
 {
@@ -605,7 +657,8 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
 
         last_ch_tstamp = std::chrono::system_clock::now();
 
-        int ch = 0;//channel_map[current_channel]%channels_.size();
+
+        short ch = channel_map[current_channel]%channels_.size();
         reconfigure_usrp(ch);
         //reconfigure_usrp(current_channel);
 
@@ -703,9 +756,9 @@ void OfdmTransceiver::set_rx_gain_uhd(float _rx_gain_uhd)
 }
 
 // set receiver antenna
-void OfdmTransceiver::set_rx_antenna(char * _rx_antenna)
+void OfdmTransceiver::set_rx_antenna(const std::string& _rx_antenna)
 {
-    usrp_rx->set_rx_antenna(_rx_antenna);
+    usrp_rx->set_rx_antenna(_rx_antenna.c_str());
     cout << "Using RX Antenna: " << usrp_rx->get_rx_antenna() << endl;
 }
 

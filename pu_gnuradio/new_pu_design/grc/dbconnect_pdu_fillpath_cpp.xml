@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<block>
+  <name>pdu_fillpath_cpp</name>
+  <key>dbconnect_pdu_fillpath_cpp</key>
+  <category>dbconnect</category>
+  <import>import dbconnect</import>
+  <make>dbconnect.pdu_fillpath_cpp()</make>
+  <sink>
+   <name>in0</name>
+   <type>message</type>
+  </sink>
+  <source>
+    <name>out0</name>
+    <type>complex</type>
+  </source>
+</block>

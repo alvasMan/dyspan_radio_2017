@@ -6,6 +6,8 @@
 
 #include "database_comms.h"
 #include <boost/thread.hpp>
+#include <chrono>
+#include <boost/format.hpp>
 
 using std::cout;
 using std::endl;
@@ -56,6 +58,9 @@ void launch_mock_database_thread()
 // TODO: Write it
 void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep_time)
 {
+    float print_interval_msec = 2000;
+    std::chrono::system_clock::time_point t1 = std::chrono::system_clock::now();
+    std::chrono::system_clock::time_point t2 = std::chrono::system_clock::now();
     DatabaseApi &db_api = DatabaseApi::getInstance();
 
     float tsu = 0;
@@ -77,14 +82,14 @@ void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep
           tsu = spectrum_getThroughput(spec, radio_number, average_time);
           tsu_provided = spectrum_getProvidedThroughput(spec, radio_number, average_time);
 
-
+/*
 #ifdef DEBUG
           std::cout << "Tsu: "      << tsu          << std::endl;
           std::cout << "Tsu_real: " << tsu_provided << std::endl;
           std::cout << "Tpu: "      << tpu          << std::endl;
           std::cout << "Tpu_real: " << tpu_provided << std::endl;
 #endif
-
+*/
           // TODO: Update throughputs
           db_api.push_Tsu(DbReply(tsu));
           db_api.push_Tsu_provided(DbReply(tsu_provided));
@@ -94,6 +99,17 @@ void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep
 
           // Is sleep needed?
           boost::this_thread::sleep(boost::posix_time::milliseconds(sleep_time));
+
+          t2 = std::chrono::system_clock::now();
+          if(std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count() > print_interval_msec)
+          {
+            std::cout << "Statistics:" << std::endl;
+            std::cout << "> Tsu [n,d,n/d]: " << boost::format("%|8t|[%4d, %|22t|%4d, %|34t|%8.2f]") % tsu % tsu_provided % (tsu/(float)tsu_provided) << std::endl;
+            std::cout << "> Tpu [n,d,n/d]: " << boost::format("%|8t|[%4d, %|22t|%4d, %|34t|%8.2f]") % tpu % tpu_provided % (tpu/(float)tpu_provided) << std::endl;
+            //std::cout << "> Tpu [n,d,n/d]: " << boost::format("%|8t|[%1%, %|22t|%2%, %|34t|%3%]") % tpu % tpu_provided % (tpu/(float)tpu_provided) << std::endl;
+            std::cout << "> Score: \t\t\t\t" << db_api.current_score() << std::endl << std::endl;
+            t1=t2;
+          }
        }
     }
     catch(boost::thread_interrupted)

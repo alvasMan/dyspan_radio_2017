@@ -51,7 +51,6 @@ template<class T>
 class bounded_buffer
 {
 public:
-
     bounded_buffer(int size) : buf(size), n_written(0), w_idx(-1), r_idx(-1)
     {
     }
@@ -98,7 +97,7 @@ public:
         bool flag = true;
         if (n_written == buf.size())
         {
-            std::cout << "O"; // we write in the previous
+            std::cout << "B"; // we write in the previous
             n_written--;
             flag = false;
         }
@@ -123,10 +122,20 @@ public:
         m_not_full.notify_one();
     }
 
-    bool empty()
+    inline bool empty()
     {
         boost::mutex::scoped_lock lock(m_mutex);
         return n_written == 0;
+    }
+    
+    inline int capacity() const
+    {
+        return buf.size();
+    }
+    
+    inline int estimated_size() const
+    {
+        return n_written;
     }
 
 private:

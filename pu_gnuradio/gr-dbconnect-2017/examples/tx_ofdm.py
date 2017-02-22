@@ -86,9 +86,9 @@ class tx_ofdm(gr.top_block, Qt.QWidget):
         )
 
         self.uhd_usrp_sink_0.set_samp_rate(samp_rate)
-        self.uhd_usrp_sink_0.set_center_freq(1255e6, 0)
+        self.uhd_usrp_sink_0.set_center_freq(2.49e9,0) #1255e6, 0)
         self.uhd_usrp_sink_0.set_gain(15, 0)
-        self.uhd_usrp_sink_0.set_antenna('TX/RX', 0)
+        self.uhd_usrp_sink_0.set_antenna('J1', 0)
         self.rational_resampler_xxx_0_0_1_1 = filter.rational_resampler_ccc(
                 interpolation=interp_factor,
                 decimation=decim_factor,
@@ -219,7 +219,8 @@ class tx_ofdm(gr.top_block, Qt.QWidget):
         	  debug_log=False,
         	  scramble_bits=False
         	 )
-        self.dbconnect_pktgen_0 = dbconnect.pktgen(1, packet_len, False, False, False, "127.0.0.1", 5002, 5, 10, 2, 20, 50, 100, 30000, 0.05, 6643, 5, 30, 2000, 2, 9, 0, 0)
+	# params:									db_ip		port						          scenario,ch1,ch2,gain(if static, if not leave it out or type -1)
+        self.dbconnect_pktgen_0 = dbconnect.pktgen(1, packet_len, False, False, False, "192.168.5.221", 5003, 5, 10, 2, 20, 50, 100, 30000, 0.05, 6643, 5, 30, 2000, 2,0,   3, -1,  5)
         self.dbconnect_pdu_fillpath_cpp_0_0_1 = dbconnect.pdu_fillpath_cpp()
         self.dbconnect_pdu_fillpath_cpp_0_0_0 = dbconnect.pdu_fillpath_cpp()
         self.dbconnect_pdu_fillpath_cpp_0_0 = dbconnect.pdu_fillpath_cpp()

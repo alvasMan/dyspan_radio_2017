@@ -13,7 +13,9 @@ file(GLOB sources
     database_comms.cpp
     modulation_search_api.cpp
     json_utils.cpp
-    markov_chain_components.cpp)
+    markov_chain_components.cpp
+    monitor_components.cpp
+    usrp_components.cpp)
 
 file(GLOB headers
     dyspanradio.h

@@ -1,17 +1,17 @@
 /* -*- c++ -*- */
-/* 
+/*
  * Copyright 2015 <+YOU OR YOUR COMPANY+>.
- * 
+ *
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3, or (at your option)
  * any later version.
- * 
+ *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this software; see the file COPYING.  If not, write to
  * the Free Software Foundation, Inc., 51 Franklin Street,
@@ -42,7 +42,8 @@ namespace gr {
      * The private constructor
      */
 
-	pktgen_impl::pktgen_impl(float interval, int pktsize, bool quit, bool debug, bool rand_scen, const std::string &host, int port, int tmin, int tmax, int tconst, int mean1, int mean2 , int mean3, int swtime, float psc, int seed, int gain_min, int gain_max, int gain_period, int gain_incr, int fixed_scenario, int first_channel, int second_channel) :
+	pktgen_impl::pktgen_impl(float interval, int pktsize, bool quit, bool debug, bool rand_scen, const std::string &host, int port, int tmin, int tmax, int tconst, int mean1, int mean2 , int mean3, int swtime, float psc, int seed, int gain_min, int gain_max, int gain_period, int gain_incr,
+        int fixed_scenario, int first_channel, int second_channel, int static_gain) :
 		block("pktgen",
 				gr::io_signature::make(0, 0, 0),
 				gr::io_signature::make(0, 0, 0)),
@@ -76,9 +77,10 @@ namespace gr {
 		d_pktsize(pktsize),
 		d_finished(false),
 		d_quit(quit),
-                d_fixed_scenario(fixed_scenario),
-                d_first_channel(first_channel),
-                d_second_channel(second_channel) {
+        d_fixed_scenario(fixed_scenario),
+        d_first_channel(first_channel),
+        d_second_channel(second_channel),
+        d_static_gain(static_gain) {
 
 	message_port_register_out(pmt::mp("out0"));
 	message_port_register_out(pmt::mp("out1"));
@@ -116,7 +118,7 @@ void pktgen_impl:: tx_connect(const std::string &host, int port)
 		spectrum_errorToText(demoTx, retVal, d_errorBuf, sizeof(d_errorBuf));
 		dout << "TX connect:" << d_errorBuf << std::endl;
 		d_myRadio = spectrum_getRadioNumber(demoTx);
-		dout << "Radio number:" << d_myRadio << std::endl;
+		dout << "PRIMARY USER Radio number:" << d_myRadio << std::endl;
 		delete[] d_host;
 
 	}
@@ -171,13 +173,13 @@ pktgen_impl::run(pktgen_impl *instance) {
 	int idx=0;
 	/*
 	  dist_type decides the scenario type
-	    All specified delays are minimum delays between packets. There could be slight variations because of 
+	    All specified delays are minimum delays between packets. There could be slight variations because of
 		pdu_fillpath implementation.
 
 		0. Single random channel  -- deterministic inter packet delay1
-		1. Single random channel  -- deterministic inter packet delay2 
-		2. 2 Channel hopping         -- interpacket delay = delay1, Hopping pattern based on seed 
-		3. 4 Channel hopping         -- interpacket delay = delay2, Hopping pattern based on seed 
+		1. Single random channel  -- deterministic inter packet delay2
+		2. 2 Channel hopping         -- interpacket delay = delay1, Hopping pattern based on seed
+		3. 4 Channel hopping         -- interpacket delay = delay2, Hopping pattern based on seed
 		4. 2 Channel occupied        -- deterministic inter packet delay (delay1)
 		5. 4 Channel occupied        -- deterministic inter packet delay (delay1)
 		6. back to back on all channels (tconst)
@@ -193,32 +195,36 @@ pktgen_impl::run(pktgen_impl *instance) {
 	bool flag_change_scenario = true;
 	int delay_1 = d_tmin;
 	int delay_2 = d_tmax;
-	bool sel_chan0 = false;  
-	bool sel_chan1 = false;  
-	bool sel_chan2 = false;  
-	bool sel_chan3 = false;  
-	int d_gain=d_gain_min;
+	bool sel_chan0 = false;
+	bool sel_chan1 = false;
+	bool sel_chan2 = false;
+	bool sel_chan3 = false;
+    int d_gain;
+    if(d_static_gain<0)
+	   d_gain=d_gain_min;
+   else
+       d_gain = d_static_gain;
 	int hopping_2_chan[2]={d_first_channel,d_second_channel};
 	int occ_2_chan[2]={d_first_channel,d_second_channel};
 
 	if(d_fixed_scenario<0)
 	{
 		//select hopping channels
-		hopping_2_chan[0] = d_dist1(d_gen1); 
+		hopping_2_chan[0] = d_dist1(d_gen1);
 		int schan = d_dist1(d_gen1);
 		while( schan == hopping_2_chan[0])
 		{
-			schan = d_dist1(d_gen1); 
+			schan = d_dist1(d_gen1);
 		}
-		hopping_2_chan[1] = schan; 
+		hopping_2_chan[1] = schan;
 		//select occupied channels
-		occ_2_chan[0] = d_dist1(d_gen1); 
+		occ_2_chan[0] = d_dist1(d_gen1);
 		schan = d_dist1(d_gen1);
 		while( schan == occ_2_chan[0])
 		{
-			schan = d_dist1(d_gen1); 
+			schan = d_dist1(d_gen1);
 		}
-		occ_2_chan[1] = schan; 
+		occ_2_chan[1] = schan;
 	}
 
 	//set to first scenario from the array
@@ -228,66 +234,66 @@ pktgen_impl::run(pktgen_impl *instance) {
 		case 0:
 		case 1:
 		case 3:
-			  sel_chan0 = false;  
-			  sel_chan1 = false;  
-			  sel_chan2 = false;  
-			  sel_chan3 = false;  
+			  sel_chan0 = false;
+			  sel_chan1 = false;
+			  sel_chan2 = false;
+			  sel_chan3 = false;
 			  chan = d_dist1(d_gen1);
 			  switch(chan){
 				  case 0:
-			  		  sel_chan0 = true;  
+			  		  sel_chan0 = true;
 					  break;
 				  case 1:
-			  		  sel_chan1 = true;  
+			  		  sel_chan1 = true;
 				  	  break;
 				  case 2:
-			  		  sel_chan2 = true;  
+			  		  sel_chan2 = true;
 				  	  break;
 				  case 3:
-			  		  sel_chan3 = true;  
+			  		  sel_chan3 = true;
 				  	  break;
 			  }
 			  break;
 		case 2:
 			  idx = d_dist5(d_gen5);
-			  sel_chan0 = false;  
-			  sel_chan1 = false;  
-			  sel_chan2 = false;  
-			  sel_chan3 = false;  
+			  sel_chan0 = false;
+			  sel_chan1 = false;
+			  sel_chan2 = false;
+			  sel_chan3 = false;
 			  switch(hopping_2_chan[idx]){
 				  case 0:
-			  		  sel_chan0 = true;  
+			  		  sel_chan0 = true;
 					  break;
 				  case 1:
-			  		  sel_chan1 = true;  
+			  		  sel_chan1 = true;
 				  	  break;
 				  case 2:
-			  		  sel_chan2 = true;  
+			  		  sel_chan2 = true;
 				  	  break;
 				  case 3:
-			  		  sel_chan3 = true;  
+			  		  sel_chan3 = true;
 				  	  break;
 			  }
 			  break;
 		case 4:
-			  sel_chan0 = false;  
-			  sel_chan1 = false;  
-			  sel_chan2 = false;  
-			  sel_chan3 = false;  
+			  sel_chan0 = false;
+			  sel_chan1 = false;
+			  sel_chan2 = false;
+			  sel_chan3 = false;
 			  for(int j=0; j<2; j++)
 			  {
 			  	switch(occ_2_chan[j]){
 			  	    case 0:
-			  			  sel_chan0 = true;  
+			  			  sel_chan0 = true;
 			  	  	  break;
 			  	    case 1:
-			  			  sel_chan1 = true;  
+			  			  sel_chan1 = true;
 			  	    	  break;
 			  	    case 2:
-			  			  sel_chan2 = true;  
+			  			  sel_chan2 = true;
 			  	    	  break;
 			  	    case 3:
-			  			  sel_chan3 = true;  
+			  			  sel_chan3 = true;
 			  	    	  break;
 			  	}
 			  }
@@ -297,10 +303,10 @@ pktgen_impl::run(pktgen_impl *instance) {
 		case 7:
 		case 8:
 		case 9:
-			  sel_chan0 = true;  
-			  sel_chan1 = true;  
-			  sel_chan2 = true;  
-			  sel_chan3 = true;  
+			  sel_chan0 = true;
+			  sel_chan1 = true;
+			  sel_chan2 = true;
+			  sel_chan3 = true;
 			  break;
 		default:
 			  break;
@@ -319,9 +325,9 @@ pktgen_impl::run(pktgen_impl *instance) {
 				break;
 			}
 
-			/* get packet and send it as pmt 
+			/* get packet and send it as pmt
 			*/
-			spectrum_eror_t retVal; 
+			spectrum_eror_t retVal;
 			pmt::pmt_t pdu;
 
 			/*
@@ -356,44 +362,44 @@ pktgen_impl::run(pktgen_impl *instance) {
 						case 2:
 							  d_inter_per0 = delay_1;
 			  				  idx = d_dist5(d_gen5);
-			  				  sel_chan0 = false;  
-			  				  sel_chan1 = false;  
-			  				  sel_chan2 = false;  
-			  				  sel_chan3 = false;  
+			  				  sel_chan0 = false;
+			  				  sel_chan1 = false;
+			  				  sel_chan2 = false;
+			  				  sel_chan3 = false;
 			  				  switch(hopping_2_chan[idx]){
 			  				      case 0:
-			  				  		  sel_chan0 = true;  
+			  				  		  sel_chan0 = true;
 			  				    	  break;
 			  				      case 1:
-			  				  		  sel_chan1 = true;  
+			  				  		  sel_chan1 = true;
 			  				      	  break;
 			  				      case 2:
-			  				  		  sel_chan2 = true;  
+			  				  		  sel_chan2 = true;
 			  				      	  break;
 			  				      case 3:
-			  				  		  sel_chan3 = true;  
+			  				  		  sel_chan3 = true;
 			  				      	  break;
 			  				  }
 							  break;
 						case 3:
 							  d_inter_per0 = delay_2;
-			  				  sel_chan0 = false;  
-			  				  sel_chan1 = false;  
-			  				  sel_chan2 = false;  
-			  				  sel_chan3 = false;  
+			  				  sel_chan0 = false;
+			  				  sel_chan1 = false;
+			  				  sel_chan2 = false;
+			  				  sel_chan3 = false;
 			  				  chan = d_dist1(d_gen1);
 			  				  switch(chan){
 			  				      case 0:
-			  				  		  sel_chan0 = true;  
+			  				  		  sel_chan0 = true;
 			  				    	  break;
 			  				      case 1:
-			  				  		  sel_chan1 = true;  
+			  				  		  sel_chan1 = true;
 			  				      	  break;
 			  				      case 2:
-			  				  		  sel_chan2 = true;  
+			  				  		  sel_chan2 = true;
 			  				      	  break;
 			  				      case 3:
-			  				  		  sel_chan3 = true;  
+			  				  		  sel_chan3 = true;
 			  				      	  break;
 			  				  }
 							  break;
@@ -426,7 +432,7 @@ pktgen_impl::run(pktgen_impl *instance) {
 				}
 
 			}
-		
+
 			if(d_inter_per1 <=0)
 			{
 				dout << "Inside 1" << std::endl;
@@ -437,7 +443,7 @@ pktgen_impl::run(pktgen_impl *instance) {
 					pdu = pmt::make_blob(d_packetBuffer, d_pktsize);
 					dout << "Sending pkt 1" << std::endl;
 					message_port_pub( pmt::mp("out1"), pmt::cons( pmt::PMT_NIL, pdu ));
-					
+
 					switch ( dist_type) {
 						case 0:
 							  d_inter_per1 = delay_1;
@@ -448,44 +454,44 @@ pktgen_impl::run(pktgen_impl *instance) {
 						case 2:
 							  d_inter_per1 = delay_1;
 			  				  idx = d_dist5(d_gen5);
-			  				  sel_chan0 = false;  
-			  				  sel_chan1 = false;  
-			  				  sel_chan2 = false;  
-			  				  sel_chan3 = false;  
+			  				  sel_chan0 = false;
+			  				  sel_chan1 = false;
+			  				  sel_chan2 = false;
+			  				  sel_chan3 = false;
 			  				  switch(hopping_2_chan[idx]){
 			  				      case 0:
-			  				  		  sel_chan0 = true;  
+			  				  		  sel_chan0 = true;
 			  				    	  break;
 			  				      case 1:
-			  				  		  sel_chan1 = true;  
+			  				  		  sel_chan1 = true;
 			  				      	  break;
 			  				      case 2:
-			  				  		  sel_chan2 = true;  
+			  				  		  sel_chan2 = true;
 			  				      	  break;
 			  				      case 3:
-			  				  		  sel_chan3 = true;  
+			  				  		  sel_chan3 = true;
 			  				      	  break;
 			  				  }
 							  break;
 						case 3:
 							  d_inter_per1 = delay_2;
-			  				  sel_chan0 = false;  
-			  				  sel_chan1 = false;  
-			  				  sel_chan2 = false;  
-			  				  sel_chan3 = false;  
+			  				  sel_chan0 = false;
+			  				  sel_chan1 = false;
+			  				  sel_chan2 = false;
+			  				  sel_chan3 = false;
 			  				  chan = d_dist1(d_gen1);
 			  				  switch(chan){
 			  				      case 0:
-			  				  		  sel_chan0 = true;  
+			  				  		  sel_chan0 = true;
 			  				    	  break;
 			  				      case 1:
-			  				  		  sel_chan1 = true;  
+			  				  		  sel_chan1 = true;
 			  				      	  break;
 			  				      case 2:
-			  				  		  sel_chan2 = true;  
+			  				  		  sel_chan2 = true;
 			  				      	  break;
 			  				      case 3:
-			  				  		  sel_chan3 = true;  
+			  				  		  sel_chan3 = true;
 			  				      	  break;
 			  				  }
 							  break;
@@ -528,7 +534,7 @@ pktgen_impl::run(pktgen_impl *instance) {
 					pdu = pmt::make_blob(d_packetBuffer, d_pktsize);
 					dout << "Sending pkt 2" << std::endl;
 					message_port_pub( pmt::mp("out2"), pmt::cons( pmt::PMT_NIL, pdu ));
-					
+
 					switch ( dist_type) {
 						case 0:
 							  d_inter_per2 = delay_1;
@@ -539,44 +545,44 @@ pktgen_impl::run(pktgen_impl *instance) {
 						case 2:
 							  d_inter_per2 = delay_1;
 			  				  idx = d_dist5(d_gen5);
-			  				  sel_chan0 = false;  
-			  				  sel_chan1 = false;  
-			  				  sel_chan2 = false;  
-			  				  sel_chan3 = false;  
+			  				  sel_chan0 = false;
+			  				  sel_chan1 = false;
+			  				  sel_chan2 = false;
+			  				  sel_chan3 = false;
 			  				  switch(hopping_2_chan[idx]){
 			  				      case 0:
-			  				  		  sel_chan0 = true;  
+			  				  		  sel_chan0 = true;
 			  				    	  break;
 			  				      case 1:
-			  				  		  sel_chan1 = true;  
+			  				  		  sel_chan1 = true;
 			  				      	  break;
 			  				      case 2:
-			  				  		  sel_chan2 = true;  
+			  				  		  sel_chan2 = true;
 			  				      	  break;
 			  				      case 3:
-			  				  		  sel_chan3 = true;  
+			  				  		  sel_chan3 = true;
 			  				      	  break;
 			  				  }
 							  break;
 						case 3:
 							  d_inter_per2 = delay_2;
-			  				  sel_chan0 = false;  
-			  				  sel_chan1 = false;  
-			  				  sel_chan2 = false;  
-			  				  sel_chan3 = false;  
+			  				  sel_chan0 = false;
+			  				  sel_chan1 = false;
+			  				  sel_chan2 = false;
+			  				  sel_chan3 = false;
 			  				  chan = d_dist1(d_gen1);
 			  				  switch(chan){
 			  				      case 0:
-			  				  		  sel_chan0 = true;  
+			  				  		  sel_chan0 = true;
 			  				    	  break;
 			  				      case 1:
-			  				  		  sel_chan1 = true;  
+			  				  		  sel_chan1 = true;
 			  				      	  break;
 			  				      case 2:
-			  				  		  sel_chan2 = true;  
+			  				  		  sel_chan2 = true;
 			  				      	  break;
 			  				      case 3:
-			  				  		  sel_chan3 = true;  
+			  				  		  sel_chan3 = true;
 			  				      	  break;
 			  				  }
 							  break;
@@ -629,44 +635,44 @@ pktgen_impl::run(pktgen_impl *instance) {
 						case 2:
 							  d_inter_per3 = delay_1;
 			  				  idx = d_dist5(d_gen5);
-			  				  sel_chan0 = false;  
-			  				  sel_chan1 = false;  
-			  				  sel_chan2 = false;  
-			  				  sel_chan3 = false;  
+			  				  sel_chan0 = false;
+			  				  sel_chan1 = false;
+			  				  sel_chan2 = false;
+			  				  sel_chan3 = false;
 			  				  switch(hopping_2_chan[idx]){
 			  				      case 0:
-			  				  		  sel_chan0 = true;  
+			  				  		  sel_chan0 = true;
 			  				    	  break;
 			  				      case 1:
-			  				  		  sel_chan1 = true;  
+			  				  		  sel_chan1 = true;
 			  				      	  break;
 			  				      case 2:
-			  				  		  sel_chan2 = true;  
+			  				  		  sel_chan2 = true;
 			  				      	  break;
 			  				      case 3:
-			  				  		  sel_chan3 = true;  
+			  				  		  sel_chan3 = true;
 			  				      	  break;
 			  				  }
 							  break;
 						case 3:
 							  d_inter_per3 = delay_2;
-			  				  sel_chan0 = false;  
-			  				  sel_chan1 = false;  
-			  				  sel_chan2 = false;  
-			  				  sel_chan3 = false;  
+			  				  sel_chan0 = false;
+			  				  sel_chan1 = false;
+			  				  sel_chan2 = false;
+			  				  sel_chan3 = false;
 			  				  chan = d_dist1(d_gen1);
 			  				  switch(chan){
 			  				      case 0:
-			  				  		  sel_chan0 = true;  
+			  				  		  sel_chan0 = true;
 			  				    	  break;
 			  				      case 1:
-			  				  		  sel_chan1 = true;  
+			  				  		  sel_chan1 = true;
 			  				      	  break;
 			  				      case 2:
-			  				  		  sel_chan2 = true;  
+			  				  		  sel_chan2 = true;
 			  				      	  break;
 			  				      case 3:
-			  				  		  sel_chan3 = true;  
+			  				  		  sel_chan3 = true;
 			  				      	  break;
 			  				  }
 							  break;
@@ -708,7 +714,7 @@ pktgen_impl::run(pktgen_impl *instance) {
 			if(d_nmsg_left > 0) {
 				d_nmsg_left--;
 			}
-			
+
 			delay = d_interval;
 
 			if(d_dist_per>=d_swtime && (d_fixed_scenario>=0 || first_change))
@@ -723,66 +729,66 @@ pktgen_impl::run(pktgen_impl *instance) {
 					case 0:
 					case 1:
 					case 3:
-						  sel_chan0 = false;  
-						  sel_chan1 = false;  
-						  sel_chan2 = false;  
-						  sel_chan3 = false;  
+						  sel_chan0 = false;
+						  sel_chan1 = false;
+						  sel_chan2 = false;
+						  sel_chan3 = false;
 						  chan = (d_fixed_scenario < 0) ? d_dist1(d_gen1) : d_first_channel;
 						  switch(chan){
 							  case 0:
-						  		  sel_chan0 = true;  
+						  		  sel_chan0 = true;
 								  break;
 							  case 1:
-						  		  sel_chan1 = true;  
+						  		  sel_chan1 = true;
 							  	  break;
 							  case 2:
-						  		  sel_chan2 = true;  
+						  		  sel_chan2 = true;
 							  	  break;
 							  case 3:
-						  		  sel_chan3 = true;  
+						  		  sel_chan3 = true;
 							  	  break;
 						  }
 						  break;
 					case 2:
-						  sel_chan0 = false;  
-						  sel_chan1 = false;  
-						  sel_chan2 = false;  
-						  sel_chan3 = false;  
+						  sel_chan0 = false;
+						  sel_chan1 = false;
+						  sel_chan2 = false;
+						  sel_chan3 = false;
 						  idx = d_dist5(d_gen5);
 						  switch(hopping_2_chan[idx]){
 							  case 0:
-						  		  sel_chan0 = true;  
+						  		  sel_chan0 = true;
 								  break;
 							  case 1:
-						  		  sel_chan1 = true;  
+						  		  sel_chan1 = true;
 							  	  break;
 							  case 2:
-						  		  sel_chan2 = true;  
+						  		  sel_chan2 = true;
 							  	  break;
 							  case 3:
-						  		  sel_chan3 = true;  
+						  		  sel_chan3 = true;
 							  	  break;
 						  }
 						  break;
 					case 4:
-						  sel_chan0 = false;  
-						  sel_chan1 = false;  
-						  sel_chan2 = false;  
-						  sel_chan3 = false;  
+						  sel_chan0 = false;
+						  sel_chan1 = false;
+						  sel_chan2 = false;
+						  sel_chan3 = false;
 						  for(int j=0; j<2; j++)
 						  {
 						  	switch(occ_2_chan[j]){
 						  	    case 0:
-						  			  sel_chan0 = true;  
+						  			  sel_chan0 = true;
 						  	  	  break;
 						  	    case 1:
-						  			  sel_chan1 = true;  
+						  			  sel_chan1 = true;
 						  	    	  break;
 						  	    case 2:
-						  			  sel_chan2 = true;  
+						  			  sel_chan2 = true;
 						  	    	  break;
 						  	    case 3:
-						  			  sel_chan3 = true;  
+						  			  sel_chan3 = true;
 						  	    	  break;
 						  	}
 						  }
@@ -792,10 +798,10 @@ pktgen_impl::run(pktgen_impl *instance) {
 					case 7:
 					case 8:
 					case 9:
-						  sel_chan0 = true;  
-						  sel_chan1 = true;  
-						  sel_chan2 = true;  
-						  sel_chan3 = true;  
+						  sel_chan0 = true;
+						  sel_chan1 = true;
+						  sel_chan2 = true;
+						  sel_chan3 = true;
 						  break;
 					default:
 						  break;
@@ -807,24 +813,28 @@ pktgen_impl::run(pktgen_impl *instance) {
 				}
 				scncnt = scncnt%scenearr.size();
 			}
-			
+
 			if(d_inter_gain>=d_gain_period)
 			{
 				dout << "DEBUG: " << d_first_channel << std::endl;
-				d_inter_gain=0;
-				d_gain = d_gain + d_gain_incr;
-				if (d_gain > d_gain_max)
-				{
-					d_gain = d_gain_min;
-				}
+                if(d_static_gain<0)
+                {
+                    d_inter_gain=0;
+    				d_gain = d_gain + d_gain_incr;
+    				if (d_gain > d_gain_max)
+    				{
+    					d_gain = d_gain_min;
+    				}
+                }
+                else
+                    d_gain = d_static_gain;
 				message_port_pub(pmt::mp("cmd"), pmt::cons(pmt::mp("gain"), pmt::mp(d_gain)));
-				
 			}
 
 
 		}
 		boost::this_thread::sleep(boost::posix_time::milliseconds(delay));
-	} 
+	}
 
 	} catch(boost::thread_interrupted) {
 		gr::thread::scoped_lock(d_mutex);
@@ -887,12 +897,13 @@ pktgen_impl::is_running() {
 }
 
     pktgen::sptr
-    pktgen::make(float interval, int pktsize, bool quit, bool debug, bool rand_scen, const std::string &host, int port, int tmin, int tmax, int tconst, int mean1, int mean2, int mean3, int swtime, float psc, int seed,int gain_min, int gain_max, int gain_period, int gain_incr, int fixed_scenario, int first_channel, int second_channel)
+    pktgen::make(float interval, int pktsize, bool quit, bool debug, bool rand_scen, const std::string &host, int port, int tmin, int tmax, int tconst, int mean1, int mean2, int mean3, int swtime, float psc, int seed,
+        int gain_min, int gain_max, int gain_period, int gain_incr, int fixed_scenario, int first_channel, int second_channel, int static_gain)
     {
       return gnuradio::get_initial_sptr
-        (new pktgen_impl(interval, pktsize, quit, debug, rand_scen, host, port, tmin, tmax, tconst, mean1, mean2, mean3, swtime, psc, seed, gain_min, gain_max, gain_period, gain_incr, fixed_scenario, first_channel, second_channel));
+        (new pktgen_impl(interval, pktsize, quit, debug, rand_scen, host, port, tmin, tmax, tconst, mean1, mean2, mean3, swtime, psc, seed,
+            gain_min, gain_max, gain_period, gain_incr, fixed_scenario, first_channel, second_channel, static_gain));
     }
 
   } /* namespace dbconnect */
 } /* namespace gr */
-

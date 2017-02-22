@@ -42,7 +42,9 @@
 #include "context_awareness.h"
 #include "database_comms.h"
 #include "json_utils.h"
+#include "SU_parameters.h"
 #include "Power.hpp"
+#include <boost/optional.hpp>
 
 class OfdmTransceiver : public DyspanRadio
 {
@@ -76,7 +78,7 @@ public:
     void set_rx_freq(float _rx_freq);
     void set_rx_rate(float _rx_rate);
     void set_rx_gain_uhd(float _rx_gain_uhd);
-    void set_rx_antenna(char * _rx_antenna);
+    void set_rx_antenna(const std::string& _rx_antenna);
     void reset_rx();
     void start_rx();
     void stop_rx();
@@ -104,13 +106,14 @@ private:
     Buffer<boost::shared_ptr<CplxFVec> > frame_buffer;
 
     // receiver objects
-    SensingHandler shandler;
+    boost::optional<SensingThreadHandler> sensing_chain;
+    boost::optional<LearningThreadHandler> learning_chain;
+    std::vector<std::unique_ptr<buffer_utils::bounded_buffer<ChPowers>>> ch_pwrs_buffers;
+    boost::optional<Spectrogram2SocketThreadHandler> deep_learning_chain;
+    boost::optional<Spectrogram2FileThreadHandler> spectrogram2file_chain;
     PowerSearcher power_controller;
     int current_gain;
 
-    // situational awareness objects
-    std::unique_ptr<RFEnvironmentData> pu_data;
-    std::unique_ptr<SituationalAwarenessApi> pu_scenario_api;
 
     //calibration objects
     uhd::gain_range_t tx_gain_range;
@@ -118,6 +121,12 @@ private:
     std::vector<double>::const_iterator gain_it;
     std::fstream cal_file;
 
+
+    // Awareness/config classes for thread communication
+    std::unique_ptr<RFEnvironmentData> pu_data;
+    std::unique_ptr<SituationalAwarenessApi> pu_scenario_api;
+    std::unique_ptr<SU_tx_params> su_params_api;
+    
     //std::pair<double,bool> DwellEst(DwellTimeEstimator &Dwell, double &previous_dwelltime, int &dwell_counter, int steady_state, double steady_state_Th);
     uhd::time_spec_t timestamp_;
 
@@ -129,6 +138,7 @@ private:
     void launch_change_places();
     void change_ofdm_mod();
     void reconfigure_usrp(const int num, bool tune_lo);
+    void set_channel();
     std::pair<bool,double> dwelltimer();
     void process_sensing(std::vector<float> ChPowers);
     // RF objects and properties

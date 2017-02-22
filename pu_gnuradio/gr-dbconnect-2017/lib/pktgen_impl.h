@@ -1,17 +1,17 @@
 /* -*- c++ -*- */
-/* 
+/*
  * Copyright 2015 <+YOU OR YOUR COMPANY+>.
- * 
+ *
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3, or (at your option)
  * any later version.
- * 
+ *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this software; see the file COPYING.  If not, write to
  * the Free Software Foundation, Inc., 51 Franklin Street,
@@ -57,6 +57,7 @@ namespace gr {
 		int d_fixed_scenario;
 		int d_first_channel;
 		int d_second_channel;
+        int d_static_gain;
 		float d_psc;
 		bool d_debug;
 		bool d_rand_scen;
@@ -69,7 +70,8 @@ namespace gr {
 
      public:
 			pktgen_impl(float interval, int pktsize,
-					bool quit, bool debug, bool rand_scen, const std::string &host, int port, int tmin, int tmax, int tconst, int mean1, int mean2, int mean3, int swtime, float psc, int seed, int gain_min, int gain_max, int gain_period, int gain_incr, int fixed_scenario = -1, int first_channel = -1, int second_channel = -1);
+					bool quit, bool debug, bool rand_scen, const std::string &host, int port, int tmin, int tmax, int tconst, int mean1, int mean2, int mean3, int swtime, float psc, int seed,
+                    int gain_min, int gain_max, int gain_period, int gain_incr, int fixed_scenario = -1, int first_channel = -1, int second_channel = -1, int static_gain = -1);
 			virtual ~pktgen_impl();
 
 			void set_nmsg(int nmsg);
@@ -88,4 +90,3 @@ namespace gr {
 } // namespace gr
 
 #endif /* INCLUDED_DBCONNECT_PKTGEN_IMPL_H */
-

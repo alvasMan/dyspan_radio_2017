@@ -5,3 +5,6 @@
 *~
 .kdev4/
 dyspan_radio_2017.kdev4
+*pyc
+/pu_gnuradio/new_pu_design/build/
+/pu_gnuradio/gr-dbconnect-2017/

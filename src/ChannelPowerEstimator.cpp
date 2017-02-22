@@ -56,6 +56,10 @@ BinMask::BinMask(const vector<int>& bmask)
         else
             ignored_section_props.count++;
     }
+    
+    ch_coeffs.resize(n_sections(), 1);
+    for(int j = 0; j < n_sections(); j++)
+        ch_coeffs[j] = 1.0/(section_props[j].count); // NOTE: when we do FFT we may also need to divide by nBins
 }
 
 BinMask::BinMask(const vector<int>& bmask, const vector<int>& channel_map, const vector<bool>& ref_map)
@@ -79,13 +83,17 @@ BinMask::BinMask(const vector<int>& bmask, const vector<int>& channel_map, const
             section_props[bin_mask[i]].count++;
         else
             ignored_section_props.count++;
-    }    
+    }
+    
+    ch_coeffs.resize(n_sections(), 1);
+    for(int j = 0; j < n_sections(); j++)
+        ch_coeffs[j] = 1.0/(section_props[j].count); // NOTE: when we do FFT we may also need to divide by nBins
 }
 
 void cancel_dc_offset(vector<int> &bin_mask)
 {
     int nBins = bin_mask.size();
-    int margin = 4;
+    int margin = 7;//4;
     for(int i = -margin; i < margin; ++i)
         if(i < 0)
             bin_mask[nBins+i] = -1;
@@ -95,13 +103,14 @@ void cancel_dc_offset(vector<int> &bin_mask)
 
 namespace sensing_utils
 {
-BinMask generate_bin_mask_no_guard(int Nch, int nBins, bool cancel_DC_offset)
+BinMask generate_bin_mask_no_guard(int Nch, int nBins, bool cancel_DC_offset, bool shift)
 {
+    int shift_idxs = (shift==true)? nBins/2 : 0;
     vector<int> bin_mask(nBins);
     float inv_bins_per_channel = (float)Nch / nBins; // 1/bins_per_channel
     for(int i = 0; i < nBins; i++)
     {
-        bin_mask[i] = floor(((i + nBins/2) % nBins) * inv_bins_per_channel);
+        bin_mask[i] = floor(((i + shift_idxs) % nBins) * inv_bins_per_channel);
     }
     
     if(cancel_DC_offset)
@@ -133,8 +142,9 @@ BinMask generate_bin_mask(int Nch, int nBins, float non_guard_percentage, bool c
 
 // bin mask is equal to -1 for non assigned bins
 // non_reference_mask is false for the values of the bin mask which correspond to reference bins
-BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage, bool cancel_DC_offset)
+BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_percentage, float reference_percentage, bool cancel_DC_offset, bool shift)
 {
+    int shift_idxs = (shift==true)? nBins/2 : 0;
     int Nbins_per_channel = nBins / Nch;
     int non_guard_bins = round(non_guard_percentage*Nbins_per_channel);
     int half_guard_bins = (Nbins_per_channel - non_guard_bins)/2;
@@ -148,8 +158,8 @@ BinMask generate_bin_mask_and_reference(int Nch, int nBins, float non_guard_perc
     vector<bool> ref_map(3*Nch);
     for(int i = 0; i < nBins; i++)
     {
-        int ch_idx = ((i + nBins/2)%nBins) / Nbins_per_channel;
-        int j = ((i + nBins/2)%nBins) % Nbins_per_channel;
+        int ch_idx = ((i + shift_idxs)%nBins) / Nbins_per_channel;
+        int j = ((i + shift_idxs)%nBins) % Nbins_per_channel;
         if(j < half_reference_bins)
             bin_mask[i] = ch_idx*3;
         else if(j>= half_guard_bins && j < half_guard_bins + non_guard_bins)
@@ -201,6 +211,36 @@ vector<float> relative_channel_powers(const BinMask& bmask, const vector<float> 
     return rel_ch_powers;
 }
 
+void apply_bin_mask(float* output, const Cplx* cplx_ptr, const BinMask& bmask, float extra_coeff)
+{
+    for(size_t j = 0; j < bmask.n_sections(); ++j)
+        output[j] = 0;
+    
+    for(unsigned int i = 0; i < bmask.size(); i++)
+    {
+        if(bmask[i] >= 0)
+            output[bmask[i]] += cplx_ptr[i].real()*cplx_ptr[i].real() + cplx_ptr[i].imag()*cplx_ptr[i].imag();//norm(fftBins[i]);
+    }
+    
+    for(size_t j = 0; j < bmask.n_sections(); ++j)
+        output[j] *= (bmask.ch_coeffs[j] * extra_coeff);
+}
+
+void apply_bin_mask(float* output, const float* pwr_ptr, const BinMask& bmask)
+{
+    for(size_t j = 0; j < bmask.n_sections(); ++j)
+        output[j] = 0;
+    
+    for(unsigned int i = 0; i < bmask.size(); i++)
+    {
+        if(bmask[i] >= 0)
+            output[bmask[i]] += pwr_ptr[i];//norm(fftBins[i]);
+    }
+    
+    for(size_t j = 0; j < bmask.n_sections(); ++j)
+        output[j] *= bmask.ch_coeffs[j];
+}
+
 };
 
 ChannelPowerEstimator::ChannelPowerEstimator() : fftBins(NULL), fft(NULL)
@@ -238,9 +278,6 @@ void ChannelPowerEstimator::set_parameters(uint16_t _avg_win_size,
     Nch = _bin_mask.Nch;
     bin_mask = _bin_mask;       // Values in bin_mask must be within [0, number of channels] and size of bin_mask must be equal to nBins. No protection yet.
     nBins = bin_mask.size();
-
-    cout << "Bin mask:";
-    cout << print_range(bin_mask) << endl;
     
     setup();
 }
@@ -309,31 +346,42 @@ void ChannelPowerEstimator::process(double tstamp)
 //         << print_container_dB(&fftBins[0], &fftBins[nBins]) << endl;
     
     // Averages across bins belonging to the same channel
-    for(unsigned int i = 0; i < nBins; i++)
-    {
-        if(bin_mask[i] >= 0)
-            output_ch_pwrs[bin_mask[i]] += fftBins[i].real()*fftBins[i].real() + fftBins[i].imag()*fftBins[i].imag();//norm(fftBins[i]);
-    }
-    
-    for(unsigned int i = 0; i < bin_mask.n_sections(); ++i)
-        output_ch_pwrs[i] *= ch_avg_coeff[i];
+    sensing_utils::apply_bin_mask(&output_ch_pwrs[0], fftBins, bin_mask, 1.0/nBins);
+//    
+//    for(unsigned int i = 0; i < nBins; i++)
+//    {
+//        if(bin_mask[i] >= 0)
+//            output_ch_pwrs[bin_mask[i]] += fftBins[i].real()*fftBins[i].real() + fftBins[i].imag()*fftBins[i].imag();//norm(fftBins[i]);
+//    }
+//    
+//    for(unsigned int i = 0; i < bin_mask.n_sections(); ++i)
+//        output_ch_pwrs[i] *= ch_avg_coeff[i];
     
     current_tstamp = tstamp;
 }
 
-#define ALPHA 0.0001
+#define ALPHA 1e-7//0.0001
+#define THRES2 1.6
+#define FIRST_N 1e6
 
 void PacketDetector::work(double tstamp, const vector<float>& vals)
 {
     for(int i = 0; i < vals.size(); ++i)
     {
+        if(vals[i]<0)   // it is the SU-Tx channel
+        {
+            params[i].counter_block = 0;
+            params[i].pu_detected = false; // just keep sure it is not caught in between detecting a packet
+            continue;
+        }
+
         // compute average pwr
 //        avg_pwr[i].first++;
 //        avg_pwr[i].second = avg_pwr[i].second + (vals[i]-avg_pwr[i].second)/avg_pwr[i].first;
         
         float old_sample = mov_avg[i].push(vals[i]);
         
-        if(params[i].counter_block>0 || vals[i] < pow(10,-90/10))
+        if(params[i].counter_block>0) // || vals[i] < pow(10,-90/10)
         {        
             params[i].counter_block--;
             continue;
@@ -342,14 +390,18 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
         float val_smoothed = mov_avg[i].get_avg();
         bool test = val_smoothed > thres * params[i].noise_floor;
         if(params[i].pu_detected==false && (test==false || params[i].n_noise_samples < 100))
-        {    
-            params[i].n_noise_samples++;
-            if(params[i].n_noise_samples < 100)
+        {
+            if(params[i].n_noise_samples < 5 || val_smoothed < THRES2 * params[i].noise_floor)
             {
+                params[i].n_noise_samples++;
+//                if(params[i].n_noise_samples < FIRST_N)
+//                {
                 params[i].noise_floor = params[i].noise_floor + (vals[i]-params[i].noise_floor)/params[i].n_noise_samples;
+//                }
+//                else if(val_smoothed < THRES2 * params[i].noise_floor)
+//                    params[i].noise_floor = (1-ALPHA) * params[i].noise_floor + ALPHA*old_sample;
             }
-            else
-                params[i].noise_floor = (1-ALPHA) * params[i].noise_floor + ALPHA*old_sample;
+            // in between thres and THRES2 is the gray area
 //            cout << "DEBUG: Noise floor " << noise_floor[i] << endl;
         }
         else
@@ -400,7 +452,7 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
     sort(detected_pulses.begin(), detected_pulses.end(), [](DetectedPacket& a, DetectedPacket &b){return get<0>(a) < get<0>(b);});
 }
 
-void SpectrogramGenerator::work(double tstamp, const vector<float>& ch_pwrs)
+void SpectrogramGenerator::push_line(double tstamp, const vector<float>& ch_pwrs)
 {
     assert(ch_pwrs.size()==mov_avg.size());
     assert(mov_avg[0].size()>0);
@@ -418,7 +470,7 @@ void SpectrogramGenerator::work(double tstamp, const vector<float>& ch_pwrs)
         
         for(uint16_t j = 0; j < mov_avg.size(); j++) 
         {
-            d().second[j] = mov_avg[j].get_avg();//ch_pwr_ma_last_outputs[j].max(); 
+            d().second[j] = mov_avg[j].get_avg();
         }
         
         assert(d().second.size()>0);
@@ -427,208 +479,36 @@ void SpectrogramGenerator::work(double tstamp, const vector<float>& ch_pwrs)
     }
 }
 
-void ForgetfulChannelMonitor::work(const std::vector<float>& ch_pwrs)
+bool VectorMovingAverage::work(const vector<float>& data)
 {
-    // make kind of a fosphor thing
-    for(int i = 0; i < channel_energy.size(); ++i)
-//        if(channel_energy[i] < ch_pwrs[i])
-//            channel_energy[i] = ch_pwrs[i];
-//        else
-            channel_energy[i] = alpha*ch_pwrs[i] + (1-alpha)*channel_energy[i];
-}
-
-// returns the indexes sorted by probability of being occupied (descending)
-vector<size_t> ForgetfulChannelMonitor::ch_sorted_by_energy()
-{
-    vector<size_t> idx(channel_energy.size());
-    iota(idx.begin(), idx.end(), 0);
+    assert(data.size()==mov_avg.size());
+    assert(mov_avg[0].size()>0);
     
-    sort(idx.begin(), idx.end(),
-       [&](size_t i1, size_t i2) {return channel_energy[i1] > channel_energy[i2];});
-
-    return idx;
-}
-
-void ChannelPacketRateMonitor::work(const std::vector<DetectedPacket>& packets)
-{
+    // Adds the channel average power to the moving average
+    for(uint16_t j = 0; j < mov_avg.size(); j++)
+        mov_avg[j].push(data[j]);
     
-    for(const auto& e : packets)
+    if(++step_count == step_size)
     {
-        int ch_idx = get<1>(e);
-        if(prev_packet_tstamp[ch_idx] > 0)
-        {
-            time_format tdelay = get<0>(e) - prev_packet_tstamp[ch_idx];
-            tdelay_sum[ch_idx].first++;
-            tdelay_sum[ch_idx].second += tdelay;
-        }
-        prev_packet_tstamp[ch_idx] = get<0>(e);
+        step_count = 0;
+        return true;
+    }
+    return false;
+}
+
+void VectorMovingAverage::read_line(vector<float>& out)
+{
+    out.resize(mov_avg.size());
+    
+    for(uint16_t j = 0; j < mov_avg.size(); j++) 
+    {
+        out[j] = mov_avg[j].get_avg();
     }
 }
 
-
-json ChannelPacketRateMonitor::to_json()
+buffer_utils::rdataset<ChPowers> SpectrogramGenerator::pop_line()
 {
-    vector<time_format> tsum(Nch,0), tsum_free(Nch,0);
-    vector<long> tcount(Nch,0), tcount_free(Nch,0);
-    for(int i = 0; i < Nch; ++i)
-    {
-        tsum[i] = tdelay_sum[i].second;
-        tcount[i] = tdelay_sum[i].first;
-        tsum_free[i] = tdelay_free_sum[i].second;
-        tcount_free[i] = tdelay_free_sum[i].first;
-    }
+    buffer_utils::rdataset<ChPowers> ch_powers = results.get_rdataset();
     
-    json j = {
-        {"Nch", Nch},
-        {"channel_stats", {{"sum",tsum},{"count",tcount}}},
-        {"channel_free", {{"sum",tsum_free},{"count",tcount_free}}}
-    };
-    
-    return j;
+    return std::move(ch_powers);
 }
-
-
-void ChannelPacketRateMonitor::from_json(nlohmann::json& j, vector<int> ch_occupancy)
-{
-    if(j.empty())
-        return;
-    Nch = j["Nch"].get<decltype(Nch)>();
-    
-    
-    tdelay_free_sum.resize(Nch, make_pair(0,0));
-    tdelay_sum.resize(Nch, make_pair(0,0));
-    for(int i = 0; i < Nch; ++i)
-    {
-        tdelay_free_sum[i].first = j["channel_free"]["count"][i].get<long>();
-        tdelay_free_sum[i].second = j["channel_free"]["sum"][i].get<time_format>();
-        tdelay_sum[i].first = j["channel_stats"]["count"][i].get<long>();
-        tdelay_sum[i].second = j["channel_stats"]["sum"][i].get<time_format>();
-    }
-
-    if(ch_occupancy.size()!=0) // swap positions according to occupancy
-        for(int i = 0; i < Nch; ++i)
-            if(ch_occupancy[i]==0)
-                swap(tdelay_free_sum[i],tdelay_sum[i]);
-}
-
-void ChannelPacketRateMonitor::merge_json(nlohmann::json& j2, std::vector<int> ch_occupancy)
-{
-    if(Nch<0) // it was empty
-    {
-        from_json(j2, ch_occupancy);
-    }
-    else
-    {
-        ChannelPacketRateMonitor m2;
-        m2.from_json(j2, ch_occupancy);
-        
-        assert(Nch==m2.Nch);
-    
-        for(int i = 0; i < Nch; ++i)
-        {
-            tdelay_sum[i].first += m2.tdelay_sum[i].first;
-            tdelay_sum[i].second += m2.tdelay_sum[i].second;
-            tdelay_free_sum[i].first += m2.tdelay_free_sum[i].first;
-            tdelay_free_sum[i].second += m2.tdelay_free_sum[i].second;
-        }
-    }
-}
-
-#define UNOCCUPIED_DELAY 0.1
-
-std::vector<ExpandedScenarioDescriptor> ChannelPacketRateTester::possible_expanded_scenarios(const ChannelPacketRateMonitorInterface* m, int forbidden_channel)
-{
-    const auto& expanded_l = pu_api->expanded_scenarios.scenarios_expanded_list;
-    const auto& delay_list = pu_api->environment_data->delay_ms_list;
-    float min_err_acum = std::numeric_limits<float>::max();
-    vector<int> min_idxs;
-    
-    for(int i = 0; i < expanded_l.size(); ++i)
-    {
-        float delay = delay_list[expanded_l[i].scenario->packet_delay_idx]/1000;
-        // TODO: some optimizations can be done
-        float err_acum = 0;
-        for(int n = 0; n < m->Nch; ++n)
-        {
-            if(n==forbidden_channel)
-                continue;
-            auto true_delay = (expanded_l[i].ch_occupied_mask[n]) ? delay : UNOCCUPIED_DELAY;
-            auto d = m->is_occupied(n) ? m->packet_arrival_period(n) : UNOCCUPIED_DELAY; 
-            err_acum += pow(abs(d - true_delay),2);
-        }
-        if(err_acum < min_err_acum)
-        {
-            min_err_acum = err_acum;
-            min_idxs.assign({i});
-        }
-        else if(err_acum == min_err_acum)
-        {
-            min_idxs.push_back(i);
-        }
-        //std::cout << "DEBUG: scenario error distance (" << expanded_l[i].scenario_idx << "," << i << ")=" << err_acum << endl;
-    }
-    
-    vector<ExpandedScenarioDescriptor> possible_scens;
-    possible_scens.reserve(min_idxs.size());
-    for(auto& e : min_idxs)
-        possible_scens.push_back(expanded_l[e]);
-    return possible_scens;
-}
-
-vector<scenario_number_type> ChannelPacketRateTester::possible_scenario_idxs(const vector<ExpandedScenarioDescriptor>& possible_expanded_scenarios)
-{
-    // find unique elements
-    set<scenario_number_type> set_idxs;
-    for(auto& e : possible_expanded_scenarios)
-        set_idxs.insert(e.scenario_idx);
-
-    return vector<scenario_number_type>(set_idxs.begin(), set_idxs.end());
-}
-
-vector<scenario_number_type> ChannelPacketRateTester::possible_scenario_idxs(const ChannelPacketRateMonitorInterface* m, int forbidden_channel)
-{
-    return possible_scenario_idxs(possible_expanded_scenarios(m,forbidden_channel));
-}
-
-namespace monitor_utils
-{
-std::string print_packet_rate(const ChannelPacketRateMonitor& p)
-{
-    stringstream os;
-    os << "[";
-    for(int i = 0; i < p.Nch-1; ++i)
-        if(p.is_occupied(i))
-            os << p.packet_arrival_rate(i) << ",";
-        else
-            os << "free,";
-    if(p.is_occupied(p.Nch-1))
-        os << p.packet_arrival_rate(p.Nch-1) << "]";
-    else
-        os << "free]";
-    return os.str();
-}
-std::string print_packet_period(const ChannelPacketRateMonitor& p)
-{
-    stringstream os;
-    os << "[";
-    for(int i = 0; i < p.Nch-1; ++i)
-        if(p.is_occupied(i))
-            os << p.packet_arrival_period(i) << ",";
-        else
-            os << "free,";
-    if(p.is_occupied(p.Nch-1))
-        os << p.packet_arrival_period(p.Nch-1) << "]";
-    else
-        os << "free]";
-    return os.str();
-}
-
-std::unique_ptr<JsonScenarioMonitor> make_scenario_monitor(const std::string& type)
-{
-    if(type=="ChannelPacketRateMonitor")
-        return unique_ptr<JsonScenarioMonitor>(new ChannelPacketRateMonitor);
-    else 
-        throw std::runtime_error("I do not recognize such Json monitor name: " + type);
-}
-
-};
