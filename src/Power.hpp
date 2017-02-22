@@ -54,11 +54,11 @@ zero_cnt = 0;
         wait_check = false;
         wait_check_lower = false;
         wait_check_higher= false;
-    
+        wait_power = 0;
         wait_score = 0;
         wait_score_lower = 0;
         wait_score_higher = 0;
-         
+        wait_directions_checked = 0;
         
         
     };
@@ -68,7 +68,7 @@ zero_cnt = 0;
     int CCompute(int Power)
     {
         count++;
-        if (count == 80)
+        if (count == 100)//80)
         {
             count = 0;
             return Compute(Power);
@@ -103,7 +103,8 @@ zero_cnt = 0;
         ScorePrev = Score;
         
         double expon = -10*((MaxPuThru - CurrentPuThru)/MaxPuThru);
-        Score = CurrentSuThru*std::exp(expon)*(CurrentPuThru);
+        int x = (CurrentPuThru == 0)?0:1;
+        Score = CurrentSuThru*std::exp(expon)*x;
         double totScore = MaxSuThru * exp(-10*(0));
         double ScoreDiff = Score - ScorePrev;
         
@@ -138,6 +139,9 @@ zero_cnt = 0;
         if(CurrentPuThru == 0)
             direction = false;
         
+        
+        //std::cout << "state is : " << state << std::endl;
+        //std::cout << "wait check is : " << wait_check << std::endl;
         switch(state)
         {
             case CHANGE:
@@ -166,12 +170,11 @@ zero_cnt = 0;
                 
             break; 
             case WAIT:
-                if(ScoreDiff < 0 && fabs(ScoreDiff) > hrys)// might want some kind of hyresthesis to allow for noisey throughput calc
+                if((ScoreDiff < 0 && fabs(ScoreDiff) > hrys) && (!wait_check))// might want some kind of hyresthesis to allow for noisey throughput calc
                 {
-                    newPower = (direction) ? Power - 1 : Power + 1;
-                    PowerHist.push_back(newPower);
-                    if(!wait_check)
-                        state = CHANGE;
+                        newPower = (direction) ? Power - 1 : Power + 1;
+                        PowerHist.push_back(newPower);
+                        state = CHANGE;       
                 }
                 else
                 {
@@ -179,11 +182,14 @@ zero_cnt = 0;
                     {
                         if(wait_check_lower)
                         {
+                            std::cout << "wait lower checked" << std::endl;
                             wait_directions_checked++;
                             wait_score_lower = Score;
                             double temp_diff = wait_score_lower - wait_score;
+                            
                             if(temp_diff > hrys)
                             {
+                                std::cout << "      {go lower}" << std::endl;
                                 newPower = Power;
                                 direction = false;
                                 wait_check = false;
@@ -193,11 +199,14 @@ zero_cnt = 0;
                         }
                         if(wait_check_higher)
                         {
+                            std::cout << "wait higher checked" << std::endl;
+                            
                             wait_directions_checked++;
                             wait_score_higher = Score;
                             double temp_diff = wait_score_higher - wait_score;
                             if(temp_diff > hrys)
                             {
+                                std::cout << "      {go higher}" << std::endl;
                                 newPower = Power;
                                 direction = true;
                                 wait_check = false;
@@ -208,8 +217,12 @@ zero_cnt = 0;
                     }
                     else
                     {
+                        cout << "wait power is : " << wait_power << std::endl;
                         wait_score = Score;
+                        wait_power = Power;
+                        
                         newPower = (direction) ? Power + 1 : Power - 1;
+                        
                         wait_check_lower = (direction)?false:true;
                         wait_check_higher = (direction)?true:false;
                         wait_check = true;
@@ -219,7 +232,9 @@ zero_cnt = 0;
                     
                     if(wait_directions_checked == 2)
                     {
-                        newPower = wait_score;
+                        std::cout << "wait directions checked " << std::endl;
+                        newPower = wait_power;
+                        wait_directions_checked = 0;
                         wait_check = false;
                         wait_check_higher = false;
                         wait_check_lower = false;
@@ -284,6 +299,7 @@ zero_cnt = 0;
     bool wait_check_higher;
     
     double wait_score;
+    int wait_power;
     double wait_score_lower;
     double wait_score_higher;
     int wait_directions_checked;
