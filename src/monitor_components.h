@@ -37,7 +37,10 @@ public:
     virtual time_format packet_arrival_period(int i) const = 0;
     virtual time_format packet_arrival_period_var(int i) const = 0;
     virtual time_format packet_arrival_rate(int i) const = 0;    
-    virtual bool is_occupied(int i) const = 0;
+    inline bool is_occupied(int i) const 
+    {
+        return packet_arrival_period(i)!=NaN();
+    }
     virtual ~ChannelPacketRateMonitorInterface() {}
     
     int Nch = -1;
@@ -106,19 +109,20 @@ public:
     void work(const vector<DetectedPacket>& packets, time_format tstamp);
     inline time_format packet_arrival_period(int i) const final
     {
-        return tdelay_acc[i].mean();
+        auto m = tdelay_acc[i].mean();
+        return (m==NaN() || m >= TDELAY_MAX) ? NaN() : m;
     }
     inline time_format packet_arrival_period_var(int i) const final
     {
-        return tdelay_acc[i].var();
+        auto v = tdelay_acc[i].var();
+        return (v == delay_stats::NaN()) ? NaN() : v;
     }
     inline time_format packet_arrival_rate(int i) const  final
     {
-        auto t = tdelay_acc[i].mean();
-        return (t != delay_stats::NaN()) ? 1.0/t : 0;
+        auto t = packet_arrival_period(i);
+        return (t != NaN()) ? 1.0/t : 0;
     }
      // NOTE: Coarse estimation of availability of the channel. If Pfa is high, this wont work.
-    inline bool is_occupied(int i) const final {return packet_arrival_period(i) < TDELAY_MAX;}
     
     // JsonScenarioMonitorInterface
     string json_key() {return "ChannelPacketRateMonitor";}
@@ -148,25 +152,26 @@ public:
     inline time_format packet_arrival_period(int i) const final
     {
         auto siz = delays_mavg[i].size();
-        if(current_tstamp-prev_packet_tstamp[i] > TDELAY_MAX || siz == 0)
+        auto sum = delays_mavg[i].sum();
+        if(siz < 1 || sum/siz >= TDELAY_MAX)
             return ChannelPacketRateMonitorInterface::NaN();
         else
-            return delays_mavg[i].sum()/siz;
+            return sum/siz;
     }
     inline time_format packet_arrival_period_var(int i) const final
     {
         auto siz = delays_mavg[i].size();
-        if(current_tstamp-prev_packet_tstamp[i] > TDELAY_MAX || siz<=1)
+        auto sum = delays_mavg[i].sum();
+        if(siz <=1 || sum/siz >= TDELAY_MAX)
             return ChannelPacketRateMonitorInterface::NaN();
         else
-            return (delays_m2[i].sum()-pow(delays_mavg[i].sum(),2)/siz)/(siz-1);
+            return (delays_m2[i].sum()-pow(sum,2)/siz)/(siz-1);
     }
     inline time_format packet_arrival_rate(int i) const  final
     {
         auto t = packet_arrival_period(i);
         return (t != ChannelPacketRateMonitorInterface::NaN()) ? 1.0/t : 0;
     }
-    inline bool is_occupied(int i) const final {return packet_arrival_period(i) < TDELAY_MAX;}
     
     vector<GrowingMovingAverage<time_format>> delays_mavg;
     vector<GrowingMovingAverage<time_format>> delays_m2;

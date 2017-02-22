@@ -13,6 +13,7 @@
 #include <memory>
 #include "matplotlibcpp.h"
 #include "SU_parameters.h"
+#include "markov_chain_components.h"
 
 using std::cout;
 using std::endl;
@@ -21,65 +22,65 @@ using std::string;
 using std::chrono::system_clock;
 using namespace nlohmann;
 using boost::asio::ip::tcp;
-
-void SensingModule::start()
-{
-    //setup streaming
-    std::cout << std::endl;
-    std::cout << boost::format("Begin streaming now ..") << std::endl;
-    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-    stream_cmd.num_samps = 0; // continuous
-    stream_cmd.stream_now = true;
-    stream_cmd.time_spec = uhd::time_spec_t();
-    usrp_tx->issue_stream_cmd(stream_cmd);
-}
-
-bool SensingModule::recv_fft_pwrs()
-{
-    size_t num_rx_samps = rx_stream->recv(&(*pwr_estim)[0], pwr_estim->fft_size(), metadata, 5.0);
-
-    //handle the error code
-    if (metadata.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT)
-    {
-        std::cout << boost::format("Timeout while streaming") << std::endl;
-        return false;
-    }
-    else if (metadata.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW)
-    {
-        if (overflow_message)
-        {
-            overflow_message = false;
-            std::cerr << boost::format("Got an overflow indication, please reduce sample rate.");
-        }
-        if(crash_on_overflow==true)
-            throw std::runtime_error("Samples are corrupted now");
-        return true;
-    }
-    else if (metadata.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE)
-    {
-        throw std::runtime_error(str(boost::format(
-                                                   "Unexpected error code 0x%x"
-                                                   ) % metadata.error_code));
-    }
-
-    tspec = metadata.time_spec;
-    current_timestamp = tspec.get_real_secs();
-
-    // Always call process because we write on fftBins nBins samples from uhd (see above)
-    pwr_estim->process(current_timestamp);
-    
-    return true;
-}
-
-void SensingModule::setup_rx_chain(uhd::usrp::multi_usrp::sptr utx)
-{
-    usrp_tx = utx;
-    //create a receive streamer
-    std::string wire_format("sc16");
-    std::string cpu_format("fc32");
-    uhd::stream_args_t stream_args(cpu_format, wire_format);
-    rx_stream = usrp_tx->get_rx_stream(stream_args);
-}
+//
+//void SensingModule::start()
+//{
+//    //setup streaming
+//    std::cout << std::endl;
+//    std::cout << boost::format("Begin streaming now ..") << std::endl;
+//    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+//    stream_cmd.num_samps = 0; // continuous
+//    stream_cmd.stream_now = true;
+//    stream_cmd.time_spec = uhd::time_spec_t();
+//    usrp_tx->issue_stream_cmd(stream_cmd);
+//}
+//
+//bool SensingModule::recv_fft_pwrs()
+//{
+//    size_t num_rx_samps = rx_stream->recv(&(*pwr_estim)[0], pwr_estim->fft_size(), metadata, 5.0);
+//
+//    //handle the error code
+//    if (metadata.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT)
+//    {
+//        std::cout << boost::format("Timeout while streaming") << std::endl;
+//        return false;
+//    }
+//    else if (metadata.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW)
+//    {
+//        if (overflow_message)
+//        {
+//            overflow_message = false;
+//            std::cerr << boost::format("Got an overflow indication, please reduce sample rate.");
+//        }
+//        if(crash_on_overflow==true)
+//            throw std::runtime_error("Samples are corrupted now");
+//        return true;
+//    }
+//    else if (metadata.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE)
+//    {
+//        throw std::runtime_error(str(boost::format(
+//                                                   "Unexpected error code 0x%x"
+//                                                   ) % metadata.error_code));
+//    }
+//
+//    tspec = metadata.time_spec;
+//    current_timestamp = tspec.get_real_secs();
+//
+//    // Always call process because we write on fftBins nBins samples from uhd (see above)
+//    pwr_estim->process(current_timestamp);
+//    
+//    return true;
+//}
+//
+//void SensingModule::setup_rx_chain(uhd::usrp::multi_usrp::sptr utx)
+//{
+//    usrp_tx = utx;
+//    //create a receive streamer
+//    std::string wire_format("sc16");
+//    std::string cpu_format("fc32");
+//    uhd::stream_args_t stream_args(cpu_format, wire_format);
+//    rx_stream = usrp_tx->get_rx_stream(stream_args);
+//}
 
 void resize_ch_pwr_outputsdB(std::vector<float>& out, const vector<float>& in)
 {
@@ -621,7 +622,9 @@ void SensingThreadHandler::setup(SituationalAwarenessApi *pu_scenario_api, SU_tx
     packet_detector = PacketDetector(Nch, 9, 12);
     
     // Setup Channel Packet Arrival Rate Estimator
-    rate_monitor = ChannelPacketRateMonitor(Nch);//SlidingChannelPacketRateMonitor(Nch, 20);
+    float avg_pkt_interval_ms = 7.5;
+    float time_window_ms = 250;//500;
+    rate_monitor = SlidingChannelPacketRateMonitor(Nch,round(time_window_ms/avg_pkt_interval_ms));
     
     // Setup Forgetful Channel Energy Monitor
     pwr_monitor = ForgetfulChannelMonitor(Nch, 0.0001);
@@ -642,6 +645,7 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
     time_format last_tstamp = -1000000;
     vector<int> ch_counter(Nch,0);
     vector<float> second_pwrs(maskprops2.n_sections(),0);
+    vector<long> scenario_counter(11,0);
     
     usrp_reader.setup(usrp_tx);
     usrp_reader.start();
@@ -693,11 +697,11 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
             if((!packet_detector.detected_pulses.empty() || (pwr_estim.current_tstamp-last_tstamp)>2))
             {
                 auto possible_scenario_numbers = channel_rate_tester.possible_scenario_idxs(&rate_monitor, current_channel);
-            
+                scenario_counter[possible_scenario_numbers[0]]++;
                 // If update, update the API
                 if(old_scenario_number != possible_scenario_numbers[0])
                 {
-                    cout << "DEBUG: New scenario " << possible_scenario_numbers[0] << endl;
+                    cout << "DEBUG: oldSchool: Scenario " << possible_scenario_numbers[0] << endl;
                     old_scenario_number = possible_scenario_numbers[0];
                     pu_api->set_PU_scenario(old_scenario_number);
                 }
@@ -716,11 +720,14 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
                      << "\n> Packet Arrival Periods per Channel: \t" << monitor_utils::print_packet_period(rate_monitor)
                      << "\n> Packet Arrival Variances per Channel: " << monitor_utils::print_packet_delay_variance(rate_monitor)
                      << "\n> Packet Power per Channel: \t\t" << print_range(pwr_monitor.channel_energy, ",\t", [](float f){return 10*log10(f);}) << endl;
+                auto max_it = std::max_element(scenario_counter.begin(),scenario_counter.end());
+                long sum = std::accumulate(scenario_counter.begin(),scenario_counter.end(),0);
                 vector<float> noise_pwr;
                 for(auto& e : packet_detector.params)
                     noise_pwr.push_back(e.noise_floor);
                 cout << "> Noise Floor per Channel: \t\t" << print_range(noise_pwr, ",\t", [](float f){return 10*log10(f);}) << endl;
                 cout << "> Number of detected per channel: \t" << print_range(ch_counter) << endl;
+                cout << "> OldSchool most visited scenario: " << distance(scenario_counter.begin(),max_it) << ", rate: " << *max_it/(double)sum << endl;
                 //cout << "STATUS: Scenario " << old_scenario_number << endl;
 //                vector<float> d(512);
 //                for(int i = 0; i < 512; ++i)
@@ -787,6 +794,9 @@ void Spectrogram2FileThreadHandler::run()
             n_ffts_read++;
             if(n_ffts_read>=skip_n)
             {    
+                // cut the corner
+//                section_powers().second[0] = *min_element(section_powers().second.begin(), section_powers().second.end());
+                
                 // write to file
                 of.write((char*)&section_powers().second[0], section_powers().second.size()*sizeof(float));
                 //of.write((char*)&pwr_outputs[0], pwr_outputs.size()*sizeof(float));
@@ -809,8 +819,8 @@ void Spectrogram2FileThreadHandler::run()
 
 Spectrogram2SocketThreadHandler::Spectrogram2SocketThreadHandler(SituationalAwarenessApi* api, 
                                                                  buffer_utils::bounded_buffer<ChPowers>* buf, 
-                                                                 const BinMask& bmask, pair<int,int> CNN_dim, int step_size) :
-sp_resizer(bmask, CNN_dim.second)
+                                                                 const BinMask& bmask, pair<int,int> CNN_dim, int step_size)
+//: sp_resizer(bmask, CNN_dim.second)
 {
     pu_api = api;
     sensing_buffer = buf;
@@ -819,6 +829,9 @@ sp_resizer(bmask, CNN_dim.second)
     //sp_resizer = SpectrogramResizer(bmask, mat.cols());
     moving_average_step = step_size;
     
+    float spectrogram_duration_ms = 50;
+    float time_window_ms = 250;//500;
+    mode_counter = markov_utils::make_deeplearning_mode_counter(time_window_ms, spectrogram_duration_ms, 10);//pu_api->environment_data->scenario_list.size());
 
 //    // setup connection to caffe
     tcp::resolver resolver(io_service);
@@ -872,6 +885,12 @@ void Spectrogram2SocketThreadHandler::run_send()
             // convert to dB
             for(int i = 0; i < mat.cols(); ++i)
                 mat.at(current_row,i) = 10*log10(sum_powers[i]);
+            
+            for(int j = 0; j < mat.rows(); ++j)
+                if(mat.at(current_row,j) < mat.at(current_row,0))
+                    mat.at(current_row,0) = mat.at(current_row,j);
+            mat.at(current_row,mat.rows()-1) = mat.at(current_row,0);
+            
             sum_powers.clear();
             sum_powers.resize(64,0);
             
@@ -952,12 +971,14 @@ pair<size_t,vector<float>> recv_predictions(socket_type& soc)
 void Spectrogram2SocketThreadHandler::run_recv()
 {
     assert(soc.get()!=nullptr);
-    std::chrono::system_clock::time_point  t2, tprev, t1;
+    std::chrono::system_clock::time_point  t2, tprev, t1, tprint;
     size_t imgno;
     scenario_number_type old_scenario_number = -1;
     vector<long> count_scenarios(10,0);
+    vector<long> count_mode_scenarios(10,0);
     
     // loop
+    tprint = std::chrono::system_clock::now();
     tprev = std::chrono::system_clock::now();
     try 
     {
@@ -977,13 +998,22 @@ void Spectrogram2SocketThreadHandler::run_recv()
             scenario_number_type scen = std::distance(pred.second.begin(), it);
             count_scenarios[scen]++;
             
-            if(old_scenario_number != scen || std::chrono::duration_cast<std::chrono::seconds>(t2 - tprev).count() > 2)
+            mode_counter.push(scen);
+            scenario_number_type scen_avg = mode_counter.current_state();
+            count_mode_scenarios[scen_avg]++;
+            
+            tprint = std::chrono::system_clock::now();
+            if(old_scenario_number != scen_avg || std::chrono::duration_cast<std::chrono::seconds>(tprint - tprev).count() > 2)
             {
-                cout << "DEBUG: Scenario " << scen << endl;
-                cout << "DEBUG: Counts: " << print_range(count_scenarios) << endl;
-                old_scenario_number = scen;
-                pu_api->set_PU_scenario(scen);
-                tprev = std::chrono::system_clock::now();
+                cout << "\nDEBUG: DeepLearning: Scenario " << scen_avg << ". Statistics:" 
+                     << "\n> Single spectrogram+caffe counts: \t" << print_range(count_scenarios)
+                     << "\n> Mode spectrogram+caffe counts: \t" << print_range(count_mode_scenarios) << endl;                
+                auto max_it = std::max_element(count_mode_scenarios.begin(),count_mode_scenarios.end());
+                long sum = std::accumulate(count_mode_scenarios.begin(),count_mode_scenarios.end(),0);
+                cout << "> DeepLearning most visited scenario: " << distance(count_mode_scenarios.begin(),max_it) << ", rate: " << *max_it/(double)sum << endl;
+                old_scenario_number = scen_avg;
+                pu_api->set_PU_scenario(scen_avg);
+                tprev = tprint;
             }
         }
     }

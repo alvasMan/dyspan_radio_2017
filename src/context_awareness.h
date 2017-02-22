@@ -72,6 +72,7 @@ public:
     {
     }
     int PU_scenario_idx() const {return scenario_idx.load();}
+    int PU_expanded_scenario_idx() const {return expanded_scenario_idx.load();}
     void set_PU_scenario(scenario_number_type s)
     {
         assert(s < environment_data->scenario_list.size() && s >= -1);

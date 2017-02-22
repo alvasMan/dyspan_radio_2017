@@ -129,6 +129,7 @@ private:
     void launch_change_places();
     void change_ofdm_mod();
     void reconfigure_usrp(const int num, bool tune_lo);
+    void set_channel();
     std::pair<bool,double> dwelltimer();
     void process_sensing(std::vector<float> ChPowers);
     // RF objects and properties

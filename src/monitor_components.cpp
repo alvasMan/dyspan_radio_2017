@@ -167,10 +167,14 @@ std::vector<ExpandedScenarioDescriptor> ChannelPacketRateTester::possible_expand
                 continue;
             auto true_delay = (expanded_l[i].ch_occupied_mask[n]) ? delay : UNOCCUPIED_DELAY;
             bool poisson = expanded_l[i].scenario->poisson_flag;
-            auto d = m->is_occupied(n) ? m->packet_arrival_period(n) : UNOCCUPIED_DELAY; 
+            
+            auto d = m->packet_arrival_period(n);
+            d = (d != ChannelPacketRateMonitorInterface::NaN()) ? d : UNOCCUPIED_DELAY;
             auto err_mean = std::norm(d - true_delay);
-            auto dvar =  m->is_occupied(n) ? m->packet_arrival_period_var(n) : UNOCCUPIED_DELAY;
-            if(dvar==delay_stats::NaN())
+            
+            auto dvar = m->packet_arrival_period_var(n);
+            
+            if(dvar==ChannelPacketRateMonitorInterface::NaN())
                 err_acum += err_mean;
             else
             {

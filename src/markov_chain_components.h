@@ -50,6 +50,7 @@ public:
 class DeepLearningModeCounter
 {
 public:
+    DeepLearningModeCounter() = default;
     DeepLearningModeCounter(int buf_size, int num_scenarios = 10) : scenario_guesses(buf_size), counter_scenarios(num_scenarios,0)
     {
     }
@@ -59,7 +60,7 @@ public:
     
     inline size_t n_states() const { return counter_scenarios.size(); }
     
-    inline void push(int8_t scenario);
+    void push(int8_t scenario);
     
     inline int8_t current_state() const
     {
@@ -69,7 +70,7 @@ public:
 
 namespace markov_utils
 {
-DeepLearningModeCounter make_deeplearning_mode_counter(float time_window, float spectrogram_duration, int num_scenarios)
+inline DeepLearningModeCounter make_deeplearning_mode_counter(float time_window, float spectrogram_duration, int num_scenarios = 10)
 {
     assert(round(time_window/spectrogram_duration)>1);
     return {(int)round(time_window/spectrogram_duration),num_scenarios};

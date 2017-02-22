@@ -232,6 +232,11 @@ void OfdmTransceiver::start(void)
     }
 }
 
+//void OfdmTransceiver::set_channel()
+//{
+//    
+//}
+
 
 // This function creates new frames and pushes them on a shared buffer
 void OfdmTransceiver::modulation_function(void)
@@ -264,7 +269,7 @@ void OfdmTransceiver::modulation_function(void)
                 cout << "Changing Powers! " << new_gain << endl;
                 set_tx_gain_uhd(new_gain);
                 current_gain = new_gain;
-            }   
+            }
                 
             // write header (first four bytes sequence number, remaining are random)
             // TODO: also use remaining 4 bytes for payload
@@ -417,34 +422,29 @@ void OfdmTransceiver::random_transmit_function(void)
     }
 }
 
-
+// change USRP frequency
 void OfdmTransceiver::reconfigure_usrp(const int num, bool tune_lo = false)
 {
+    static vector<int> channel_map = {3, 1, 0, 2};
     // construct tuning request
     current_channel = num;
     int internal_num = num;
 
-    if (channels_.size() > 1) {
-      // only do remapping for more channels
-      if(num == 0)
-        internal_num = 3;
-      if(num == 1)
-          internal_num = 1;
-      if(num == 2)
-          internal_num = 0;
-      if(num == 3)
-          internal_num = 2;
-    }
+    if (channels_.size() > 1)
+        internal_num = channel_map[num];
 
     uhd::tune_request_t request;
     // don't touch RF part
 
-    if (tune_lo) {
-      request.rf_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
-      request.rf_freq = channels_.at(internal_num).rf_freq;
-    } else {
-      request.rf_freq_policy = uhd::tune_request_t::POLICY_NONE;
-      request.rf_freq = 0;
+    if (tune_lo)
+    {
+        request.rf_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
+        request.rf_freq = channels_.at(internal_num).rf_freq;
+    }
+    else
+    {
+        request.rf_freq_policy = uhd::tune_request_t::POLICY_NONE;
+        request.rf_freq = 0;
     }
 
     // only tune DSP frequency
@@ -455,7 +455,8 @@ void OfdmTransceiver::reconfigure_usrp(const int num, bool tune_lo = false)
     if(su_params_api)   // sets the SU-TX channel so the sensing sees it
         su_params_api->set_channel(num);
 
-    if (params_.debug) {
+    if (params_.debug)
+    {
         cout << result.to_pp_string() << endl;
     }
 }
@@ -541,7 +542,7 @@ void OfdmTransceiver::reconfigure_usrp(const int num, bool tune_lo = false)
 //        uhd::device::SEND_MODE_FULL_BUFF
 //    );
 //}
-
+ 
 void OfdmTransceiver::launch_change_places()
 {
     for(;;)

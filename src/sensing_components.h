@@ -19,6 +19,7 @@
 #include <boost/optional.hpp>
 #include <boost/asio.hpp>
 #include "usrp_components.h"
+#include "markov_chain_components.h"
 
 using std::vector;
 using std::string;
@@ -27,30 +28,30 @@ using std::string;
 #define SENSINGMODULE_H
 
 
-class SensingModule
-{
-public:
-
-    SensingModule(ChannelPowerEstimator* estim, bool crash_flag = false) : pwr_estim(estim), crash_on_overflow(crash_flag)
-    {
-    } // copy
-    void setup_rx_chain(uhd::usrp::multi_usrp::sptr utx); ///< Configure the rx_stream
-    void run(); ///< Run the USRP Rx and stores the values in pwr_estim
-    void start();
-    bool recv_fft_pwrs();
-
-    ChannelPowerEstimator *pwr_estim;
-    std::unique_ptr<PacketDetector> packet_detector;
-    double current_timestamp;
-    uhd::time_spec_t tspec;
-
-private:
-    uhd::usrp::multi_usrp::sptr usrp_tx;
-    uhd::rx_streamer::sptr rx_stream;
-    bool overflow_message = true;
-    uhd::rx_metadata_t metadata;
-    bool crash_on_overflow;
-};
+//class SensingModule
+//{
+//public:
+//
+//    SensingModule(ChannelPowerEstimator* estim, bool crash_flag = false) : pwr_estim(estim), crash_on_overflow(crash_flag)
+//    {
+//    } // copy
+//    void setup_rx_chain(uhd::usrp::multi_usrp::sptr utx); ///< Configure the rx_stream
+//    void run(); ///< Run the USRP Rx and stores the values in pwr_estim
+//    void start();
+//    bool recv_fft_pwrs();
+//
+//    ChannelPowerEstimator *pwr_estim;
+//    std::unique_ptr<PacketDetector> packet_detector;
+//    double current_timestamp;
+//    uhd::time_spec_t tspec;
+//
+//private:
+//    uhd::usrp::multi_usrp::sptr usrp_tx;
+//    uhd::rx_streamer::sptr rx_stream;
+//    bool overflow_message = true;
+//    uhd::rx_metadata_t metadata;
+//    bool crash_on_overflow;
+//};
 
 class SituationalAwarenessApi;
 
@@ -61,7 +62,7 @@ public:
     ChannelPowerEstimator pwr_estim;
     USRPReader usrp_reader;
     PacketDetector packet_detector;
-    ChannelPacketRateMonitor rate_monitor;
+    SlidingChannelPacketRateMonitor rate_monitor;
     ForgetfulChannelMonitor pwr_monitor;
     ChannelPacketRateTester channel_rate_tester;
     
@@ -145,11 +146,13 @@ private:
     SituationalAwarenessApi *pu_api = NULL;
     buffer_utils::bounded_buffer<ChPowers>* sensing_buffer = NULL;
     pair<int,int> CNNdims = {0,0};
-    SpectrogramResizer sp_resizer;
+    //SpectrogramResizer sp_resizer;
     size_t moving_average_step = 15;
     Matrix<float> mat;
     size_t current_row = 0;
     size_t current_imgno = 0;
+    
+    DeepLearningModeCounter mode_counter;
     
     buffer_utils::bounded_buffer<std::pair<size_t, std::chrono::system_clock::time_point>> time_buffer{1000};
     
@@ -165,17 +168,17 @@ public:
     void run_recv();
 };
 
-class SensingHandler
-{
-public:
-    int Nch = 4;
-    std::unique_ptr<SensingModule> sensing_module;
-    std::unique_ptr<ChannelPowerEstimator> pwr_estim;
-    std::unique_ptr<SpectrogramGenerator> spectrogram_module;
-    std::unique_ptr<TrainingJsonManager> json_learning_manager;
-    std::unique_ptr<ChannelPacketRateTester> channel_rate_tester;
-    SituationalAwarenessApi *pu_scenario_api;
-};
+//class SensingHandler
+//{
+//public:
+//    int Nch = 4;
+//    std::unique_ptr<SensingModule> sensing_module;
+//    std::unique_ptr<ChannelPowerEstimator> pwr_estim;
+//    std::unique_ptr<SpectrogramGenerator> spectrogram_module;
+//    std::unique_ptr<TrainingJsonManager> json_learning_manager;
+//    std::unique_ptr<ChannelPacketRateTester> channel_rate_tester;
+//    SituationalAwarenessApi *pu_scenario_api;
+//};
 
 namespace sensing_utils
 {
