@@ -97,17 +97,12 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     // Add PU parameters and scenarios
     pu_data = context_utils::make_rf_environment();    // this is gonna read files
     pu_scenario_api.reset(new SituationalAwarenessApi(*pu_data));
-<<<<<<< HEAD
-
-    // Add SU config. API
-
-=======
 
     // Add SU config. stuff
     channel_hopper.reset(new SimpleChannelHopper(*pu_scenario_api));
     //power_controller.reset(new PowerSearcher(5,-1));
 
->>>>>>> origin/separated_funcs
+
     // check if no weird configuration
     assert(params_.has_sensing || (!params_.sensing_to_file && !params_.has_deep_learning && !params_.has_learning));
 
@@ -134,11 +129,8 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     auto it = ch_pwrs_buffers.begin();
     if(params_.sensing_to_file)
     {
-<<<<<<< HEAD
-        spectrogram2file_chain.emplace(it->get(), *bin_mask_ptr);
-=======
+
         spectrogram2file_chain.reset(new Spectrogram2FileThreadHandler(it->get(), *bin_mask_ptr));
->>>>>>> origin/separated_funcs
         ++it;
     }
 
