@@ -623,8 +623,8 @@ void SensingThreadHandler::setup(SituationalAwarenessApi *pu_scenario_api, SU_tx
     
     // Setup Channel Packet Arrival Rate Estimator
     float avg_pkt_interval_ms = 7.5;
-    float time_window_ms = 250;//500;
-    rate_monitor = SlidingChannelPacketRateMonitor(Nch,round(time_window_ms/avg_pkt_interval_ms));
+    float time_window_ms = 100;//250;//500;
+    rate_monitor = TimedChannelPacketRateMonitor(Nch,time_window_ms);//SlidingChannelPacketRateMonitor(Nch,round(time_window_ms/avg_pkt_interval_ms));
     
     // Setup Forgetful Channel Energy Monitor
     pwr_monitor = ForgetfulChannelMonitor(Nch, 0.0001);
@@ -636,12 +636,18 @@ void SensingThreadHandler::setup(SituationalAwarenessApi *pu_scenario_api, SU_tx
     spectrogram_buffers = &bufs;
 }
 
+#define TIME_THRES 0.02
+
 void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
 {
     auto t1 = system_clock::now();
     
-    short current_channel = -1;
+    short new_channel = -1;
+    short old_channel = 0;
+    time_format last_hop_tstamp = -1;
+    
     scenario_number_type old_scenario_number = -1;
+    scenario_number_type old_expanded_scenario_number = -1;
     time_format last_tstamp = -1000000;
     vector<int> ch_counter(Nch,0);
     vector<float> second_pwrs(maskprops2.n_sections(),0);
@@ -672,12 +678,28 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
             
             if(su_api)
             {   // set the PU channel to -1 just to ignore it
-                current_channel = su_api->channel();       
-                ch_snrs[current_channel] = -1;
+                new_channel = su_api->channel();
+                if(new_channel != old_channel)
+                    if(pwr_estim.current_tstamp-last_hop_tstamp < TIME_THRES)
+                    {
+                        ch_snrs[old_channel] = -1;
+                    }
+                    else
+                    {
+                        old_channel = new_channel;
+                        last_hop_tstamp = pwr_estim.current_tstamp;
+                    }
+                ch_snrs[new_channel] = -1;
             }
             
             // Discover packets through a moving average
             packet_detector.work(pwr_estim.current_tstamp, ch_snrs);
+            
+//            cout << "Current forbidden channels: " << new_channel << "," << old_channel << endl;
+//            cout << "Detected pulses: " << print_range(packet_detector.detected_pulses, [](std::tuple<double,int,float> p)
+//            {
+//                return std::get<1>(p);
+//            });
             
             rate_monitor.work(packet_detector.detected_pulses, pwr_estim.current_tstamp);
             
@@ -696,14 +718,19 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
             // Check the list of possible scenarios
             if((!packet_detector.detected_pulses.empty() || (pwr_estim.current_tstamp-last_tstamp)>2))
             {
-                auto possible_scenario_numbers = channel_rate_tester.possible_scenario_idxs(&rate_monitor, current_channel);
+                auto expanded_scenario_pairs = channel_rate_tester.possible_expanded_scenarios(&rate_monitor,new_channel);
+                auto possible_scenario_numbers = channel_rate_tester.possible_scenario_idxs(expanded_scenario_pairs);
+                //cout << "scenario idxs: " << possible_scenario_numbers[0] << ", " << expanded_scenario_pairs[0].first << endl;
                 scenario_counter[possible_scenario_numbers[0]]++;
                 // If update, update the API
-                if(old_scenario_number != possible_scenario_numbers[0])
+                if(old_expanded_scenario_number != expanded_scenario_pairs[0].first)
                 {
                     cout << "DEBUG: oldSchool: Scenario " << possible_scenario_numbers[0] << endl;
                     old_scenario_number = possible_scenario_numbers[0];
                     pu_api->set_PU_scenario(old_scenario_number);
+                    old_expanded_scenario_number = expanded_scenario_pairs[0].first;
+                    pu_api->set_PU_expanded_scenario(old_expanded_scenario_number);
+                    cout << "occupied channels: " << print_range(pu_api->expanded_scenarios.scenarios_expanded_list[old_expanded_scenario_number].ch_occupied_mask) << endl;
                 }
                 last_tstamp = pwr_estim.current_tstamp;
             }
@@ -731,7 +758,7 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
                 //cout << "STATUS: Scenario " << old_scenario_number << endl;
 //                vector<float> d(512);
 //                for(int i = 0; i < 512; ++i)
-//                    d[i] = 10*log10(abs(shandler->pwr_estim->fftBins[(i+256)%512]));
+//                    d[i] = 10*log10(abs(pwr_estim.fftBins[(i+256)%512]));
 //                matplotlibcpp::plot(d);
 //                matplotlibcpp::show();
                 //cout << "\n FFT input: " << print_container_dB(&shandler->pwr_estim->fftBins[0], &shandler->pwr_estim->fftBins[512]) << endl;

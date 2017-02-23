@@ -5,8 +5,8 @@
  */
 
 #include "monitor_components.h"
-#include "general_utils.hpp"
-#include <sstream>
+//#include "general_utils.hpp"
+//#include <sstream>
 #include <set>
 #include <algorithm>
 #include <complex>
@@ -146,10 +146,31 @@ void SlidingChannelPacketRateMonitor::work(const std::vector<DetectedPacket>& pa
     current_tstamp = tstamp;
 }
 
+void TimedChannelPacketRateMonitor::work(const vector<DetectedPacket>& packets, time_format tstamp)
+{
+    for(const auto& e : packets)
+    {
+        int ch_idx = get<1>(e);
+        if(prev_packet_tstamp[ch_idx] > 0)
+        {
+            time_format tdelay = get<0>(e) - prev_packet_tstamp[ch_idx];
+            time_and_intervals[ch_idx].push_back(make_pair(get<0>(e),tdelay));
+        }
+        prev_packet_tstamp[ch_idx] = get<0>(e);
+    }
+    current_tstamp = tstamp;
+    
+    // clean up old ones
+    time_format min_tstamp = current_tstamp - twindow_sec;
+    for(int i = 0; i < time_and_intervals.size(); ++i)
+        while(!time_and_intervals[i].empty() && time_and_intervals[i].front().first < min_tstamp)
+            time_and_intervals[i].pop_front();
+}
+
 #define UNOCCUPIED_DELAY 0.1
 #define ALPHA_VAR 0.1
 
-std::vector<ExpandedScenarioDescriptor> ChannelPacketRateTester::possible_expanded_scenarios(const ChannelPacketRateMonitorInterface* m, int forbidden_channel)
+vector<pair<int,ExpandedScenarioDescriptor>> ChannelPacketRateTester::possible_expanded_scenarios(const ChannelPacketRateMonitorInterface* m, int forbidden_channel)
 {
     const auto& expanded_l = pu_api->expanded_scenarios.scenarios_expanded_list;
     const auto& delay_list = pu_api->environment_data->delay_ms_list;
@@ -196,19 +217,19 @@ std::vector<ExpandedScenarioDescriptor> ChannelPacketRateTester::possible_expand
     
     assert(min_idxs.size()>0);
     
-    vector<ExpandedScenarioDescriptor> possible_scens;
+    vector<pair<int,ExpandedScenarioDescriptor>> possible_scens;
     possible_scens.reserve(min_idxs.size());
     for(auto& e : min_idxs)
-        possible_scens.push_back(expanded_l[e]);
+        possible_scens.emplace_back(e,expanded_l[e]);
     return possible_scens;
 }
 
-vector<scenario_number_type> ChannelPacketRateTester::possible_scenario_idxs(const vector<ExpandedScenarioDescriptor>& possible_expanded_scenarios)
+vector<scenario_number_type> ChannelPacketRateTester::possible_scenario_idxs(const vector<pair<int,ExpandedScenarioDescriptor>>& possible_expanded_scenarios)
 {
     // find unique elements
     set<scenario_number_type> set_idxs;
     for(auto& e : possible_expanded_scenarios)
-        set_idxs.insert(e.scenario_idx);
+        set_idxs.insert(e.second.scenario_idx);
 
     return vector<scenario_number_type>(set_idxs.begin(), set_idxs.end());
 }
@@ -235,70 +256,70 @@ std::string print_packet_rate(const ChannelPacketRateMonitor& p)
         os << "free]";
     return os.str();
 }
-std::string print_packet_period(const ChannelPacketRateMonitor& p)
-{
-    stringstream os;
-    os << "[";
-    for(int i = 0; i < p.Nch-1; ++i)
-        if(p.is_occupied(i))
-            os << p.packet_arrival_period(i) << ",\t";
-        else
-            os << "free,\t";
-    if(p.is_occupied(p.Nch-1))
-        os << p.packet_arrival_period(p.Nch-1) << "]";
-    else
-        os << "free]";
-    return os.str();
-}
-string print_packet_period(const SlidingChannelPacketRateMonitor& p)
-{
-    vector<int> range_idxs = ranges::make_range(p.Nch);
-    return containers::print(range_idxs.begin(), range_idxs.end(), ",\t", [&](int i)
-    {
-        std::stringstream ss;
-        if(p.is_occupied(i))
-            ss << boost::format("%1.11f") % p.packet_arrival_period(i);
-        else
-            ss << "free";
-        return ss.str();
-    });
-}
-string print_packet_delay_variance(const ChannelPacketRateMonitor& p)
-{
-    stringstream os;
-    os << "[";
-    float var;
-    for(int i = 0; i < p.Nch-1; ++i)
-    {
-        var = p.packet_arrival_period_var(i);
-        if(p.is_occupied(i) && var!=delay_stats::NaN())
-            os << p.packet_arrival_period_var(i) << ",\t";
-        else
-            os << "free,\t";
-    }
-    var = p.packet_arrival_period_var(p.Nch-1);
-    if(p.is_occupied(p.Nch-1) && var!=delay_stats::NaN())
-        os << p.packet_arrival_period_var(p.Nch-1) << "]";
-    else
-        os << "free]";
-    return os.str();
-}
-string print_packet_delay_variance(const SlidingChannelPacketRateMonitor& p)
-{
-    vector<int> range_idxs = ranges::make_range(p.Nch);
-    //vector<int> range_idxs(p.Nch);
-    //std::iota(range_idxs.begin(), range_idxs.end());
-    return containers::print(range_idxs.begin(), range_idxs.end(), ",\t", [&](int i)
-    {
-        std::stringstream ss;
-        auto var = p.packet_arrival_period_var(i);
-        if(p.is_occupied(i) && var!=delay_stats::NaN())
-            ss << boost::format("%1.11f") % var;
-        else
-            ss << "free";
-        return ss.str();
-    });
-}
+//std::string print_packet_period(const ChannelPacketRateMonitor& p)
+//{
+//    stringstream os;
+//    os << "[";
+//    for(int i = 0; i < p.Nch-1; ++i)
+//        if(p.is_occupied(i))
+//            os << p.packet_arrival_period(i) << ",\t";
+//        else
+//            os << "free,\t";
+//    if(p.is_occupied(p.Nch-1))
+//        os << p.packet_arrival_period(p.Nch-1) << "]";
+//    else
+//        os << "free]";
+//    return os.str();
+//}
+//string print_packet_period(const SlidingChannelPacketRateMonitor& p)
+//{
+//    vector<int> range_idxs = ranges::make_range(p.Nch);
+//    return containers::print(range_idxs.begin(), range_idxs.end(), ",\t", [&](int i)
+//    {
+//        std::stringstream ss;
+//        if(p.is_occupied(i))
+//            ss << boost::format("%1.11f") % p.packet_arrival_period(i);
+//        else
+//            ss << "free";
+//        return ss.str();
+//    });
+//}
+//string print_packet_delay_variance(const ChannelPacketRateMonitor& p)
+//{
+//    stringstream os;
+//    os << "[";
+//    float var;
+//    for(int i = 0; i < p.Nch-1; ++i)
+//    {
+//        var = p.packet_arrival_period_var(i);
+//        if(p.is_occupied(i) && var!=delay_stats::NaN())
+//            os << p.packet_arrival_period_var(i) << ",\t";
+//        else
+//            os << "free,\t";
+//    }
+//    var = p.packet_arrival_period_var(p.Nch-1);
+//    if(p.is_occupied(p.Nch-1) && var!=delay_stats::NaN())
+//        os << p.packet_arrival_period_var(p.Nch-1) << "]";
+//    else
+//        os << "free]";
+//    return os.str();
+//}
+//string print_packet_delay_variance(const SlidingChannelPacketRateMonitor& p)
+//{
+//    vector<int> range_idxs = ranges::make_range(p.Nch);
+//    //vector<int> range_idxs(p.Nch);
+//    //std::iota(range_idxs.begin(), range_idxs.end());
+//    return containers::print(range_idxs.begin(), range_idxs.end(), ",\t", [&](int i)
+//    {
+//        std::stringstream ss;
+//        auto var = p.packet_arrival_period_var(i);
+//        if(p.is_occupied(i) && var!=delay_stats::NaN())
+//            ss << boost::format("%1.11f") % var;
+//        else
+//            ss << "free";
+//        return ss.str();
+//    });
+//}
 
 std::unique_ptr<JsonScenarioMonitor> make_scenario_monitor(const std::string& type)
 {

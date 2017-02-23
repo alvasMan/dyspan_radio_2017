@@ -180,12 +180,6 @@ unique_ptr<RFEnvironmentData> make_rf_environment()
     return std::move(env);
 }
 
-vector<int> find_free_channels(SituationalAwarenessApi& api)
-{
-    vector<int> channels = api.stats.occupied_channels();
-    return context_utils::find_free_channels(channels, api.environment_data->num_channels);
-}
-
 void launch_mock_scenario_update_thread(SituationalAwarenessApi* scenario_api)
 {
     int scenario_idx = 0;

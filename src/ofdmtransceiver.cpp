@@ -31,6 +31,7 @@
 #include <iostream>
 #include <string>
 #include "general_utils.hpp"
+#include "channel_hopper.hpp"
 
 #define DEBUG_MODE
 
@@ -44,8 +45,7 @@ using std::endl;
 OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     DyspanRadio(params),
     seq_no_(0),
-    payload_len_(1500),
-        power_controller(5,-1)
+    payload_len_(1500)
 {
     assert(payload_len_ <= MAX_PAYLOAD_LEN);
 
@@ -96,7 +96,9 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     pu_data = context_utils::make_rf_environment();    // this is gonna read files
     pu_scenario_api.reset(new SituationalAwarenessApi(*pu_data));
     
-    // Add SU config. API
+    // Add SU config. stuff
+    channel_hopper.reset(new SimpleChannelHopper(*pu_scenario_api));
+    //power_controller.reset(new PowerSearcher(5,-1));
     
     // check if no weird configuration
     assert(params_.has_sensing || (!params_.sensing_to_file && !params_.has_deep_learning && !params_.has_learning));
@@ -109,14 +111,14 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     BinMask *bin_mask_ptr = NULL;
     if(params_.has_sensing && params_.has_learning)
     {
-        learning_chain.emplace();
+        learning_chain.reset(new LearningThreadHandler());
         learning_chain->setup_filepaths(params_.project_folder, params_.read_learning_file, params_.write_learning_file);
         learning_chain->setup(ch_pwrs_buffers, 4, 512);
         bin_mask_ptr = &learning_chain->pwr_estim.bin_mask;
     }
     else if(params_.has_sensing)
     {
-        sensing_chain.emplace();
+        sensing_chain.reset(new SensingThreadHandler());
         sensing_chain->setup(pu_scenario_api.get(), su_params_api.get(), ch_pwrs_buffers, 4, 512);
         bin_mask_ptr = &sensing_chain->pwr_estim.bin_mask;
     }
@@ -124,12 +126,12 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     auto it = ch_pwrs_buffers.begin();
     if(params_.sensing_to_file)
     {
-        spectrogram2file_chain.emplace(it->get(), *bin_mask_ptr);    
+        spectrogram2file_chain.reset(new Spectrogram2FileThreadHandler(it->get(), *bin_mask_ptr));
         ++it;
     }
     if(params_.has_deep_learning)
     {
-        deep_learning_chain.emplace(pu_scenario_api.get(), it->get(), *bin_mask_ptr);
+        deep_learning_chain.reset(new Spectrogram2SocketThreadHandler(pu_scenario_api.get(), it->get(), *bin_mask_ptr));
         ++it;
     }
     assert(it==ch_pwrs_buffers.end());
@@ -188,7 +190,7 @@ void OfdmTransceiver::start(void)
         threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );
         //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
                 
-        threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
+        //threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
     }
 
     // Launch thread that handles database throughput queries
@@ -210,19 +212,20 @@ void OfdmTransceiver::start(void)
         // the two threads communicate through the e_detec buffer
         if(params_.has_learning)
         {
-            threads_.push_back(new boost::thread(boost::bind(&LearningThreadHandler::run, &(*learning_chain), usrp_tx)));
-            if(params_.sensing_to_file)
-                threads_.push_back(new boost::thread(boost::bind(&Spectrogram2FileThreadHandler::run,&(*spectrogram2file_chain))));
+            threads_.push_back(new boost::thread(boost::bind(&LearningThreadHandler::run, learning_chain.get(), usrp_tx)));
         }
         else
         {
             threads_.push_back(new boost::thread(boost::bind(&SensingThreadHandler::run, &(*sensing_chain), usrp_tx)));
             if(params_.has_deep_learning)
             {
-                threads_.push_back(new boost::thread(boost::bind(&Spectrogram2SocketThreadHandler::run_recv, &(*deep_learning_chain))));
-                threads_.push_back(new boost::thread(boost::bind(&Spectrogram2SocketThreadHandler::run_send, &(*deep_learning_chain))));
+                threads_.push_back(new boost::thread(boost::bind(&Spectrogram2SocketThreadHandler::run_recv, deep_learning_chain.get())));
+                threads_.push_back(new boost::thread(boost::bind(&Spectrogram2SocketThreadHandler::run_send, deep_learning_chain.get())));
             }
         }
+        
+        if(spectrogram2file_chain)
+            threads_.push_back(new boost::thread(boost::bind(&Spectrogram2FileThreadHandler::run,spectrogram2file_chain.get())));
         //threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, pu_scenario_api.get()));
     }
     else
@@ -262,15 +265,25 @@ void OfdmTransceiver::modulation_function(void)
                 #endif
             }
 
-            int new_gain = power_controller.CCompute(current_gain);
-
-            if(new_gain != current_gain)
+            if(power_controller)
             {
-                cout << "Changing Powers! " << new_gain << endl;
-                set_tx_gain_uhd(new_gain);
-                current_gain = new_gain;
+                int new_gain = power_controller->CCompute(current_gain);
+
+                if(new_gain != current_gain)
+                {
+                    cout << "Changing Powers! " << new_gain << endl;
+                    set_tx_gain_uhd(new_gain);
+                    current_gain = new_gain;
+                }
             }
-                
+            
+            channel_hopper->work();
+            if(channel_hopper->current_channel != current_channel)
+            {
+                current_channel = channel_hopper->current_channel;
+                cout << "Changed to channel: " << current_channel << endl;
+                reconfigure_usrp(current_channel);
+            }   
             // write header (first four bytes sequence number, remaining are random)
             // TODO: also use remaining 4 bytes for payload
             header[0] = (seq_no_ >> 24) & 0xff;
@@ -423,7 +436,7 @@ void OfdmTransceiver::random_transmit_function(void)
 }
 
 // change USRP frequency
-void OfdmTransceiver::reconfigure_usrp(const int num, bool tune_lo = false)
+void OfdmTransceiver::reconfigure_usrp(const int num, bool tune_lo)
 {
     static vector<int> channel_map = {3, 1, 0, 2};
     // construct tuning request
@@ -433,6 +446,9 @@ void OfdmTransceiver::reconfigure_usrp(const int num, bool tune_lo = false)
     if (channels_.size() > 1)
         internal_num = channel_map[num];
 
+    if(su_params_api)   // sets the SU-TX channel so the sensing sees it
+        su_params_api->set_channel(num);
+    
     uhd::tune_request_t request;
     // don't touch RF part
 
@@ -452,8 +468,6 @@ void OfdmTransceiver::reconfigure_usrp(const int num, bool tune_lo = false)
     request.dsp_freq = channels_.at(internal_num).dsp_freq;
     request.args = uhd::device_addr_t("mode_n=integer");
     uhd::tune_result_t result = usrp_tx->set_tx_freq(request);
-    if(su_params_api)   // sets the SU-TX channel so the sensing sees it
-        su_params_api->set_channel(num);
 
     if (params_.debug)
     {

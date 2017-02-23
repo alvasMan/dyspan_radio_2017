@@ -70,13 +70,20 @@ class SituationalAwarenessApi
 public:
     SituationalAwarenessApi(RFEnvironmentData& e) : environment_data(&e), expanded_scenarios(&e)
     {
+        scenario_idx = 0;
+        expanded_scenario_idx = 0;
     }
     int PU_scenario_idx() const {return scenario_idx.load();}
     int PU_expanded_scenario_idx() const {return expanded_scenario_idx.load();}
     void set_PU_scenario(scenario_number_type s)
     {
-        assert(s < environment_data->scenario_list.size() && s >= -1);
+        assert(s < environment_data->scenario_list.size() && s >= 0);
         scenario_idx = s;
+    }
+    void set_PU_expanded_scenario(scenario_number_type s)
+    {
+        assert(s>=0);
+        expanded_scenario_idx = s;
     }
     
     const RFEnvironmentData* environment_data;   // this will only change at the beginning
@@ -112,7 +119,18 @@ inline std::vector<int> find_free_channels(const std::vector<int>& occupied_chan
     return possible_channels;
 }
 
-std::vector<int> find_free_channels(const SituationalAwarenessApi& api);
+inline std::vector<int> find_free_channels(SituationalAwarenessApi& api)
+{
+    //std::vector<int> channels = api.stats.occupied_channels();
+    //return context_utils::find_free_channels(channels, api.environment_data->num_channels);
+    std::vector<int> channels;
+    auto& scen = api.expanded_scenarios.scenarios_expanded_list[api.PU_expanded_scenario_idx()];
+    for(int i = 0; i < scen.ch_occupied_mask.size(); ++i)
+        if(scen.ch_occupied_mask[i]==false)
+            channels.push_back(i);
+    
+    return channels;
+}
 
 };
 
