@@ -62,7 +62,7 @@ public:
     ChannelPowerEstimator pwr_estim;
     USRPReader usrp_reader;
     PacketDetector packet_detector;
-    TimedChannelPacketRateMonitor rate_monitor;//SlidingChannelPacketRateMonitor rate_monitor;
+    SlidingChannelPacketRateMonitor rate_monitor;//TimedChannelPacketRateMonitor rate_monitor;//SlidingChannelPacketRateMonitor rate_monitor;
     ForgetfulChannelMonitor pwr_monitor;
     ChannelPacketRateTester channel_rate_tester;
     

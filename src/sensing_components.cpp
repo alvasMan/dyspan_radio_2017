@@ -624,7 +624,8 @@ void SensingThreadHandler::setup(SituationalAwarenessApi *pu_scenario_api, SU_tx
     // Setup Channel Packet Arrival Rate Estimator
     float avg_pkt_interval_ms = 7.5;
     float time_window_ms = 100;//250;//500;
-    rate_monitor = TimedChannelPacketRateMonitor(Nch,time_window_ms);//SlidingChannelPacketRateMonitor(Nch,round(time_window_ms/avg_pkt_interval_ms));
+    //rate_monitor = TimedChannelPacketRateMonitor(Nch,time_window_ms);//SlidingChannelPacketRateMonitor(Nch,round(time_window_ms/avg_pkt_interval_ms));
+    rate_monitor = SlidingChannelPacketRateMonitor(Nch,round(time_window_ms/avg_pkt_interval_ms));
     
     // Setup Forgetful Channel Energy Monitor
     pwr_monitor = ForgetfulChannelMonitor(Nch, 0.0001);
@@ -636,7 +637,7 @@ void SensingThreadHandler::setup(SituationalAwarenessApi *pu_scenario_api, SU_tx
     spectrogram_buffers = &bufs;
 }
 
-#define TIME_THRES 0.02
+#define TIME_THRES 0.05
 
 void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
 {
@@ -694,6 +695,13 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
             
             // Discover packets through a moving average
             packet_detector.work(pwr_estim.current_tstamp, ch_snrs);
+            
+            for(auto& e : packet_detector.detected_pulses)
+                if(ch_snrs[std::get<1>(e)]<0)
+                {
+                    cout << "ERROR: I should not have detected this in channel" << std::get<1>(e) << endl;
+                    exit(-1);
+                }
             
 //            cout << "Current forbidden channels: " << new_channel << "," << old_channel << endl;
 //            cout << "Detected pulses: " << print_range(packet_detector.detected_pulses, [](std::tuple<double,int,float> p)
@@ -791,7 +799,7 @@ void Spectrogram2FileThreadHandler::run()
     
     long n_ffts_read = 0;
     long skip_n = std::ceil(1.0 / (512/10.0e6));
-    long max_written = std::ceil(120.0 / (512/10.0e6)) + skip_n;
+    long max_written = std::ceil(60.0 / (512/10.0e6)) + skip_n;//std::ceil(120.0 / (512/10.0e6)) + skip_n;
     
     cout << "Writing Spectrogram to file." << endl;
     cout << "Going to write a total of " << max_written << " fft lines" << endl;
@@ -900,6 +908,10 @@ void Spectrogram2SocketThreadHandler::run_send()
             // resize to NN dimensions
             //sp_resizer.resize_line(pwr_outputs, section_powers().second);
             
+            float min_val = *min_element(section_powers().second.begin(), section_powers().second.end());
+            section_powers().second[0] = min_val;
+            section_powers().second.back() = min_val;
+            
             // Averaging
             for(int i = 0; i < mat.cols(); ++i)
                 sum_powers[i] += section_powers().second[i];
@@ -913,10 +925,10 @@ void Spectrogram2SocketThreadHandler::run_send()
             for(int i = 0; i < mat.cols(); ++i)
                 mat.at(current_row,i) = 10*log10(sum_powers[i]);
             
-            for(int j = 0; j < mat.rows(); ++j)
-                if(mat.at(current_row,j) < mat.at(current_row,0))
-                    mat.at(current_row,0) = mat.at(current_row,j);
-            mat.at(current_row,mat.rows()-1) = mat.at(current_row,0);
+//            for(int j = 0; j < mat.rows(); ++j)
+//                if(mat.at(current_row,j) < mat.at(current_row,0))
+//                    mat.at(current_row,0) = mat.at(current_row,j);
+//            mat.at(current_row,mat.rows()-1) = mat.at(current_row,0);
             
             sum_powers.clear();
             sum_powers.resize(64,0);
@@ -1038,6 +1050,7 @@ void Spectrogram2SocketThreadHandler::run_recv()
                 auto max_it = std::max_element(count_mode_scenarios.begin(),count_mode_scenarios.end());
                 long sum = std::accumulate(count_mode_scenarios.begin(),count_mode_scenarios.end(),0);
                 cout << "> DeepLearning most visited scenario: " << distance(count_mode_scenarios.begin(),max_it) << ", rate: " << *max_it/(double)sum << endl;
+                cout << "> Last probability vector: " << print_range(pred.second) << endl;
                 old_scenario_number = scen_avg;
                 pu_api->set_PU_scenario(scen_avg);
                 tprev = tprint;

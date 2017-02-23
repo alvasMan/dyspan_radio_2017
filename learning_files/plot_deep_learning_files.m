@@ -49,8 +49,8 @@ function SdB_norm = preprocess_img(S)
 target_dim = [size(S,2), size(S,2)];
 n_avg = size(S,1)/size(S,2);
 
-% S(:,1) = min(S,[],2);
-% S(:,end) = S(:,1);
+S(:,1) = min(S,[],2);
+S(:,end) = S(:,1);
 
 Simg = zeros(target_dim);
 for i=1:n_avg

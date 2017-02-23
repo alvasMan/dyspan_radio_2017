@@ -25,6 +25,8 @@ public:
     int current_scenario_expanded = -1;
     std::vector<int> current_free_channels;
     int max_channel_stay_ms = 500;
+    int min_channel_return_ms = 100;
+    int last_channel = -1;
     SituationalAwarenessApi* pu_api;
     
     SimpleChannelHopper() = default;

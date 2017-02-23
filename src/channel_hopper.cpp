@@ -31,12 +31,12 @@ void SimpleChannelHopper::work()
             assert(found_ch_it != current_free_channels.end());
 
             // If enough time has passed, change to another free channel
-            auto tnow = std::chrono::system_clock::now();
-            if(std::chrono::duration_cast<std::chrono::milliseconds>(tnow-tchange).count() > max_channel_stay_ms)
+            auto t_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()-tchange).count();
+            if(t_elapsed > max_channel_stay_ms)
             {
                 std::cout << "Free channels: " << print_range(current_free_channels) << std::endl;
                 auto it = current_free_channels.begin();
-                while(it == found_ch_it)
+                while(it == found_ch_it || (*it == last_channel && t_elapsed < min_channel_return_ms))
                     ++it;
                 assert(it != found_ch_it);
                 // TODO: Select random
