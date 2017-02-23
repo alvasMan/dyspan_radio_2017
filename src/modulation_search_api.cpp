@@ -61,7 +61,6 @@ ModulationSearchApi::setGainChanged(bool gain_changed)
 void
 ModulationSearchApi::initializeSearch()
 {
-    std::cout<<"Start New Mod Search"<<std::endl<<std::endl;
     m_current_modulation = m_modulation_list.begin();
     std::fill(m_this_mod_tsu_v.begin(),m_this_mod_tsu_v.end(),0);
     std::fill(m_previous_mod_tsu_v.begin(),m_previous_mod_tsu_v.end(),0);
@@ -142,6 +141,7 @@ ModulationSearchApi::changeOfdmMod()
 
     if(m_gain_changed) //The gain has changed, we need to restart our search.
     {
+        std::cout<<"Start New Mod Search"<<std::endl<<std::endl;
         initializeSearch();
     }
     else //The gain has not changed, carry on searching

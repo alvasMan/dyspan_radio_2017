@@ -100,8 +100,10 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
 
     // Add SU config. stuff
     channel_hopper.reset(new SimpleChannelHopper(*pu_scenario_api));
-    //power_controller.reset(new PowerSearcher(5,-1));
-
+    if(params_.power_control)
+    {
+        power_controller.reset(new PowerSearcher(5,-1,params_.db_period));
+    }
 
     // check if no weird configuration
     assert(params_.has_sensing || (!params_.sensing_to_file && !params_.has_deep_learning && !params_.has_learning));
@@ -160,7 +162,7 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
       cal_file.open (params_.cal_file);
       std::string gain_str;
       std::string mod_str;
-      std::map<float,modulation_scheme> gain_2_mod;
+      
       while(!cal_file.eof())
       {
           getline(cal_file, gain_str, ' ');
@@ -171,9 +173,18 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
           //float gain_float = std::atof(gain_str.c_str());
           float gain_float = std::stof(gain_str);
           gain_2_mod[gain_float]=liquid_getopt_str2mod(mod_str.c_str());
-          cout<<gain_str<<endl;
-          cout<<modulation_types[gain_2_mod[gain_float]].name<<endl;
+          //cout<<gain_str<<endl;
+          //cout<<modulation_types[gain_2_mod[gain_float]].name<<endl;
       }
+      cout<<endl<< "Gain to modulation read from file: "<<endl;
+      cout<<"Gain: ";
+      for(map<float,modulation_scheme>::const_iterator it = gain_2_mod.begin(); it != gain_2_mod.end(); ++it)
+        std::cout << it->first << " ";
+
+      cout<<endl<<"Modulation: ";
+      for(map<float,modulation_scheme>::const_iterator it = gain_2_mod.begin(); it != gain_2_mod.end(); ++it)
+        std::cout << modulation_types[it->second].name << " ";
+      cout<<endl;
     }
 
     if(params_.has_deep_learning)
@@ -354,15 +365,19 @@ void OfdmTransceiver::modulation_function(void)
                     cout << "Changing Powers! " << new_gain << endl;
                     set_tx_gain_uhd(new_gain);
                     current_gain = new_gain;
+                    fgprops.mod_scheme = gain_2_mod[current_gain];
                 }
             }
 
-            channel_hopper->work();
-            if(channel_hopper->current_channel != current_channel)
+            if(params_.channel_hopping)
             {
-                current_channel = channel_hopper->current_channel;
-                cout << "Changed to channel: " << current_channel << endl;
-                reconfigure_usrp(current_channel);
+                channel_hopper->work();
+                if(channel_hopper->current_channel != current_channel)
+                {
+                    current_channel = channel_hopper->current_channel;
+                    cout << "Changed to channel: " << current_channel << endl;
+                    reconfigure_usrp(current_channel);
+                }
             }
 
             // write header (first four bytes sequence number, remaining are random)

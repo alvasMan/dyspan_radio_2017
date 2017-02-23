@@ -91,7 +91,11 @@ typedef struct
     std::string db_user;
     std::string db_password;
 
+    //hopping parameters
+    bool channel_hopping;
 
+    //Power control parameters
+    bool power_control;
 
     std::string project_folder;
     std::string read_learning_file;

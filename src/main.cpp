@@ -106,6 +106,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("txgain_uhd",po::value<double>(&params.tx_gain_uhd)->default_value(10),"Sets UHD transmit gain")
         ("rxantenna", po::value<std::string>(&params.rx_antenna)->default_value("TX/RX"), "RX antenna to use")
         ("stat_interval",po::value<unsigned int>(&params.stat_interval)->default_value(2),"Statistic interval")
+        ("tx_enabled", po::value<bool>(&params.tx_enabled)->default_value(true), "Transmission on or off")
 
         ("M",po::value<unsigned int>(&params.M)->default_value(48),"Number of subcarriers")
         ("cp_len",po::value<unsigned int>(&params.cp_len)->default_value(6),"Cyclic prefix length")
@@ -116,16 +117,24 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("mod",po::value<std::string>(&params.mod)->default_value("qpsk"),"Modulation scheme")
         //("change_mod_period",po::value<unsigned long>(&params.change_mod_period)->default_value(ULONG_MAX),"Change mod period in ms.")
 
+        //Calibration parameters
         ("calibration", po::value<bool>(&params.calibration)->default_value(false), "Whether to start calibration stage")
         ("cal_file", po::value<std::string>(&params.cal_file)->default_value("cal_file.csv"), "File where to save calibration info")
+
+        //Database parameters
         ("challenge", po::value<bool>(&params.use_db)->default_value(false), "Whether to connect and use challenge database")
         ("db_ip", po::value<std::string>(&params.db_ip)->default_value("127.0.0.1"), "Database IP")
         ("db_period", po::value<unsigned int>(&params.db_period)->default_value(100), "Database query period in ms")
         ("db_user", po::value<std::string>(&params.db_user)->default_value("?"), "Database user")
         ("db_pass", po::value<std::string>(&params.db_password)->default_value("?"), "Database password")
 
-        ("tx_enabled", po::value<bool>(&params.tx_enabled)->default_value(true), "learning on or off")
-        ("debug", po::value<bool>(&params.debug)->default_value(false), "Whether to print debug messages")
+        //Channel hopping parameters
+        ("channel_hopping", po::value<bool>(&params.channel_hopping)->default_value(false), "Whether to have the channel hopping")
+
+        //Power control parameters
+        ("power_control", po::value<bool>(&params.power_control)->default_value(false), "Enable power control")
+
+        //Deep learning parameters
         ("sensing", po::value<bool>(&params.has_sensing)->default_value(true), "Whether to start sensing thread")
         ("learning", po::value<bool>(&params.has_learning)->default_value(false), "Whether to train your algorithms")
         ("deep_learning", po::value<bool>(&params.has_deep_learning)->default_value(false), "Whether to use deep learning")
@@ -133,6 +142,9 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         ("project_folder", po::value<std::string>(&params.project_folder)->default_value("../../"), "Needed to find config files")
         ("read_learning_file", po::value<std::string>(&params.read_learning_file)->default_value("learned_data.json"), "Which file to configure context algorithms")
         ("write_learning_file", po::value<std::string>(&params.write_learning_file)->default_value("written_data.json"), "Which file to write output of context algorithms")
+
+        //Debug parameters
+        ("debug", po::value<bool>(&params.debug)->default_value(false), "Whether to print debug messages")
         ("dilv", "specify to disable inner-loop verbose")
     ;
 
