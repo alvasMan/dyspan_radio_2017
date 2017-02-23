@@ -68,7 +68,7 @@ using boost::asio::ip::tcp;
 //
 //    // Always call process because we write on fftBins nBins samples from uhd (see above)
 //    pwr_estim->process(current_timestamp);
-//    
+//
 //    return true;
 //}
 //
@@ -85,15 +85,15 @@ using boost::asio::ip::tcp;
 void resize_ch_pwr_outputsdB(std::vector<float>& out, const vector<float>& in)
 {
     float interp_factor = out.size()/(float)in.size();
-    
+
     //cout << "in size: " << in.size() << endl;
-    
+
     for(int i = 0; i < out.size(); ++i)
     {
         float i_val = i/interp_factor;
         float i_floor = std::floor(i_val);
         float i_ceil = std::ceil(i_val);
-        
+
         if(i_ceil!=in.size())
         {
             float alpha = (i_val-i_floor);
@@ -107,7 +107,7 @@ void resize_ch_pwr_outputsdB(std::vector<float>& out, const vector<float>& in)
 void SpectrogramResizer::setup()
 {
     float mask_interp_factor = bin_mask.size() / Nout;
-    
+
     int nBins = bin_mask.size();
     int n_cols = bin_mask.n_sections();
     vector<int> out_mat_count(Nout*n_cols,0);
@@ -119,7 +119,7 @@ void SpectrogramResizer::setup()
         int out_idx = std::floor(shift_idx/mask_interp_factor);
         out_mat_count[out_idx*n_cols + bin_mask[i]]++;
     }
-    
+
     out_mat_frac = std::vector<float>(Nout*n_cols,0);
     for(int i = 0; i < Nout; ++i)
     {
@@ -151,7 +151,7 @@ void SpectrogramResizer::resize_line(vector<float>& out_vec, const vector<float>
 {
     assert(out_vec.size()==Nout);
     assert(in_vec.size()==bin_mask.n_sections());
-    
+
     int n_cols = bin_mask.n_sections();
     for(int i = 0; i < Nout; ++i)
     {
@@ -166,13 +166,13 @@ void SpectrogramResizer::resize_line(vector<float>& out_vec, const vector<float>
 namespace sensing_utils
 {
 //SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::string json_read_filename,
-//                                             std::string json_write_filename, SituationalAwarenessApi *pu_scenario_api, 
+//                                             std::string json_write_filename, SituationalAwarenessApi *pu_scenario_api,
 //                                    bool has_sensing, bool has_learning)
 //{
 //    SensingHandler shandler;
-//    
+//
 //    shandler.Nch = Nch;
-//    
+//
 //    if(has_sensing)
 //    {
 //        int moving_average_size = 1;
@@ -184,26 +184,26 @@ namespace sensing_utils
 //        assert(maskprops.bin_mask.size()==Nfft);
 //        shandler.pwr_estim->set_parameters(moving_average_size, maskprops);
 //        //shandler.pwr_estim->set_parameters(16, 512, 4, 0.4, 0.4);//(150, num_channels, 512, 0.4);// Andre: these are the parameters of the sensing (number of averages,window step size,fftsize)
-//        
+//
 //        // SETUP JSON LEARNER/READER
 //        std::string learning_folder = project_folder+"learning_files/";
 //        shandler.json_learning_manager.reset(new TrainingJsonManager(learning_folder + json_read_filename, learning_folder + json_write_filename));
 //        shandler.json_learning_manager->read(); // reads the config file
-//        
+//
 //        // SETUP USRP Reader to PowerChannelEstimator input
 //        if(has_learning==false)
 //            shandler.sensing_module.reset(new SensingModule(shandler.pwr_estim.get()));
 //        else
 //            shandler.sensing_module.reset(new SensingModule(shandler.pwr_estim.get(),true));
-//        
+//
 //        if(has_learning)
 //            shandler.spectrogram_module.reset(new SpectrogramGenerator(maskprops, moving_average_size));
-//        
+//
 //        shandler.channel_rate_tester.reset(new ChannelPacketRateTester(pu_scenario_api));
 //    }
-//    
+//
 //    shandler.pu_scenario_api = pu_scenario_api;
-//    
+//
 //    return std::move(shandler);
 //}
 
@@ -212,18 +212,18 @@ namespace sensing_utils
 //    auto t1 = system_clock::now();
 //    scenario_number_type old_scenario_number = -1;
 //    time_format last_tstamp = -1000000;
-//    
+//
 //    shandler->sensing_module->setup_rx_chain(usrp_tx);
 //    auto packet_detector = PacketDetector(shandler->Nch, 9, 12);
 //    std::unique_ptr<ChannelPacketRateMonitor> par_monitor(new ChannelPacketRateMonitor(shandler->Nch, 0.1));
 //    auto ch_monitor = ForgetfulChannelMonitor(shandler->Nch, 0.01);
 //    vector<int> ch_counter(shandler->Nch,0);
-//    
+//
 //    // start streaming
 //    shandler->sensing_module->start();
-//    
+//
 //    // loop
-//    try 
+//    try
 //    {
 //        while (true)
 //        {
@@ -232,15 +232,15 @@ namespace sensing_utils
 //            // receive data from USRP and place it in the buffer
 //            if(shandler->sensing_module->recv_fft_pwrs()==false)
 //                break;
-//            
+//
 //            vector<float> ch_pwrs = sensing_utils::relative_channel_powers(shandler->pwr_estim->bin_mask, shandler->pwr_estim->output_ch_pwrs);
 //            assert(ch_pwrs.size()==shandler->Nch);
-//            
+//
 //            // Discover packets through a moving average
 //            packet_detector.work(shandler->pwr_estim->current_tstamp, ch_pwrs);
-//            
+//
 //            par_monitor->work(packet_detector.detected_pulses);
-//            
+//
 //            // Perform channel occupancy measurements
 ////            vector<float> ch_snr(shandler->Nch);
 ////            for(int i = 0; i < ch_snr.size(); ++i)
@@ -248,12 +248,12 @@ namespace sensing_utils
 //            ch_monitor.work(ch_pwrs);//shandler->pwr_estim->output_ch_pwrs);//ch_snr);
 //            for(auto &e : packet_detector.detected_pulses)
 //                ch_counter[std::get<1>(e)]++;
-//            
+//
 //            // Check the list of possible scenarios
 //            if(false && (!packet_detector.detected_pulses.empty() || (shandler->pwr_estim->current_tstamp-last_tstamp)>2))
 //            {
 //                auto possible_scenario_numbers = shandler->channel_rate_tester->possible_scenario_idxs(par_monitor.get());
-//            
+//
 //                // If update, update the API
 //                if(old_scenario_number != possible_scenario_numbers[0])
 //                {
@@ -263,10 +263,10 @@ namespace sensing_utils
 //                }
 //                last_tstamp = shandler->pwr_estim->current_tstamp;
 //            }
-//            
+//
 //            // clear the just detected packets
 //            packet_detector.detected_pulses.clear();
-//            
+//
 //            // Print to screen
 //            auto t2 = system_clock::now();
 //            if(std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count() > 2)
@@ -296,45 +296,45 @@ namespace sensing_utils
 //}
 
 //void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler* shandler)
-//{    
+//{
 //    auto t1 = system_clock::now();
-//    
+//
 //    scenario_number_type old_scenario_number = -1;
 //    shandler->sensing_module->setup_rx_chain(usrp_tx);
 //    auto packet_detector = PacketDetector(shandler->Nch, 15, 10);
 //    auto ch_monitor = ForgetfulChannelMonitor(shandler->Nch, 0.1);
 //    auto par_monitor = ChannelPacketRateMonitor(shandler->Nch, 0.1);
-//    
+//
 //    // start streaming
 //    shandler->sensing_module->start();
-//    
+//
 //    // loop
-//    try 
+//    try
 //    {
 //        while (true)
 //        {
 //            boost::this_thread::interruption_point();
-//            
+//
 //            // receive data from USRP and place it in the buffer
 //            if(shandler->sensing_module->recv_fft_pwrs()==false)
 //                break;
-//            
+//
 //            vector<float> ch_pwrs = sensing_utils::relative_channel_powers(shandler->pwr_estim->bin_mask, shandler->pwr_estim->output_ch_pwrs);
-//            
-//            
+//
+//
 //            // Discover packets through a moving average
 //            packet_detector.work(shandler->pwr_estim->current_tstamp, ch_pwrs);
-//            
+//
 //            ch_monitor.work(ch_pwrs);
 //            par_monitor.work(packet_detector.detected_pulses);
-//            
+//
 //            // Move data to spectrogram
 //            if(shandler->spectrogram_module)
 //                shandler->spectrogram_module->push_line(shandler->pwr_estim->current_tstamp, shandler->pwr_estim->output_ch_pwrs);
-//            
+//
 //            // clear the just detected packets
 //            packet_detector.detected_pulses.clear();
-//            
+//
 //            // Print to screen
 //            auto t2 = system_clock::now();
 //            if(std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count() > 2)
@@ -350,7 +350,7 @@ namespace sensing_utils
 //    {
 //        std::cout << "Sensing thread interrupted." << std::endl;
 //    }
-//    
+//
 //    json j = {{par_monitor.json_key(),par_monitor.to_json()}};
 //    shandler->json_learning_manager->write(j);
 //}
@@ -359,37 +359,37 @@ namespace sensing_utils
 //{
 //    std::vector<int> NNdims = {64,64};
 //    SpectrogramResizer sp_resizer(shandler->spectrogram_module->bin_mask, NNdims[1]);
-//    
+//
 //    // loop
-//    try 
+//    try
 //    {
 //        std::vector<float> resized_pwr_outputsdB(NNdims[1]);
 //        while(true)
 //        {
 //            boost::this_thread::interruption_point();
-//            
+//
 //            //blocks waiting
 //            buffer_utils::rdataset<ChPowers>  ch_powers = shandler->spectrogram_module->pop_line();
-//            
+//
 //            // convert to dB ----> Only after the averaging
 ////            for(int i = 0; i < ch_powers().second.size(); ++i)
 ////                if(ch_powers().second[i]!=0)
 ////                    ch_powers().second[i] = 10*log10(ch_powers().second[i]);
 ////                else
 ////                    ch_powers().second[i] = -240;
-//            
-//            
+//
+//
 ////            if(ch_powers.empty())
 ////                boost::this_thread::sleep(boost::posix_time::milliseconds(500));
-//            
+//
 //            assert(ch_powers().second.size()>0);
-//            
+//
 //            //cout << "DEBUG: reading from e_detec timestamp: " << ch_powers().first << " buffer: " << print_range(ch_powers().second) << endl;
-//            
+//
 //            // resize to NN dimensions
 //            sp_resizer.resize_line(resized_pwr_outputsdB, ch_powers().second);
 //            //resize_ch_pwr_outputsdB(resized_pwr_outputsdB, ch_powers().second);
-//            
+//
 //            // i can't max to 1 here
 //
 //            n_ffts_read++;
@@ -417,58 +417,58 @@ namespace sensing_utils
 //    std::string filename = "/home/connect/repo/generated_files/temp.bin";
 //    std::vector<int> NNdims = {64,64};
 //    SpectrogramResizer sp_resizer(shandler->spectrogram_module->bin_mask, NNdims[1]);
-//    
+//
 //    std::ofstream of;
 //    of.open(filename, std::ios::out | std::ios::binary);
-//    
+//
 //    long n_ffts_read = 0;
 //    long skip_n = std::ceil(1.0 / (shandler->pwr_estim->nBins/10.0e6));
 //    long max_written = std::ceil(120.0 / (shandler->pwr_estim->nBins/10.0e6)) + skip_n;
-//    
+//
 //    cout << "Writing Spectrogram to file." << endl;
 //    cout << "Going to write a total of " << max_written << " fft lines" << endl;
 //    cout << "Going to skip the first " << skip_n << " fft lines" << endl;
-//    
+//
 //    if(of.is_open()==false)
 //    {
 //        std::cout << "Spectrogram2FileThread: Unable to open file in " << filename << std::endl;
 //        return; // TODO: send a signal
 //    }
 //    // loop
-//    try 
+//    try
 //    {
 //        std::vector<float> resized_pwr_outputsdB(NNdims[1]);
 //        while(true)
 //        {
 //            boost::this_thread::interruption_point();
-//            
+//
 //            //blocks waiting
 //            buffer_utils::rdataset<ChPowers>  ch_powers = shandler->spectrogram_module->pop_line();
-//            
+//
 //            // convert to dB ----> Only after the averaging
 ////            for(int i = 0; i < ch_powers().second.size(); ++i)
 ////                if(ch_powers().second[i]!=0)
 ////                    ch_powers().second[i] = 10*log10(ch_powers().second[i]);
 ////                else
 ////                    ch_powers().second[i] = -240;
-//            
-//            
+//
+//
 ////            if(ch_powers.empty())
 ////                boost::this_thread::sleep(boost::posix_time::milliseconds(500));
-//            
+//
 //            assert(ch_powers().second.size()>0);
-//            
+//
 //            //cout << "DEBUG: reading from e_detec timestamp: " << ch_powers().first << " buffer: " << print_range(ch_powers().second) << endl;
-//            
+//
 //            // resize to NN dimensions
 //            sp_resizer.resize_line(resized_pwr_outputsdB, ch_powers().second);
 //            //resize_ch_pwr_outputsdB(resized_pwr_outputsdB, ch_powers().second);
-//            
+//
 //            // i can't max to 1 here
-//            
+//
 //            n_ffts_read++;
 //            if(n_ffts_read>=skip_n)
-//            {    
+//            {
 //                // write to file
 //                of.write((char*)&resized_pwr_outputsdB[0], resized_pwr_outputsdB.size()*sizeof(float));
 //                if(n_ffts_read>=max_written)
@@ -483,7 +483,7 @@ namespace sensing_utils
 //    {
 //        std::cout << "STATUS: Spectrogram to file thread successfully interrupted." << std::endl;
 //    }
-//    
+//
 //    of.close();
 //    cout << "STATUS: Closing thread dedicated to writing the spectrogram to a file." << endl;
 //}
@@ -501,62 +501,62 @@ void LearningThreadHandler::setup_filepaths(const string& folder_name, const str
 void LearningThreadHandler::setup(vector<std::unique_ptr<buffer_utils::bounded_buffer<ChPowers>>>& bufs, int _Nch, int Nfft)
 {
     Nch = _Nch;
-    
+
     //auto maskprops = sensing_utils::generate_bin_mask_and_reference(Nch, Nfft, 0.8, 0.12);
     auto maskprops = sensing_utils::generate_bin_mask_no_guard(64, Nfft);
     maskprops2 = sensing_utils::generate_bin_mask_and_reference(Nch, 64, 0.75, 0.125, false, false);
     cout << "Mask1: " << print_range(maskprops) << endl;
     cout << "Mask2: " << print_range(maskprops2) << endl;
-    
+
     pwr_estim.set_parameters(1, maskprops);
     packet_detector = PacketDetector(Nch, 9, 12);
     rate_monitor = ChannelPacketRateMonitor(Nch);
-    
+
     if(json_read_filename != "" && json_write_filename != "")
     {
         string learning_folder = project_folder+"learning_files/";
-        json_learning_manager.emplace(learning_folder + json_read_filename, learning_folder + json_write_filename);
+        json_learning_manager.reset(new TrainingJsonManager(learning_folder + json_read_filename, learning_folder + json_write_filename));
         json_learning_manager->read(); // reads the config file
     }
-        
+
     spectrogram_buffers = &bufs;
 }
 
 void LearningThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
-{      
+{
     auto t1 = system_clock::now();
     vector<int> ch_counter(Nch,0);
     vector<float> second_pwrs(maskprops2.n_sections(),0);
-    
+
     usrp_reader.setup(usrp_tx, true);
     usrp_reader.start();
-    
+
     try
     {
         while (true)
         {
             boost::this_thread::interruption_point();
-            
+
             // receive data from USRP and place it in the buffer
             if(usrp_reader.recv_block(&pwr_estim[0], pwr_estim.nBins, pwr_estim.current_tstamp)==false)
             {
                 cout << "ERROR: Could not read samples from USRP" << endl;
                 break;
             }
-            
+
             pwr_estim.process(pwr_estim.current_tstamp);
-            
+
             //vector<float> ch_pwrs = sensing_utils::relative_channel_powers(pwr_estim.bin_mask, pwr_estim.output_ch_pwrs);
             sensing_utils::apply_bin_mask(&second_pwrs[0], &pwr_estim.output_ch_pwrs[0], maskprops2);
             vector<float> ch_pwrs = sensing_utils::relative_channel_powers(maskprops2, second_pwrs);
-            
+
             // Discover packets through a moving average
             packet_detector.work(pwr_estim.current_tstamp, ch_pwrs);
-            
+
             rate_monitor.work(packet_detector.detected_pulses, pwr_estim.current_tstamp);
             for(auto &e : packet_detector.detected_pulses)
                 ch_counter[std::get<1>(e)]++;
-            
+
             // move data to file or caffe
             for(auto&e : *spectrogram_buffers)
             {
@@ -564,10 +564,10 @@ void LearningThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
                 wdst().first = pwr_estim.current_tstamp;
                 wdst().second = pwr_estim.output_ch_pwrs;
             }
-            
+
             // clear the just detected packets
             packet_detector.detected_pulses.clear();
-            
+
             // Print to screen
             auto t2 = system_clock::now();
             if(std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count() > 2)
@@ -587,7 +587,7 @@ void LearningThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
     {
         cout << "STATUS: Learning Thread was interrupted." << endl;
     }
-    
+
     if(json_learning_manager) // write to json file
     {
         json j = {{rate_monitor.json_key(),rate_monitor.to_json()}};
@@ -595,43 +595,43 @@ void LearningThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
     }
 }
 
-void SensingThreadHandler::setup(SituationalAwarenessApi *pu_scenario_api, SU_tx_params* su_params, 
+void SensingThreadHandler::setup(SituationalAwarenessApi *pu_scenario_api, SU_tx_params* su_params,
                                  vector<std::unique_ptr<buffer_utils::bounded_buffer<ChPowers>>>& bufs, int _Nch, int Nfft)
 {
     Nch = _Nch;
     pu_api = pu_scenario_api;
-    
+
     // Set ChannelPowerEstimator
     //auto maskprops = sensing_utils::generate_bin_mask(shandler.Nch, Nfft, 0.8);
 
 //    auto maskprops = sensing_utils::generate_bin_mask_and_reference(Nch, Nfft, 0.8, 0.12);
 //    pwr_estim.set_parameters(1, maskprops);
-//    assert(maskprops.bin_mask.size()==Nfft);    
-    
+//    assert(maskprops.bin_mask.size()==Nfft);
+
     auto maskprops = sensing_utils::generate_bin_mask_no_guard(64, Nfft);
     maskprops2 = sensing_utils::generate_bin_mask_and_reference(Nch, 64, 0.75, 0.125, false, false);
     cout << "Mask1: " << print_range(maskprops) << endl;
     cout << "Mask2: " << print_range(maskprops2) << endl;
-    
+
     pwr_estim.set_parameters(1, maskprops);
-    
+
     // Set USRP to FFT writer
     // not yet
-    
+
     // Setup Packet Detector
     packet_detector = PacketDetector(Nch, 9, 12);
-    
+
     // Setup Channel Packet Arrival Rate Estimator
     float avg_pkt_interval_ms = 7.5;
     float time_window_ms = 100;//250;//500;
     rate_monitor = TimedChannelPacketRateMonitor(Nch,time_window_ms);//SlidingChannelPacketRateMonitor(Nch,round(time_window_ms/avg_pkt_interval_ms));
-    
+
     // Setup Forgetful Channel Energy Monitor
     pwr_monitor = ForgetfulChannelMonitor(Nch, 0.0001);
-    
+
     // This will guess the scenario based on packet arrival rate
     channel_rate_tester = ChannelPacketRateTester(pu_scenario_api);
-    
+
     su_api = su_params;
     spectrogram_buffers = &bufs;
 }
@@ -641,41 +641,41 @@ void SensingThreadHandler::setup(SituationalAwarenessApi *pu_scenario_api, SU_tx
 void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
 {
     auto t1 = system_clock::now();
-    
+
     short new_channel = -1;
     short old_channel = 0;
     time_format last_hop_tstamp = -1;
-    
+
     scenario_number_type old_scenario_number = -1;
     scenario_number_type old_expanded_scenario_number = -1;
     time_format last_tstamp = -1000000;
     vector<int> ch_counter(Nch,0);
     vector<float> second_pwrs(maskprops2.n_sections(),0);
     vector<long> scenario_counter(11,0);
-    
+
     usrp_reader.setup(usrp_tx);
     usrp_reader.start();
-    
+
     try
     {
         while (true)
         {
             boost::this_thread::interruption_point();
-            
+
             // receive data from USRP and place it in the buffer
             if(usrp_reader.recv_block(&pwr_estim.fftBins[0], pwr_estim.nBins, pwr_estim.current_tstamp)==false)
             {
                 cout << "ERROR: Could not read samples from USRP" << endl;
                 break;
             }
-            
+
             pwr_estim.process(pwr_estim.current_tstamp);
-            
+
             //vector<float> ch_snrs = sensing_utils::relative_channel_powers(pwr_estim.bin_mask, pwr_estim.output_ch_pwrs);
-            
+
             sensing_utils::apply_bin_mask(&second_pwrs[0], &pwr_estim.output_ch_pwrs[0], maskprops2);
             vector<float> ch_snrs = sensing_utils::relative_channel_powers(maskprops2, second_pwrs);
-            
+
             if(su_api)
             {   // set the PU channel to -1 just to ignore it
                 new_channel = su_api->channel();
@@ -691,22 +691,22 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
                     }
                 ch_snrs[new_channel] = -1;
             }
-            
+
             // Discover packets through a moving average
             packet_detector.work(pwr_estim.current_tstamp, ch_snrs);
-            
+
 //            cout << "Current forbidden channels: " << new_channel << "," << old_channel << endl;
 //            cout << "Detected pulses: " << print_range(packet_detector.detected_pulses, [](std::tuple<double,int,float> p)
 //            {
 //                return std::get<1>(p);
 //            });
-            
+
             rate_monitor.work(packet_detector.detected_pulses, pwr_estim.current_tstamp);
-            
+
             pwr_monitor.work(ch_snrs);//shandler->pwr_estim->output_ch_pwrs);//ch_snr);
             for(auto &e : packet_detector.detected_pulses)
                 ch_counter[std::get<1>(e)]++;
-            
+
             // move data to file or caffe
             for(auto&e : *spectrogram_buffers)
             {
@@ -714,7 +714,7 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
                 wdst().first = pwr_estim.current_tstamp;
                 wdst().second = pwr_estim.output_ch_pwrs;
             }
-            
+
             // Check the list of possible scenarios
             if((!packet_detector.detected_pulses.empty() || (pwr_estim.current_tstamp-last_tstamp)>2))
             {
@@ -734,11 +734,11 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
                 }
                 last_tstamp = pwr_estim.current_tstamp;
             }
-            
-            
+
+
             // clear the just detected packets
             packet_detector.detected_pulses.clear();
-            
+
                         // Print to screen
             auto t2 = system_clock::now();
             if(std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count() > 2)
@@ -772,7 +772,7 @@ void SensingThreadHandler::run(uhd::usrp::multi_usrp::sptr& usrp_tx)
     }
 }
 
-Spectrogram2FileThreadHandler::Spectrogram2FileThreadHandler(buffer_utils::bounded_buffer<ChPowers>* buf, 
+Spectrogram2FileThreadHandler::Spectrogram2FileThreadHandler(buffer_utils::bounded_buffer<ChPowers>* buf,
                                                              const BinMask& bmask, pair<int,int> CNN_dim, int step_size):
 sp_resizer(bmask, CNN_dim.second)
 {
@@ -785,45 +785,45 @@ sp_resizer(bmask, CNN_dim.second)
 void Spectrogram2FileThreadHandler::run()
 {
     std::string filename = "/home/connect/repo/generated_files/temp.bin";
-    
+
     std::ofstream of;
     of.open(filename, std::ios::out | std::ios::binary);
-    
+
     long n_ffts_read = 0;
     long skip_n = std::ceil(1.0 / (512/10.0e6));
     long max_written = std::ceil(120.0 / (512/10.0e6)) + skip_n;
-    
+
     cout << "Writing Spectrogram to file." << endl;
     cout << "Going to write a total of " << max_written << " fft lines" << endl;
     cout << "Going to skip the first " << skip_n << " fft lines" << endl;
-    
+
     if(of.is_open()==false)
     {
         std::cout << "Spectrogram2FileThread: Unable to open file in " << filename << std::endl;
         return; // TODO: send a signal
     }
     // loop
-    try 
+    try
     {
         std::vector<float> pwr_outputs(CNNdims.second);
         while(true)
         {
             boost::this_thread::interruption_point();
-            
+
             //blocks waiting
             buffer_utils::rdataset<ChPowers>  section_powers = sensing_buffer->get_rdataset();
-            
+
             // resize to NN dimensions
             //sp_resizer.resize_line(pwr_outputs, section_powers().second);
-            
+
             // i can't max to 1 here
-            
+
             n_ffts_read++;
             if(n_ffts_read>=skip_n)
-            {    
+            {
                 // cut the corner
 //                section_powers().second[0] = *min_element(section_powers().second.begin(), section_powers().second.end());
-                
+
                 // write to file
                 of.write((char*)&section_powers().second[0], section_powers().second.size()*sizeof(float));
                 //of.write((char*)&pwr_outputs[0], pwr_outputs.size()*sizeof(float));
@@ -839,13 +839,13 @@ void Spectrogram2FileThreadHandler::run()
     {
         std::cout << "STATUS: Spectrogram to file thread successfully interrupted." << std::endl;
     }
-    
+
     of.close();
     cout << "STATUS: Closing thread dedicated to writing the spectrogram to a file." << endl;
 }
 
-Spectrogram2SocketThreadHandler::Spectrogram2SocketThreadHandler(SituationalAwarenessApi* api, 
-                                                                 buffer_utils::bounded_buffer<ChPowers>* buf, 
+Spectrogram2SocketThreadHandler::Spectrogram2SocketThreadHandler(SituationalAwarenessApi* api,
+                                                                 buffer_utils::bounded_buffer<ChPowers>* buf,
                                                                  const BinMask& bmask, pair<int,int> CNN_dim, int step_size)
 //: sp_resizer(bmask, CNN_dim.second)
 {
@@ -855,7 +855,7 @@ Spectrogram2SocketThreadHandler::Spectrogram2SocketThreadHandler(SituationalAwar
     mat = Matrix<float>(CNN_dim.first, CNN_dim.second);
     //sp_resizer = SpectrogramResizer(bmask, mat.cols());
     moving_average_step = step_size;
-    
+
     float spectrogram_duration_ms = 50;
     float time_window_ms = 250;//500;
     mode_counter = markov_utils::make_deeplearning_mode_counter(time_window_ms, spectrogram_duration_ms, 10);//pu_api->environment_data->scenario_list.size());
@@ -867,11 +867,11 @@ Spectrogram2SocketThreadHandler::Spectrogram2SocketThreadHandler(SituationalAwar
     soc.reset(new socket_type(io_service));
     boost::asio::connect(*soc, endpoint_iterator);
     assert(soc.get()!=nullptr);
-    
+
 //    const boost::asio::local::stream_protocol::endpoint ep("/tmp/caffe");
 //    socket_ptr soc(new socket_type(io_service));
 //    soc->connect(ep);
-    
+
     cout << "STATUS: Connection with Caffe was established" << endl;
 }
 
@@ -888,22 +888,22 @@ void Spectrogram2SocketThreadHandler::run_send()
     size_t cur_idx = 0;
 
     // loop
-    try 
+    try
     {
         while(true)
         {
             boost::this_thread::interruption_point();
-            
+
             //blocks waiting
             buffer_utils::rdataset<ChPowers>  section_powers = sensing_buffer->get_rdataset();
-            
+
             // resize to NN dimensions
             //sp_resizer.resize_line(pwr_outputs, section_powers().second);
-            
+
             // Averaging
             for(int i = 0; i < mat.cols(); ++i)
                 sum_powers[i] += section_powers().second[i];
-            
+
             // if not output available restart loop
             if(++cur_idx < moving_average_step)
                 continue;
@@ -912,27 +912,27 @@ void Spectrogram2SocketThreadHandler::run_send()
             // convert to dB
             for(int i = 0; i < mat.cols(); ++i)
                 mat.at(current_row,i) = 10*log10(sum_powers[i]);
-            
+
             for(int j = 0; j < mat.rows(); ++j)
                 if(mat.at(current_row,j) < mat.at(current_row,0))
                     mat.at(current_row,0) = mat.at(current_row,j);
             mat.at(current_row,mat.rows()-1) = mat.at(current_row,0);
-            
+
             sum_powers.clear();
             sum_powers.resize(64,0);
-            
+
             if(++current_row == mat.rows())
             {
                 // copy img no
                 buffer.resize(sizeof(current_imgno));
                 memcpy(&buffer[0], (void*)&current_imgno, sizeof(current_imgno));
-                
+
                 // compute max/min
                 auto it = max_element(mat.begin(), mat.end());
                 current_max = *it;
                 it = min_element(mat.begin(), mat.end());
                 current_min = *it;
-                
+
                 // normalize
                 float range = current_max-current_min;
                 //assert(mat.total_size()==64*64);
@@ -944,11 +944,11 @@ void Spectrogram2SocketThreadHandler::run_send()
                     wdst().first = current_imgno;
                     wdst().second = std::chrono::system_clock::now(); // timestamp
                 } // release
-                
+
                 // send to caffe
                 //cout << "DEBUG: number of bytes sent to socket: " <<  buffer.size() << endl;
                 boost::asio::write(*soc, boost::asio::buffer(&buffer[0], buffer.size()));
-                
+
                 // reset
                 current_max = -std::numeric_limits<float>::max();
                 current_min = std::numeric_limits<float>::max();
@@ -971,14 +971,14 @@ pair<size_t,vector<float>> recv_predictions(socket_type& soc)
     size_t img_no;
     pair<size_t, vector<float>> ret;
     short Nclasses;
-    
+
     boost::asio::read(soc, boost::asio::buffer(&ret.first,sizeof(img_no)), ec);
     if(ec)
         throw boost::system::system_error(ec);
     boost::asio::read(soc, boost::asio::buffer(&Nclasses,sizeof(Nclasses)), ec);
     if(ec)
         throw boost::system::system_error(ec);
-    
+
     ret.second.resize(Nclasses);
     size_t toread = Nclasses*siz_el;
     vector<uint8_t> vec(toread);
@@ -1003,38 +1003,38 @@ void Spectrogram2SocketThreadHandler::run_recv()
     scenario_number_type old_scenario_number = -1;
     vector<long> count_scenarios(10,0);
     vector<long> count_mode_scenarios(10,0);
-    
+
     // loop
     tprint = std::chrono::system_clock::now();
     tprev = std::chrono::system_clock::now();
-    try 
+    try
     {
         while(true)
         {
             boost::this_thread::interruption_point();
-            
+
             auto rdst = time_buffer.get_rdataset();
             imgno = rdst().first;
             t1 = rdst().second;
-            
+
             auto pred = recv_predictions(*soc);
             t2 = std::chrono::system_clock::now();
             assert(rdst().first == pred.first);
-            
+
             auto it = max_element(pred.second.begin(), pred.second.end());
             scenario_number_type scen = std::distance(pred.second.begin(), it);
             count_scenarios[scen]++;
-            
+
             mode_counter.push(scen);
             scenario_number_type scen_avg = mode_counter.current_state();
             count_mode_scenarios[scen_avg]++;
-            
+
             tprint = std::chrono::system_clock::now();
             if(old_scenario_number != scen_avg || std::chrono::duration_cast<std::chrono::seconds>(tprint - tprev).count() > 2)
             {
-                cout << "\nDEBUG: DeepLearning: Scenario " << scen_avg << ". Statistics:" 
+                cout << "\nDEBUG: DeepLearning: Scenario " << scen_avg << ". Statistics:"
                      << "\n> Single spectrogram+caffe counts: \t" << print_range(count_scenarios)
-                     << "\n> Mode spectrogram+caffe counts: \t" << print_range(count_mode_scenarios) << endl;                
+                     << "\n> Mode spectrogram+caffe counts: \t" << print_range(count_mode_scenarios) << endl;
                 auto max_it = std::max_element(count_mode_scenarios.begin(),count_mode_scenarios.end());
                 long sum = std::accumulate(count_mode_scenarios.begin(),count_mode_scenarios.end(),0);
                 cout << "> DeepLearning most visited scenario: " << distance(count_mode_scenarios.begin(),max_it) << ", rate: " << *max_it/(double)sum << endl;
