@@ -44,7 +44,7 @@
 #include "json_utils.h"
 #include "SU_parameters.h"
 #include "Power.hpp"
-#include <boost/optional.hpp>
+#include "channel_hopper.hpp"
 
 class OfdmTransceiver : public DyspanRadio
 {
@@ -106,12 +106,13 @@ private:
     Buffer<boost::shared_ptr<CplxFVec> > frame_buffer;
 
     // receiver objects
-    boost::optional<SensingThreadHandler> sensing_chain;
-    boost::optional<LearningThreadHandler> learning_chain;
+    std::unique_ptr<SensingThreadHandler> sensing_chain;
+    std::unique_ptr<LearningThreadHandler> learning_chain;
     std::vector<std::unique_ptr<buffer_utils::bounded_buffer<ChPowers>>> ch_pwrs_buffers;
-    boost::optional<Spectrogram2SocketThreadHandler> deep_learning_chain;
-    boost::optional<Spectrogram2FileThreadHandler> spectrogram2file_chain;
-    PowerSearcher power_controller;
+    std::unique_ptr<Spectrogram2SocketThreadHandler> deep_learning_chain;
+    std::unique_ptr<Spectrogram2FileThreadHandler> spectrogram2file_chain;
+    std::unique_ptr<PowerSearcher> power_controller;
+    std::unique_ptr<SimpleChannelHopper> channel_hopper;
     int current_gain;
 
 
@@ -137,7 +138,7 @@ private:
     void receive_function();
     void launch_change_places();
     void change_ofdm_mod();
-    void reconfigure_usrp(const int num, bool tune_lo);
+    void reconfigure_usrp(const int num, bool tune_lo = false);
     void set_channel();
     std::pair<bool,double> dwelltimer();
     void process_sensing(std::vector<float> ChPowers);

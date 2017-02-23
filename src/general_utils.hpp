@@ -97,6 +97,8 @@ std::string print_container(Iterator vec_begin, Iterator vec_end)
 template<typename Iterator, typename Op> 
 std::string print_container(Iterator vec_begin, Iterator vec_end, Op func)
 {
+    if(vec_begin==vec_end)
+        return "[]";
     std::ostringstream os;
     Iterator it = vec_begin;
     os << "[" << func(*vec_begin);

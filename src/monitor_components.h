@@ -13,6 +13,8 @@
 #include "context_awareness.h"
 #include "json_utils.h"
 #include <vector>
+#include <sstream>
+#include "general_utils.hpp"
 #include "stats.h"
 
 using std::vector;
@@ -180,6 +182,47 @@ public:
     vector<time_format> prev_packet_tstamp;
 };
 
+class TimedChannelPacketRateMonitor : public ChannelPacketRateMonitorInterface
+{
+public:
+    TimedChannelPacketRateMonitor() = default;
+    TimedChannelPacketRateMonitor(int n_channels, float twindow_x) : 
+                ChannelPacketRateMonitorInterface(n_channels), 
+                twindow_sec(twindow_x/1000),
+                time_and_intervals(n_channels, boost::circular_buffer<pair<time_format,time_format>>(1000)), 
+                prev_packet_tstamp(n_channels,0) 
+    {
+    }
+    void work(const vector<DetectedPacket>& packets, time_format tstamp);
+    inline time_format packet_arrival_period(int i) const final
+    {
+        auto siz = time_and_intervals[i].size();
+        time_format sum = 0;
+        for(auto& e : time_and_intervals[i])
+            sum += e.second;
+        if(siz < 1 || sum/siz >= TDELAY_MAX)
+            return ChannelPacketRateMonitorInterface::NaN();
+        else
+            return sum/siz;
+    }
+    inline time_format packet_arrival_period_var(int i) const final
+    {
+        return ChannelPacketRateMonitorInterface::NaN(); // who cares about the scenario here
+    }
+    inline time_format packet_arrival_rate(int i) const  final
+    {
+        auto t = packet_arrival_period(i);
+        return (t != ChannelPacketRateMonitorInterface::NaN()) ? 1.0/t : 0;
+    }
+    
+    time_format twindow_sec;
+    
+    vector<boost::circular_buffer<pair<time_format,time_format>>> time_and_intervals;
+    
+    time_format current_tstamp;
+    vector<time_format> prev_packet_tstamp;
+};
+
 class ChannelPacketRateTester
 {
 public:
@@ -189,19 +232,51 @@ public:
     }
     SituationalAwarenessApi* pu_api = NULL;
     
-    vector<ExpandedScenarioDescriptor> possible_expanded_scenarios(const ChannelPacketRateMonitorInterface* m, int forbidden_channel = -1);
-    vector<scenario_number_type> possible_scenario_idxs(const vector<ExpandedScenarioDescriptor>& possible_expanded_scenarios);
+    vector<pair<int,ExpandedScenarioDescriptor>> possible_expanded_scenarios(const ChannelPacketRateMonitorInterface* m, int forbidden_channel = -1);
+    vector<scenario_number_type> possible_scenario_idxs(const vector<pair<int,ExpandedScenarioDescriptor>>& possible_expanded_scenarios);
     vector<scenario_number_type> possible_scenario_idxs(const ChannelPacketRateMonitorInterface* m, int forbidden_channel = -1);
 };
 
 namespace monitor_utils
 {
 string print_packet_rate(const ChannelPacketRateMonitor& p);
-string print_packet_period(const ChannelPacketRateMonitor& p);
-string print_packet_delay_variance(const ChannelPacketRateMonitor& p);
+//string print_packet_period(const ChannelPacketRateMonitor& p);
+//string print_packet_delay_variance(const ChannelPacketRateMonitor& p);
 
-string print_packet_period(const SlidingChannelPacketRateMonitor& p);
-string print_packet_delay_variance(const SlidingChannelPacketRateMonitor& p);
+//string print_packet_period(const SlidingChannelPacketRateMonitor& p);
+//string print_packet_delay_variance(const SlidingChannelPacketRateMonitor& p);
+
+template<typename Monitor>
+string print_packet_period(const Monitor& p)
+{
+    vector<int> range_idxs = ranges::make_range(p.Nch);
+    return containers::print(range_idxs.begin(), range_idxs.end(), ",\t", [&](int i)
+    {
+        std::stringstream ss;
+        if(p.is_occupied(i))
+            ss << boost::format("%1.11f") % p.packet_arrival_period(i);
+        else
+            ss << "free";
+        return ss.str();
+    });
+}
+
+template<typename Monitor>
+string print_packet_delay_variance(const Monitor& p)
+{
+    vector<int> range_idxs = ranges::make_range(p.Nch);
+    return containers::print(range_idxs.begin(), range_idxs.end(), ",\t", [&](int i)
+    {
+        std::stringstream ss;
+        auto var = p.packet_arrival_period_var(i);
+        if(p.is_occupied(i) && var!=delay_stats::NaN())
+            ss << boost::format("%1.11f") % var;
+        else
+            ss << "free";
+        return ss.str();
+    });
+}
+
 };
 
 #endif /* MONITOR_COMPONENTS_H */

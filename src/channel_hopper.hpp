@@ -20,19 +20,26 @@
 class SimpleChannelHopper
 {
 public:
-    int current_channel;
+    int current_channel = -1;
     std::chrono::system_clock::time_point tchange;
     int current_scenario_expanded = -1;
-    vector<int> current_free_channels;
+    std::vector<int> current_free_channels;
     int max_channel_stay_ms = 500;
     SituationalAwarenessApi* pu_api;
     
-    SimpleChannelHopper(SituationalAwarenessApi& scen_api) : pu_api(&scen_api)
+    SimpleChannelHopper() = default;
+    SimpleChannelHopper(SituationalAwarenessApi& scen_api)
     {
+        setup(scen_api);
+    }
+    
+    void setup(SituationalAwarenessApi& scen_api)
+    {
+        pu_api = &scen_api;
         set_channel(0);
     }
     
-    set_channel(int ch)
+    void set_channel(int ch)
     {
         if(ch == current_channel)
             return; // do nothing
@@ -43,43 +50,7 @@ public:
         }
     }
     
-    work()
-    {
-        auto scenario_expanded = pu_api->PU_expanded_scenario_idx();
-        
-        if(scenario_expanded != current_scenario_expanded)
-        {
-            current_free_channels = context_utils::find_free_channels(pu_api);
-            if(current_free_channels.size()>0)
-            {
-                // TODO: Set random channel
-                set_channel(current_free_channels[0]);
-            }
-            // if no free channels, do nothing
-            
-            current_scenario_expanded = scenario_expanded;
-        }
-        else
-        {
-            if(current_free_channels.size()>0)
-            {
-                auto found_ch_it = std::find(current_free_channels.begin(), current_free_channels.end(), current_channel);
-                assert(found_ch_it != current_free_channels.end());
-                
-                // If enough time has passed, change to another free channel
-                auto tnow = std::chrono::system_clock::now();
-                if(std::chrono::duration_cast<std::chrono::milliseconds>(tnow-tchange).count() > max_channel_stay_ms)
-                {
-                    auto new_end_it = std::remove(current_free_channels.begin(), current_free_channels.end(), found_ch_it);
-                    assert(current_free_channels.begin() != new_end_it);
-                    // TODO: Select random
-                    set_channel(current_free_channels[0]);
-                }
-                // do nothing if not enough time has passed
-            }
-            // if there is no free channel, do nothing (or change to last detection)
-        }
-    }
+    void work();
 };
 
 #endif /* CHANNEL_HOPPER_HPP */

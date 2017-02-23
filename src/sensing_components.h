@@ -62,7 +62,7 @@ public:
     ChannelPowerEstimator pwr_estim;
     USRPReader usrp_reader;
     PacketDetector packet_detector;
-    SlidingChannelPacketRateMonitor rate_monitor;
+    TimedChannelPacketRateMonitor rate_monitor;//SlidingChannelPacketRateMonitor rate_monitor;
     ForgetfulChannelMonitor pwr_monitor;
     ChannelPacketRateTester channel_rate_tester;
     
@@ -167,18 +167,6 @@ public:
     void run_send();
     void run_recv();
 };
-
-//class SensingHandler
-//{
-//public:
-//    int Nch = 4;
-//    std::unique_ptr<SensingModule> sensing_module;
-//    std::unique_ptr<ChannelPowerEstimator> pwr_estim;
-//    std::unique_ptr<SpectrogramGenerator> spectrogram_module;
-//    std::unique_ptr<TrainingJsonManager> json_learning_manager;
-//    std::unique_ptr<ChannelPacketRateTester> channel_rate_tester;
-//    SituationalAwarenessApi *pu_scenario_api;
-//};
 
 namespace sensing_utils
 {
