@@ -60,7 +60,7 @@ class rx_ofdm(gr.top_block, Qt.QWidget):
         # Variables
         ##################################################
         self.usrp_samp_rate = usrp_samp_rate = 10e6
-        self.sync_word2 = sync_word2 = [0, 0, 0, 0, 0, 0, -1, -1, -1, -1, 1, 1, -1, -1, -1, 1, -1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, 1, -1, -1, 1, -1, 0, 1, -1, 1, 1, 1, -1, 1, 1, 1, -1, 1, 1, 1, 1, -1, 1, -1, -1, -1, 1, -1, 1, -1, -1, -1, -1, 0, 0, 0, 0, 0] 
+        self.sync_word2 = sync_word2 = [0, 0, 0, 0, 0, 0, -1, -1, -1, -1, 1, 1, -1, -1, -1, 1, -1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, 1, -1, -1, 1, -1, 0, 1, -1, 1, 1, 1, -1, 1, 1, 1, -1, 1, 1, 1, 1, -1, 1, -1, -1, -1, 1, -1, 1, -1, -1, -1, -1, 0, 0, 0, 0, 0]
         self.sync_word1 = sync_word1 = [0., 0., 0., 0., 0., 0., 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., -1.41421356, 0., -1.41421356, 0., -1.41421356, 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., -1.41421356, 0., -1.41421356, 0., -1.41421356, 0., -1.41421356, 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., 1.41421356, 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., 1.41421356, 0., 1.41421356, 0., -1.41421356, 0., 1.41421356, 0., 1.41421356, 0., 1.41421356, 0., 0., 0., 0., 0., 0.]
         self.samp_rate = samp_rate = 2.5e6
         self.pilot_symbols = pilot_symbols = ((1, 1, 1, -1,),)
@@ -152,6 +152,7 @@ class rx_ofdm(gr.top_block, Qt.QWidget):
         	  debug_log=False,
         	  scramble_bits=False
         	 )
+
         self.dbconnect_pktrecv_0 = dbconnect.pktrecv("192.168.5.221", 5003, False)
         self.blocks_tagged_stream_to_pdu_0_2 = blocks.tagged_stream_to_pdu(blocks.byte_t, "rx_len")
         self.blocks_tagged_stream_to_pdu_0_1 = blocks.tagged_stream_to_pdu(blocks.byte_t, "rx_len")
@@ -161,22 +162,22 @@ class rx_ofdm(gr.top_block, Qt.QWidget):
         ##################################################
         # Connections
         ##################################################
-        self.msg_connect((self.blocks_tagged_stream_to_pdu_0, 'pdus'), (self.dbconnect_pktrecv_0, 'in0'))    
-        self.msg_connect((self.blocks_tagged_stream_to_pdu_0_0, 'pdus'), (self.dbconnect_pktrecv_0, 'in1'))    
-        self.msg_connect((self.blocks_tagged_stream_to_pdu_0_1, 'pdus'), (self.dbconnect_pktrecv_0, 'in2'))    
-        self.msg_connect((self.blocks_tagged_stream_to_pdu_0_2, 'pdus'), (self.dbconnect_pktrecv_0, 'in3'))    
-        self.connect((self.digital_ofdm_rx_0, 0), (self.blocks_tagged_stream_to_pdu_0, 0))    
-        self.connect((self.digital_ofdm_rx_0_0, 0), (self.blocks_tagged_stream_to_pdu_0_0, 0))    
-        self.connect((self.digital_ofdm_rx_0_1, 0), (self.blocks_tagged_stream_to_pdu_0_1, 0))    
-        self.connect((self.digital_ofdm_rx_0_2, 0), (self.blocks_tagged_stream_to_pdu_0_2, 0))    
-        self.connect((self.freq_xlating_fft_filter_ccc_0, 0), (self.digital_ofdm_rx_0, 0))    
-        self.connect((self.freq_xlating_fft_filter_ccc_0_0, 0), (self.digital_ofdm_rx_0_0, 0))    
-        self.connect((self.freq_xlating_fft_filter_ccc_0_1, 0), (self.digital_ofdm_rx_0_1, 0))    
-        self.connect((self.freq_xlating_fft_filter_ccc_0_2, 0), (self.digital_ofdm_rx_0_2, 0))    
-        self.connect((self.uhd_usrp_source_1, 0), (self.freq_xlating_fft_filter_ccc_0, 0))    
-        self.connect((self.uhd_usrp_source_1, 0), (self.freq_xlating_fft_filter_ccc_0_0, 0))    
-        self.connect((self.uhd_usrp_source_1, 0), (self.freq_xlating_fft_filter_ccc_0_1, 0))    
-        self.connect((self.uhd_usrp_source_1, 0), (self.freq_xlating_fft_filter_ccc_0_2, 0))    
+        self.msg_connect((self.blocks_tagged_stream_to_pdu_0, 'pdus'), (self.dbconnect_pktrecv_0, 'in0'))
+        self.msg_connect((self.blocks_tagged_stream_to_pdu_0_0, 'pdus'), (self.dbconnect_pktrecv_0, 'in1'))
+        self.msg_connect((self.blocks_tagged_stream_to_pdu_0_1, 'pdus'), (self.dbconnect_pktrecv_0, 'in2'))
+        self.msg_connect((self.blocks_tagged_stream_to_pdu_0_2, 'pdus'), (self.dbconnect_pktrecv_0, 'in3'))
+        self.connect((self.digital_ofdm_rx_0, 0), (self.blocks_tagged_stream_to_pdu_0, 0))
+        self.connect((self.digital_ofdm_rx_0_0, 0), (self.blocks_tagged_stream_to_pdu_0_0, 0))
+        self.connect((self.digital_ofdm_rx_0_1, 0), (self.blocks_tagged_stream_to_pdu_0_1, 0))
+        self.connect((self.digital_ofdm_rx_0_2, 0), (self.blocks_tagged_stream_to_pdu_0_2, 0))
+        self.connect((self.freq_xlating_fft_filter_ccc_0, 0), (self.digital_ofdm_rx_0, 0))
+        self.connect((self.freq_xlating_fft_filter_ccc_0_0, 0), (self.digital_ofdm_rx_0_0, 0))
+        self.connect((self.freq_xlating_fft_filter_ccc_0_1, 0), (self.digital_ofdm_rx_0_1, 0))
+        self.connect((self.freq_xlating_fft_filter_ccc_0_2, 0), (self.digital_ofdm_rx_0_2, 0))
+        self.connect((self.uhd_usrp_source_1, 0), (self.freq_xlating_fft_filter_ccc_0, 0))
+        self.connect((self.uhd_usrp_source_1, 0), (self.freq_xlating_fft_filter_ccc_0_0, 0))
+        self.connect((self.uhd_usrp_source_1, 0), (self.freq_xlating_fft_filter_ccc_0_1, 0))
+        self.connect((self.uhd_usrp_source_1, 0), (self.freq_xlating_fft_filter_ccc_0_2, 0))
 
     def closeEvent(self, event):
         self.settings = Qt.QSettings("GNU Radio", "rx_ofdm")

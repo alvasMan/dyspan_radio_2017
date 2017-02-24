@@ -66,7 +66,9 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     cout << boost::format("Creating the usrp device with: %s...") % params_.args << endl;
     usrp_tx = uhd::usrp::multi_usrp::make(params_.args);
     usrp_tx->set_tx_subdev_spec(params_.txsubdev);
+    tx_gain_range = usrp_tx->get_tx_gain_range(0);
     cout << boost::format("Using Device: %s") % usrp_tx->get_pp_string() << endl;
+
     usrp_rx = uhd::usrp::multi_usrp::make(params_.args);
     usrp_rx->set_rx_subdev_spec(params_.rxsubdev);
 
@@ -89,25 +91,28 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     set_rx_freq(params_.f_center);
     set_rx_rate(rx_rf_rate);
     set_rx_gain_uhd(params_.rx_gain_uhd);
-    
+
     set_rx_antenna(params_.rx_antenna);
 
     // Add PU parameters and scenarios
     pu_data = context_utils::make_rf_environment();    // this is gonna read files
     pu_scenario_api.reset(new SituationalAwarenessApi(*pu_data));
-    
+
     // Add SU config. stuff
-    channel_hopper.reset(new SimpleChannelHopper(*pu_scenario_api, *su_params_api));
-    //power_controller.reset(new PowerSearcher(5,-1));
-    
+    channel_hopper.reset(new SimpleChannelHopper(*pu_scenario_api));
+    if(params_.power_control)
+    {
+        power_controller.reset(new PowerSearcher(5,-1,params_.db_period));
+    }
+
     // check if no weird configuration
     assert(params_.has_sensing || (!params_.sensing_to_file && !params_.has_deep_learning && !params_.has_learning));
-    
+
     if(params_.sensing_to_file)
         ch_pwrs_buffers.emplace_back(new bounded_buffer<ChPowers>(1000));
     if(params_.has_deep_learning)
         ch_pwrs_buffers.emplace_back(new bounded_buffer<ChPowers>(1000));
-    
+
     BinMask *bin_mask_ptr = NULL;
     if(params_.has_sensing && params_.has_learning)
     {
@@ -122,13 +127,66 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
         sensing_chain->setup(pu_scenario_api.get(), su_params_api.get(), ch_pwrs_buffers, 4, 512);
         bin_mask_ptr = &sensing_chain->pwr_estim.bin_mask;
     }
-    
+
     auto it = ch_pwrs_buffers.begin();
     if(params_.sensing_to_file)
     {
+
         spectrogram2file_chain.reset(new Spectrogram2FileThreadHandler(it->get(), *bin_mask_ptr));
         ++it;
     }
+
+    if(params_.calibration)
+    {
+      if(!params_.use_db)
+        throw std::runtime_error("You cannot calibrate the radio without the Database running.");
+
+      //Initialize gain range
+      cout << "Gain Start ("<<tx_gain_range.start()<<")"<< endl;
+      cout << "Gain Step ("<<tx_gain_range.step()<<")" << endl;
+      cout << "Gain Stop ("<<tx_gain_range.stop()<<")" << endl;
+      for( double it = tx_gain_range.start(); it < tx_gain_range.stop(); it=it+2*tx_gain_range.step() )
+      {
+        tx_gain_range_v.push_back(it);
+        cout<< it << " ";
+      }
+      cout << endl;
+      gain_it = tx_gain_range_v.begin();
+      //create calibration file here
+      cout << "Opening Calibration File: "<< params_.cal_file << endl;
+      cal_file.open (params_.cal_file, std::ofstream::out | std::ofstream::trunc); //This file is closed on
+    }
+    else
+    {
+      //read power -> mod mapping file here.
+      cal_file.open (params_.cal_file);
+      std::string gain_str;
+      std::string mod_str;
+
+      while(!cal_file.eof())
+      {
+          getline(cal_file, gain_str, ' ');
+          if(gain_str.size() == 0)
+              break;
+          getline(cal_file, mod_str);
+          //cout<<gain_str<<endl;
+          //float gain_float = std::atof(gain_str.c_str());
+          float gain_float = std::stof(gain_str);
+          gain_2_mod[gain_float]=liquid_getopt_str2mod(mod_str.c_str());
+          //cout<<gain_str<<endl;
+          //cout<<modulation_types[gain_2_mod[gain_float]].name<<endl;
+      }
+      cout<<endl<< "Gain to modulation read from file: "<<endl;
+      cout<<"Gain: ";
+      for(map<float,modulation_scheme>::const_iterator it = gain_2_mod.begin(); it != gain_2_mod.end(); ++it)
+        std::cout << it->first << " ";
+
+      cout<<endl<<"Modulation: ";
+      for(map<float,modulation_scheme>::const_iterator it = gain_2_mod.begin(); it != gain_2_mod.end(); ++it)
+        std::cout << modulation_types[it->second].name << " ";
+      cout<<endl;
+    }
+
     if(params_.has_deep_learning)
     {
         deep_learning_chain.reset(new Spectrogram2SocketThreadHandler(pu_scenario_api.get(), it->get(), *bin_mask_ptr));
@@ -146,7 +204,7 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
         if (ret < 0) {
             throw std::runtime_error("Couldn't connect to challenge database");
         }
-
+        cout << "Connected to Database"<< endl;
         // get radio number
         int radio = spectrum_getRadioNumber(tx_);
         cout << boost::format("TX radio number: %d") % radio << endl;
@@ -172,7 +230,10 @@ OfdmTransceiver::~OfdmTransceiver()
     cout << "Transmitted " << seq_no_ << " frames." << endl;
     if (tx_)
         spectrum_delete(tx_);
+    if (params_.calibration)
+        cal_file.close();
     delete fgbuffer;
+
 }
 
 
@@ -190,7 +251,7 @@ void OfdmTransceiver::start(void)
         threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );
         
         //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
-                
+
         //threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
     }
 
@@ -198,7 +259,7 @@ void OfdmTransceiver::start(void)
     if(params_.use_db)
     {
         int radio_id = spectrum_getRadioNumber(tx_);
-        threads_.push_back(new boost::thread(boost::bind(launch_database_thread, tx_, radio_id, 10000)));
+        threads_.push_back(new boost::thread(boost::bind(launch_database_thread, tx_, radio_id, params_.db_period)));
     }
     else
     {
@@ -224,7 +285,7 @@ void OfdmTransceiver::start(void)
                 threads_.push_back(new boost::thread(boost::bind(&Spectrogram2SocketThreadHandler::run_send, deep_learning_chain.get())));
             }
         }
-        
+
         if(spectrogram2file_chain)
             threads_.push_back(new boost::thread(boost::bind(&Spectrogram2FileThreadHandler::run,spectrogram2file_chain.get())));
         //threads_.push_back(new boost::thread(context_utils::launch_mock_scenario_update_thread, pu_scenario_api.get()));
@@ -238,7 +299,7 @@ void OfdmTransceiver::start(void)
 
 //void OfdmTransceiver::set_channel()
 //{
-//    
+//
 //}
 
 
@@ -258,8 +319,40 @@ void OfdmTransceiver::modulation_function(void)
         while (true) {
             boost::this_thread::interruption_point();
 
+            if(params_.calibration)
+            {
+              //cout<<"Calibrating Mode!!!"<<std::endl;
+              //Call call function when db is updated (TODO move to db thread?)
+              if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_mod_change).count()) > params_.db_period)
+              {
+                //get next modulation
+                modulation_scheme mod_scheme;
+                modulation_scheme previous_mod_scheme;
+                float measured_ber;
+                bool mod_found;
+                std::cout << "\t" << "Current UHD Gain: " << (*gain_it) << std::endl;
+                std::tie(mod_found, mod_scheme, previous_mod_scheme) = ModulationSearchApi::getInstance().changeOfdmMod();
+                last_mod_change = std::chrono::system_clock::now();
+                fgprops.mod_scheme = mod_scheme;
+                if ( mod_found )
+                {
+                  gain_it++;
+                  cout<<"Found Mod, gain is:"<< (*gain_it) <<std::endl;
+
+                  if(gain_it == tx_gain_range_v.end() )
+                  {
+                    cout << "End of calibration" << std::endl;
+                    std::terminate();
+                  }
+                  usrp_tx->set_tx_gain(*gain_it); //Change gain
+                  ModulationSearchApi::getInstance().setGainChanged(true);
+                  cal_file << (*gain_it) << " " << modulation_types[mod_scheme].name << std::endl;   //Save to calibration file
+
+                }
+              }
+            }
             // Check if params_.change_mod_period ms passed.
-            if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_mod_change).count()) > params_.change_mod_period)
+            /*if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_mod_change).count()) > params_.change_mod_period)
             {
                 modulation_scheme mod_scheme = ModulationSearchApi::getInstance().changeOfdmMod();
                 fgprops.mod_scheme = mod_scheme;
@@ -267,7 +360,7 @@ void OfdmTransceiver::modulation_function(void)
                 #ifdef DEBUG_MODE
                 	std::cout << __FUNCTION__ << ": " << "Changing Modulation to " << modulation_types[mod_scheme].name << std::endl;
                 #endif
-            }
+            }*/
 
             if(power_controller)
             {
@@ -278,17 +371,21 @@ void OfdmTransceiver::modulation_function(void)
                     cout << "Changing Powers! " << new_gain << endl;
                     set_tx_gain_uhd(new_gain);
                     current_gain = new_gain;
+                    fgprops.mod_scheme = gain_2_mod[current_gain];
                 }
             }
-            
-            channel_hopper->work();
-            if(channel_hopper->current_channel != current_channel)
+
+            if(params_.channel_hopping)
             {
-                current_channel = channel_hopper->current_channel;
-                cout << "Changed to channel: " << current_channel << endl;
-                reconfigure_usrp(current_channel);
+                channel_hopper->work();
+                if(channel_hopper->current_channel != current_channel)
+                {
+                    current_channel = channel_hopper->current_channel;
+                    cout << "Changed to channel: " << current_channel << endl;
+                    reconfigure_usrp(current_channel);
+                }
             }
-            
+
             // write header (first four bytes sequence number, remaining are random)
             // TODO: also use remaining 4 bytes for payload
             header[0] = (seq_no_ >> 24) & 0xff;
@@ -424,7 +521,7 @@ void OfdmTransceiver::random_transmit_function(void)
         boost::this_thread::interruption_point();
 
         // get random channel
-        if (next_channel == 9) 
+        if (next_channel == 9)
         {
           int num = rand() % channels_.size();
           reconfigure_usrp(num, false);
@@ -453,7 +550,7 @@ void OfdmTransceiver::reconfigure_usrp(const int num, bool tune_lo)
 
     if(su_params_api)   // sets the SU-TX channel so the sensing sees it
         su_params_api->set_channel(num);
-    
+
     uhd::tune_request_t request;
     // don't touch RF part
 
@@ -561,7 +658,7 @@ void OfdmTransceiver::reconfigure_usrp(const int num, bool tune_lo)
 //        uhd::device::SEND_MODE_FULL_BUFF
 //    );
 //}
- 
+
 void OfdmTransceiver::launch_change_places()
 {
     for(;;)
@@ -571,10 +668,13 @@ void OfdmTransceiver::launch_change_places()
         // get data from socket. may block until result arrives
         //buffer_utils::rdataset<ChPowers> dset;
         //e_detec.pop_result(dset);
-        std::vector<float> ch_powers;
+        if(!params_.calibration)
+        {
+            std::vector<float> ch_powers;
 
-        // call the CHAAANGE PLACES
-        process_sensing(ch_powers);
+            // call the CHAAANGE PLACES
+            process_sensing(ch_powers);
+        }
     }
 }
 
@@ -593,13 +693,15 @@ void OfdmTransceiver::process_sensing(std::vector<float> ChPowers)
         constexpr int channel_map[] = {2, 0, 3, 1};
 
         last_ch_tstamp = std::chrono::system_clock::now();
-        
+
+
         short ch = channel_map[current_channel]%channels_.size();
         reconfigure_usrp(ch);
         //reconfigure_usrp(current_channel);
 
-        cout << "Current Challenge Score: " << DatabaseApi::getInstance().current_score() << endl;
-        cout << "Current Challenge Scenario: " << pu_scenario_api->PU_scenario_idx() << endl;
+
+       //cout << "Current Challenge Score: " << DatabaseApi::getInstance().current_score() << endl;
+        //cout << "Current Challenge Scenario: " << pu_scenario_api->PU_scenario_idx() << endl;
     }
 }
 

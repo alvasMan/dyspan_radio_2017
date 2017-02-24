@@ -26,6 +26,7 @@
 
 #include <mutex>
 #include <vector>
+#include <tuple>
 #include <liquid/liquid.h>
 
 #ifndef MODULATION_SEARCH_API_H
@@ -45,7 +46,8 @@ public:
     }
 
     //Linear search
-    modulation_scheme changeOfdmMod();
+    std::tuple<bool,modulation_scheme,modulation_scheme> changeOfdmMod();
+    void linearModSearch();
     void changeOfdmModLinear();
 
     // Remove copy CTOR and assigment operator. This is a singleton after all.
@@ -53,19 +55,26 @@ public:
     void operator=(ModulationSearchApi const &) = delete;
 
     // setters
-    /*void push_Tsu_provided(const DbReply& r)
-    {
-        std::lock_guard<std::mutex> lk(mut);
-        _Tsu_provided.push_back(r);
-    }*/
+    void setGainChanged(bool gain_changed);
+
+    void initializeSearch();
 
 private:
     std::mutex m_mut;
+    bool m_first_lookup;
     bool m_stop_searching;
     bool m_gain_changed;
-    float m_previous_tsu;
+    unsigned int m_mod_samples;
+    unsigned int m_sample_counter;
+    //float m_previous_tsu;
+    //float m_previous_tsu_provided;
+
     std::vector<modulation_scheme>::const_iterator m_current_modulation;
     int m_current_usrp_gain;
+    std::vector<float> m_this_mod_tsu_v;
+    std::vector<float> m_previous_mod_tsu_v;
+    std::vector<float> m_this_mod_tsu_offered_v;
+    std::vector<float> m_previous_mod_tsu_offered_v;
     std::vector<modulation_scheme> m_modulation_list;
 
     // Singleton classics: private CTOR and pointer to instance

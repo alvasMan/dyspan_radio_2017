@@ -33,6 +33,7 @@
 #include <chrono>
 #include <boost/ptr_container/ptr_deque.hpp>
 #include <liquid/liquid.h>
+#include <fstream>
 #include "dyspanradio.h"
 #include "Buffer.h"
 #include "channels.h"
@@ -113,12 +114,20 @@ private:
     std::unique_ptr<PowerSearcher> power_controller;
     std::unique_ptr<SimpleChannelHopper> channel_hopper;
     int current_gain;
-    
+
+
+    //calibration objects
+    uhd::gain_range_t tx_gain_range;
+    std::vector<double> tx_gain_range_v;
+    std::vector<double>::const_iterator gain_it;
+    std::fstream cal_file;
+    std::map<float,modulation_scheme> gain_2_mod;
+
     // Awareness/config classes for thread communication
     std::unique_ptr<RFEnvironmentData> pu_data;
     std::unique_ptr<SituationalAwarenessApi> pu_scenario_api;
     std::unique_ptr<SU_tx_params> su_params_api;
-    
+
     //std::pair<double,bool> DwellEst(DwellTimeEstimator &Dwell, double &previous_dwelltime, int &dwell_counter, int steady_state, double steady_state_Th);
     uhd::time_spec_t timestamp_;
 

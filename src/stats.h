@@ -77,7 +77,7 @@ struct exp_stats {
     double val_sum;
     double alpha;
     uint32_t val_count;
-    
+
     exp_stats()
     {
         alpha = 0.05;
@@ -130,21 +130,21 @@ class GrowingMovingAverage
     T pwr_sum = 0;
     uint16_t count_refresh = 0;
     uint16_t refresh_period = 5;
-    
+
 public:
     GrowingMovingAverage() = default;//delete;
-    GrowingMovingAverage(size_t siz) : buf(siz), refresh_period(3*siz) 
+    GrowingMovingAverage(size_t siz) : buf(siz), refresh_period(3*siz)
     {
     }
-    GrowingMovingAverage(size_t siz, uint32_t refresh_dur) : buf(siz), refresh_period(refresh_dur) 
+    GrowingMovingAverage(size_t siz, uint32_t refresh_dur) : buf(siz), refresh_period(refresh_dur)
     {
     }
-    inline boost::optional<T> push(const T &val) 
+    inline boost::optional<T> push(const T &val)
     {
         boost::optional<T> ret;
         if(buf.size()==buf.capacity())
         {
-            ret.emplace(buf.front());
+            ret = buf.front();
             pwr_sum += val - buf.front();
             buf.push_back(val);
         }
@@ -160,7 +160,7 @@ public:
     inline size_t size() const { return buf.size();}
     inline T sum() const {return pwr_sum;}
     inline double mean() const { return pwr_sum / (double)buf.size(); }
-    inline void refresh() 
+    inline void refresh()
     {
         pwr_sum = std::accumulate(buf.begin(), buf.end(), 0.0);
         count_refresh = 0;
@@ -168,7 +168,7 @@ public:
 };
 
 template <typename T>
-class MovingAverage 
+class MovingAverage
 {
     std::vector<T> buf;
     T pwr_sum = 0;
@@ -178,15 +178,15 @@ class MovingAverage
 
 public:
     MovingAverage() = default;//delete;
-    MovingAverage(uint32_t size) : buf(size,0), refresh_period(3*size) 
+    MovingAverage(uint32_t size) : buf(size,0), refresh_period(3*size)
     {
     }
-    MovingAverage(uint32_t size, uint32_t refresh_dur) : buf(size,0), refresh_period(refresh_dur) 
+    MovingAverage(uint32_t size, uint32_t refresh_dur) : buf(size,0), refresh_period(refresh_dur)
     {
     }
     inline void set_size(uint32_t size) {buf.resize(size, 0); count_refresh = 0; refresh_period = 3 * buf.size();}
     inline uint32_t size() const {return buf.size();}
-    inline T push(const T &val) 
+    inline T push(const T &val)
     {
         T ret = buf[idx];
         pwr_sum += val - buf[idx];
@@ -198,7 +198,7 @@ public:
         return ret;
     }
     inline double get_avg() const { return pwr_sum / (double)size(); }
-    inline void refresh() 
+    inline void refresh()
     {
         pwr_sum = std::accumulate(buf.begin(), buf.end(), 0.0);
         count_refresh = 0;
@@ -217,7 +217,7 @@ public:
     MovingWindowMax(uint32_t size) {resize(size);}
     inline void resize(uint32_t size) {buf.resize(size, 0); max_val_idx = 0; idx = 0;}
     inline uint32_t size() {return buf.size();}
-    inline void push(double val) 
+    inline void push(double val)
     {
         buf[idx] = val;
         if(buf[max_val_idx] < val)
