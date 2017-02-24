@@ -62,7 +62,8 @@ public:
     ChannelPowerEstimator pwr_estim;
     USRPReader usrp_reader;
     PacketDetector packet_detector;
-    SlidingChannelPacketRateMonitor rate_monitor;//TimedChannelPacketRateMonitor rate_monitor;//SlidingChannelPacketRateMonitor rate_monitor;
+    TimedChannelPacketRateMonitor rate_monitor;
+    //SlidingChannelPacketRateMonitor rate_monitor;
     ForgetfulChannelMonitor pwr_monitor;
     ChannelPacketRateTester channel_rate_tester;
     
@@ -170,17 +171,6 @@ public:
 
 namespace sensing_utils
 {
-//SensingHandler make_sensing_handler(int Nch, std::string project_folder, std::string json_read_filename,
-//                                             std::string json_write_filename, SituationalAwarenessApi *pu_scenario_api, 
-//                                    bool has_sensing, bool has_learning);
-//
-//void launch_sensing_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler* shandler);
-//
-//void launch_learning_thread(uhd::usrp::multi_usrp::sptr& usrp_tx, SensingHandler* shandler);
-////void launch_spectrogram_results_handler(uhd::usrp::multi_usrp::sptr& usrp_tx, ChannelPowerEstimator* estim);
-//
-//void launch_spectrogram_to_file_thread(SensingHandler* shandler);
-
 };
 
 #endif /* SENSINGMODULE_H */

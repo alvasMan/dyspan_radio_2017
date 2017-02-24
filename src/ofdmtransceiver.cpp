@@ -97,7 +97,7 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     pu_scenario_api.reset(new SituationalAwarenessApi(*pu_data));
     
     // Add SU config. stuff
-    channel_hopper.reset(new SimpleChannelHopper(*pu_scenario_api));
+    channel_hopper.reset(new SimpleChannelHopper(*pu_scenario_api, *su_params_api));
     //power_controller.reset(new PowerSearcher(5,-1));
     
     // check if no weird configuration
@@ -188,6 +188,7 @@ void OfdmTransceiver::start(void)
         // either start random transmit function or normal one ..
         threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::modulation_function, this ) ) );
         threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );
+        
         //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
                 
         //threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
@@ -245,7 +246,10 @@ void OfdmTransceiver::start(void)
 void OfdmTransceiver::modulation_function(void)
 {
     ModulationSearchApi &mod_api = ModulationSearchApi::getInstance(); //There is probably a better place to initialize this, it will be here for now.
+    
+    // WARNING: This wait of two seconds is really important for the sensing to calibrate the noise floor
     boost::this_thread::sleep(boost::posix_time::seconds(2));
+    su_params_api->start();
     try {
         unsigned char header[8];
         unsigned char payload[MAX_PAYLOAD_LEN];
@@ -283,7 +287,8 @@ void OfdmTransceiver::modulation_function(void)
                 current_channel = channel_hopper->current_channel;
                 cout << "Changed to channel: " << current_channel << endl;
                 reconfigure_usrp(current_channel);
-            }   
+            }
+            
             // write header (first four bytes sequence number, remaining are random)
             // TODO: also use remaining 4 bytes for payload
             header[0] = (seq_no_ >> 24) & 0xff;

@@ -24,7 +24,6 @@ using std::string;
 #ifndef MONITOR_COMPONENTS_H
 #define MONITOR_COMPONENTS_H
 
-typedef double time_format;
 typedef std::tuple<time_format,int,float> DetectedPacket;
 
 class ChannelPacketRateMonitorInterface
@@ -38,7 +37,8 @@ public:
     
     virtual time_format packet_arrival_period(int i) const = 0;
     virtual time_format packet_arrival_period_var(int i) const = 0;
-    virtual time_format packet_arrival_rate(int i) const = 0;    
+    virtual time_format packet_arrival_rate(int i) const = 0;   
+    virtual long packet_count(int i) const = 0;
     inline bool is_occupied(int i) const 
     {
         return packet_arrival_period(i)!=NaN();
@@ -124,6 +124,10 @@ public:
         auto t = packet_arrival_period(i);
         return (t != NaN()) ? 1.0/t : 0;
     }
+    inline long packet_count(int i) const final
+    {
+        return tdelay_acc[i].count;
+    }
      // NOTE: Coarse estimation of availability of the channel. If Pfa is high, this wont work.
     
     // JsonScenarioMonitorInterface
@@ -174,6 +178,10 @@ public:
         auto t = packet_arrival_period(i);
         return (t != ChannelPacketRateMonitorInterface::NaN()) ? 1.0/t : 0;
     }
+    inline long packet_count(int i) const final
+    {
+        return delays_mavg[i].size();
+    }
     
     vector<GrowingMovingAverage<time_format>> delays_mavg;
     vector<GrowingMovingAverage<time_format>> delays_m2;
@@ -214,6 +222,14 @@ public:
         auto t = packet_arrival_period(i);
         return (t != ChannelPacketRateMonitorInterface::NaN()) ? 1.0/t : 0;
     }
+    inline long packet_count(int i) const final
+    {
+        return time_and_intervals[i].size();
+    }
+//    inline time_format last_packet_tstamp(int i) const final
+//    {
+//        return time_and_intervals[i].back().first;
+//    }
     
     time_format twindow_sec;
     

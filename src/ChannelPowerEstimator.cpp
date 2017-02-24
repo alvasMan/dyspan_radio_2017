@@ -360,12 +360,13 @@ void ChannelPowerEstimator::process(double tstamp)
     current_tstamp = tstamp;
 }
 
-#define ALPHA 1e-7//0.0001
 #define THRES2 1.6
-#define FIRST_N 1e6
 
 void PacketDetector::work(double tstamp, const vector<float>& vals)
 {
+    constexpr double ALPHA = 1.0e-3;
+    constexpr int FIRST_N = 1e3;
+    
     for(int i = 0; i < vals.size(); ++i)
     {
         if(vals[i]<0)   // it is the SU-Tx channel
@@ -394,12 +395,12 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
             if(params[i].n_noise_samples < 5 || val_smoothed < THRES2 * params[i].noise_floor)
             {
                 params[i].n_noise_samples++;
-//                if(params[i].n_noise_samples < FIRST_N)
-//                {
-                params[i].noise_floor = params[i].noise_floor + (vals[i]-params[i].noise_floor)/params[i].n_noise_samples;
-//                }
-//                else if(val_smoothed < THRES2 * params[i].noise_floor)
-//                    params[i].noise_floor = (1-ALPHA) * params[i].noise_floor + ALPHA*old_sample;
+                if(params[i].n_noise_samples < FIRST_N)
+                {
+                    params[i].noise_floor = params[i].noise_floor + (vals[i]-params[i].noise_floor)/params[i].n_noise_samples;
+                }
+                else if(val_smoothed < THRES2 * params[i].noise_floor)
+                    params[i].noise_floor = (1-ALPHA) * params[i].noise_floor + ALPHA*old_sample;
             }
             // in between thres and THRES2 is the gray area
 //            cout << "DEBUG: Noise floor " << noise_floor[i] << endl;
@@ -450,6 +451,21 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
         }
     }
     sort(detected_pulses.begin(), detected_pulses.end(), [](DetectedPacket& a, DetectedPacket &b){return get<0>(a) < get<0>(b);});
+}
+
+void push_detected_packets(const std::vector<DetectedPacket>& detected_packets, SituationalAwarenessApi* api)
+{
+    auto range_idxs = ranges::make_range(api->environment_data->num_channels);
+    
+    for(auto rit = detected_packets.rbegin(); rit != detected_packets.rend() && !range_idxs.empty(); ++rit)
+    {
+        auto it = find(range_idxs.begin(), range_idxs.end(), get<1>(*rit));
+        if(it != range_idxs.end())
+        {
+            api->stats.add_packet_tstamp(get<0>(*rit),get<1>(*rit));
+            range_idxs.erase(it);
+        }
+    }
 }
 
 void SpectrogramGenerator::push_line(double tstamp, const vector<float>& ch_pwrs)

@@ -12,6 +12,7 @@
  */
 
 #include "context_awareness.h"
+#include "SU_parameters.h"
 #include <chrono>
 
 #ifndef CHANNEL_HOPPER_HPP
@@ -28,25 +29,29 @@ public:
     int min_channel_return_ms = 100;
     int last_channel = -1;
     SituationalAwarenessApi* pu_api;
+    SU_tx_params* su_api;
     
     SimpleChannelHopper() = default;
-    SimpleChannelHopper(SituationalAwarenessApi& scen_api)
+    SimpleChannelHopper(SituationalAwarenessApi& scen_api, SU_tx_params& sutx_api)
     {
-        setup(scen_api);
+        setup(scen_api, sutx_api);
     }
     
-    void setup(SituationalAwarenessApi& scen_api)
+    void setup(SituationalAwarenessApi& scen_api, SU_tx_params& sutx_api)
     {
         pu_api = &scen_api;
+        su_api = &sutx_api;
         set_channel(0);
     }
     
     void set_channel(int ch)
     {
+        assert(ch >= 0 and ch < 4);
         if(ch == current_channel)
             return; // do nothing
         else
         {
+            last_channel = current_channel;
             current_channel = ch;
             tchange = std::chrono::system_clock::now();
         }

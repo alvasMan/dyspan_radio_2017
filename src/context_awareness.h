@@ -16,9 +16,14 @@
 #include <atomic>
 #include <memory>
 #include <algorithm>
+#include <utility>
+
+using std::tuple;
 
 #ifndef CONTEXTAWARESYSTEM_H
 #define CONTEXTAWARESYSTEM_H
+
+typedef double time_format;
 
 class ExpandedScenarioDescriptor
 {
@@ -45,30 +50,46 @@ public:
 class ScenarioStats
 {
 public:
-    void set_occupied_channels(const std::vector<int>& v)
+    ScenarioStats(int Nch) : last_packet_tstamp_vec(Nch)
     {
-        std::lock_guard<std::mutex> lk(mut);
-//        if(env->scenario_list[scenario_idx.load()].n_visited_channels!=v.size())
-//        {
-//            std::cout << "ERROR: Number of channels does not match scenario" << std::endl;
-//        }
-        ch_vec = v;
     }
-    std::vector<int> occupied_channels()
+    
+    void add_packet_tstamp(time_format tstamp, int idx)
     {
-        std::lock_guard<std::mutex> lk(mut);
-        return ch_vec;
+        last_packet_tstamp_vec[idx] = tstamp;
+    }
+    tuple<int,time_format> most_recent_occupied_channel(int forbidden_channel = -1)
+    {
+       int idx = 0;
+       time_format tstamp = -std::numeric_limits<time_format>::max();
+       for(int i = 0; i < last_packet_tstamp_vec.size(); ++i)
+           if(last_packet_tstamp_vec[i].load() > tstamp && i != forbidden_channel)
+           {
+               tstamp = last_packet_tstamp_vec[i].load();
+               idx = i;
+           }
+       return tuple<int,time_format>{idx, tstamp};
+    }
+    tuple<int,time_format> least_recent_occupied_channel(int forbidden_channel = -1)
+    {
+        int idx = 0;
+        time_format tstamp = std::numeric_limits<time_format>::max();
+        for(int i = 0; i < last_packet_tstamp_vec.size(); ++i)
+           if(last_packet_tstamp_vec[i].load() < tstamp && i != forbidden_channel)
+           {
+               tstamp = last_packet_tstamp_vec[i].load();
+               idx = i;
+           }
+       return tuple<int,time_format>{idx, tstamp};
     }
 private:
-    
-    std::vector<int> ch_vec;
-    std::mutex mut;
+    std::vector<std::atomic<time_format>> last_packet_tstamp_vec;
 };
 
 class SituationalAwarenessApi
 {   
 public:
-    SituationalAwarenessApi(RFEnvironmentData& e) : environment_data(&e), expanded_scenarios(&e)
+    SituationalAwarenessApi(RFEnvironmentData& e) : environment_data(&e), expanded_scenarios(&e), stats(e.num_channels)
     {
         scenario_idx = 0;
         expanded_scenario_idx = 0;

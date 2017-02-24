@@ -167,8 +167,8 @@ void TimedChannelPacketRateMonitor::work(const vector<DetectedPacket>& packets, 
             time_and_intervals[i].pop_front();
 }
 
-#define UNOCCUPIED_DELAY 0.1
-#define ALPHA_VAR 0.1
+constexpr float UNOCCUPIED_DELAY = 0.5;
+constexpr float ALPHA_VAR = 0.1;
 
 vector<pair<int,ExpandedScenarioDescriptor>> ChannelPacketRateTester::possible_expanded_scenarios(const ChannelPacketRateMonitorInterface* m, int forbidden_channel)
 {
@@ -180,6 +180,17 @@ vector<pair<int,ExpandedScenarioDescriptor>> ChannelPacketRateTester::possible_e
     for(int i = 0; i < expanded_l.size(); ++i)
     {
         float delay = delay_list[expanded_l[i].scenario->packet_delay_idx]/1000;
+        
+        int c = count_if(expanded_l[i].ch_occupied_mask.begin(), expanded_l[i].ch_occupied_mask.end(), [](bool b){return b == true;});
+        if(c == 0 || (forbidden_channel>0 && (c==1 && expanded_l[i].ch_occupied_mask[forbidden_channel] == true)))
+            continue; // do not allow the case of PU in same channel as SU
+//        int j;
+//        for(j = 0; j < m->Nch; ++j)
+//            if(j!=forbidden_channel and expanded_l[i].ch_occupied_mask[j]==true and m->packet_count(j)==0)
+//                break;
+//        if(j != m->Nch) // do not allow scenarios where a channel is occupied but there are no packets in the monitor
+//            continue;
+        
         // TODO: some optimizations can be done
         float err_acum = 0;
         for(int n = 0; n < m->Nch; ++n)
@@ -191,6 +202,7 @@ vector<pair<int,ExpandedScenarioDescriptor>> ChannelPacketRateTester::possible_e
             
             auto d = m->packet_arrival_period(n);
             d = (d != ChannelPacketRateMonitorInterface::NaN()) ? d : UNOCCUPIED_DELAY;
+            assert((d != UNOCCUPIED_DELAY && m->packet_count(n)==0)==false);
             auto err_mean = std::norm(d - true_delay);
             
             auto dvar = m->packet_arrival_period_var(n);

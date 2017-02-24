@@ -21,14 +21,17 @@
 class SU_tx_params
 {
 public:
-    SU_tx_params() : channel_idx(-1) {}
+    SU_tx_params() : channel_idx(-1), has_started_(false) 
+    {
+        timestamp_ = 0;
+    }
     inline void set_channel(short ch)
     {
         channel_idx = ch;
     }
     inline short channel()
     {
-        return channel_idx.load();
+        return (has_started_==true) ? channel_idx.load() : -1;
     }
     inline void set_gain(int g)
     {
@@ -38,9 +41,23 @@ public:
     {
         return gain_.load();
     }
+    inline void start()
+    {
+        has_started_ = true;
+    }
+    inline void set_clock(time_format t)
+    {
+        timestamp_ = t;
+    }
+    inline time_format get_clock()
+    {
+        return timestamp_.load();
+    }
 private:
     std::atomic<short> channel_idx; //0-4
     std::atomic<int> gain_; //0-4
+    std::atomic<time_format> timestamp_;
+    bool has_started_;
 };
 
 #endif /* SU_PARAMETERS_H */

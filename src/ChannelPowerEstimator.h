@@ -220,6 +220,8 @@ public:
 //    std::vector<std::pair<long,float> > avg_pwr;
 };
 
+void push_detected_packets(const std::vector<DetectedPacket>& detected_packets, SituationalAwarenessApi* api);
+
 namespace sensing_utils
 {
 BinMask generate_bin_mask_no_guard(int Nch, int nBins, bool cancel_DC_offset = true, bool shift = true);
