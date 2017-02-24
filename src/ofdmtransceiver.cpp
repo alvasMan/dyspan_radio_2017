@@ -162,7 +162,7 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
       cal_file.open (params_.cal_file);
       std::string gain_str;
       std::string mod_str;
-      
+
       while(!cal_file.eof())
       {
           getline(cal_file, gain_str, ' ');
@@ -323,9 +323,11 @@ void OfdmTransceiver::modulation_function(void)
               {
                 //get next modulation
                 modulation_scheme mod_scheme;
+                modulation_scheme previous_mod_scheme;
+                float measured_ber;
                 bool mod_found;
                 std::cout << "\t" << "Current UHD Gain: " << (*gain_it) << std::endl;
-                std::tie(mod_found, mod_scheme) = ModulationSearchApi::getInstance().changeOfdmMod();
+                std::tie(mod_found, mod_scheme, previous_mod_scheme) = ModulationSearchApi::getInstance().changeOfdmMod();
                 last_mod_change = std::chrono::system_clock::now();
                 fgprops.mod_scheme = mod_scheme;
                 if ( mod_found )

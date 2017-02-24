@@ -46,7 +46,7 @@ public:
     }
 
     //Linear search
-    std::tuple<bool,modulation_scheme> changeOfdmMod();
+    std::tuple<bool,modulation_scheme,modulation_scheme> changeOfdmMod();
     void linearModSearch();
     void changeOfdmModLinear();
 
@@ -73,6 +73,8 @@ private:
     int m_current_usrp_gain;
     std::vector<float> m_this_mod_tsu_v;
     std::vector<float> m_previous_mod_tsu_v;
+    std::vector<float> m_this_mod_tsu_offered_v;
+    std::vector<float> m_previous_mod_tsu_offered_v;
     std::vector<modulation_scheme> m_modulation_list;
 
     // Singleton classics: private CTOR and pointer to instance

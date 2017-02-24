@@ -334,7 +334,7 @@ public:
 
         //std::cout << "state is : " << state << std::endl;
         //std::cout << "wait check is : " << wait_check << std::endl;
-        if(CurrentPuThru/MaxPuThru > 0.95)
+        if(CurrentPuThru/MaxPuThru > 0.95 || CurrentSuThru/MaxSuThru < 0.05 )
         {
             if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_dramatic_rise).count()) > 300)
             {
