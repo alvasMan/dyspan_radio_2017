@@ -19,7 +19,7 @@ class PowerSearcher
 public:
     //PowerSearcher(uhd::usrp::multi_usrp::sptr usrp_ptr, spectrum* spec_ptr, int InitialPower, float Factor = 0.5)
     //PowerSearcher(spectrum* spec_ptr, int InitialPower, float Factor = 0.5)
-    PowerSearcher(int InitialPower, float Factor = 0.5, int PowerPeriod = 500)
+    PowerSearcher(int InitialPower, int max_power = 31, float Factor = 0.5, int PowerPeriod = 500)
     {
         CurrentPower = InitialPower;
         ScalingFactor = Factor;
@@ -62,7 +62,7 @@ public:
 
         m_PowerPeriod=PowerPeriod;
         last_gain_change = std::chrono::system_clock::now();
-        MaxPower=31;
+        MaxPower=max_power;
         MinPower=1;
 
         last_dramatic_drop = std::chrono::system_clock::now();
@@ -338,7 +338,7 @@ public:
         {
             if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_dramatic_rise).count()) > 300)
             {
-                //cout<<"DRAMA!!! Gain too low, new gain"<<newPower;
+                
                 direction=true;
                 newPower = get_new_power(direction, Power,1);
                 PowerHist.push_back(newPower);
@@ -352,7 +352,7 @@ public:
             if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_dramatic_drop).count()) > 200)
             {
                 direction=false;
-                newPower = get_new_power(direction, Power,2);
+                newPower = get_new_power(direction, Power,4);
                 PowerHist.push_back(newPower);
                 state = CHANGE;
                 cout<<"DRAMA!!! Gain too high, new gain"<<newPower<<endl;

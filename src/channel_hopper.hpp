@@ -28,6 +28,7 @@ public:
     int max_channel_stay_ms = 500;
     int min_channel_return_ms = 100;
     int last_channel = -1;
+    time_format last_fast_hop_tstamp = 0;
     SituationalAwarenessApi* pu_api;
     SU_tx_params* su_api;
     

@@ -106,7 +106,11 @@ void SimpleChannelHopper::work()
             int ch;
             time_format tstamp;
             std::tie(ch, tstamp) = pu_api->stats.most_recent_occupied_channel();
-            set_channel(ch);
+            if(tstamp > last_fast_hop_tstamp)
+            {
+                set_channel(ch);
+                last_fast_hop_tstamp = tstamp;
+            }
         }
         // if there is no free channel, do nothing (or change to last detection)
     }

@@ -360,10 +360,9 @@ void ChannelPowerEstimator::process(double tstamp)
     current_tstamp = tstamp;
 }
 
-#define THRES2 1.6
-
 void PacketDetector::work(double tstamp, const vector<float>& vals)
 {
+    constexpr float THRES2 = 1.8;//1.6
     constexpr double ALPHA = 1.0e-3;
     constexpr int FIRST_N = 1e3;
     

@@ -256,7 +256,7 @@ void SensingThreadHandler::setup(SituationalAwarenessApi *pu_scenario_api, SU_tx
 }
 
 // safter margin for configuration to take place
-constexpr float TIME_THRES = 0.01;
+constexpr float TIME_THRES = 0.015;
 
 class SelfInterferenceCanceller
 {

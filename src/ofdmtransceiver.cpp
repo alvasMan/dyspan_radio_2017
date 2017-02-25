@@ -99,10 +99,10 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     pu_scenario_api.reset(new SituationalAwarenessApi(*pu_data));
 
     // Add SU config. stuff
-    channel_hopper.reset(new SimpleChannelHopper(*pu_scenario_api));
+    channel_hopper.reset(new SimpleChannelHopper(*pu_scenario_api, *su_params_api));
     if(params_.power_control)
     {
-        power_controller.reset(new PowerSearcher(5,-1,params_.db_period));
+        power_controller.reset(new PowerSearcher(5,params_.max_gain,-1,params_.db_period));
     }
 
     // check if no weird configuration

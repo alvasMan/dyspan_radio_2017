@@ -96,6 +96,7 @@ typedef struct
 
     //Power control parameters
     bool power_control;
+    int max_gain;
 
     std::string project_folder;
     std::string read_learning_file;
