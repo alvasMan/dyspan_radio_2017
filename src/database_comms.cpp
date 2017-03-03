@@ -104,9 +104,9 @@ void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep
           if(std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count() > print_interval_msec)
           {
               //Get overall score (usefull for debug)
-            float tpu_ever = spectrum_getThroughput(spec, 0, -1);
-            float tpu_provided_ever = spectrum_getProvidedThroughput(spec, 0, -1);
-            float tsu_ever = spectrum_getThroughput(spec, radio_number, -1);
+            float tpu_ever = spectrum_getThroughput(spec, 0, 120);
+            float tpu_provided_ever = spectrum_getProvidedThroughput(spec, 0, 120);
+            float tsu_ever = spectrum_getThroughput(spec, radio_number, 120);
             float score_ever = std::exp(-10.0f*(1-tpu_ever/tpu_provided_ever)) * tpu_ever;
 
             std::cout << "Statistics:" << std::endl;
@@ -115,8 +115,8 @@ void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep
             std::cout << "> Tpu [n,d,n/d]: " << boost::format("%|8t|[%4d, %|22t|%4d, %|34t|%8.2f]") % tpu % tpu_provided % (tpu/(float)tpu_provided) << std::endl;
 
             //std::cout << "> Tpu [n,d,n/d]: " << boost::format("%|8t|[%1%, %|22t|%2%, %|34t|%3%]") % tpu % tpu_provided % (tpu/(float)tpu_provided) << std::endl;
-            std::cout << "> Score: \t\t\t\t" << db_api.current_score() << std::endl << std::endl;
-            std::cout << "> Score since start: \t\t\t\t" << score_ever << std::endl << std::endl;
+            std::cout << "> Score: \t\t\t\t" << db_api.current_score() << std::endl;
+            std::cout << "> Score since last two minutes: \t\t\t\t" << score_ever << std::endl << std::endl;
             t1=t2;
           }
        }

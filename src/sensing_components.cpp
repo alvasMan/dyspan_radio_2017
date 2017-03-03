@@ -241,7 +241,7 @@ void SensingThreadHandler::setup(SituationalAwarenessApi *pu_scenario_api, SU_tx
 
     // Setup Channel Packet Arrival Rate Estimator
     float avg_pkt_interval_ms = 7.5;
-    float time_window_ms = 100;//250;//500;
+    float time_window_ms = 200;//250;//500;
     rate_monitor = TimedChannelPacketRateMonitor(Nch,time_window_ms);//SlidingChannelPacketRateMonitor(Nch,round(time_window_ms/avg_pkt_interval_ms));
     //rate_monitor = SlidingChannelPacketRateMonitor(Nch,round(time_window_ms/avg_pkt_interval_ms));
     
