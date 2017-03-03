@@ -237,7 +237,7 @@ void SensingThreadHandler::setup(SituationalAwarenessApi *pu_scenario_api, SU_tx
     // not yet
 
     // Setup Packet Detector
-    packet_detector = PacketDetector(Nch, 9, 12);
+    packet_detector = PacketDetector(Nch, 9, 8);
 
     // Setup Channel Packet Arrival Rate Estimator
     float avg_pkt_interval_ms = 7.5;

@@ -391,7 +391,7 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
         bool test = val_smoothed > thres * params[i].noise_floor;
         if(params[i].pu_detected==false && (test==false || params[i].n_noise_samples < 100))
         {
-            if(params[i].n_noise_samples < 5 || val_smoothed < THRES2 * params[i].noise_floor)
+            if(params[i].n_noise_samples < 5 || val_smoothed < THRES2 * params[i].noise_floor || params[i].n_samples_out >= 5*max_plen)
             {
                 params[i].n_noise_samples++;
                 if(params[i].n_noise_samples < FIRST_N)
@@ -400,6 +400,15 @@ void PacketDetector::work(double tstamp, const vector<float>& vals)
                 }
                 else if(val_smoothed < THRES2 * params[i].noise_floor)
                     params[i].noise_floor = (1-ALPHA) * params[i].noise_floor + ALPHA*old_sample;
+                params[i].n_samples_out = 0;
+                params[i].min_val = std::numeric_limits<float>::max();
+            }
+            else
+            {
+                // don't let the noise estimator get locked in a very low value
+                params[i].n_samples_out++;
+                if(params[i].min_val > val_smoothed)
+                    params[i].min_val = val_smoothed;
             }
             // in between thres and THRES2 is the gray area
 //            cout << "DEBUG: Noise floor " << noise_floor[i] << endl;

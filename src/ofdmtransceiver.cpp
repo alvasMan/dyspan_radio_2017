@@ -384,7 +384,7 @@ void OfdmTransceiver::modulation_function(void)
 //                    cout << "Changed to channel: " << current_channel << endl;
 //                    reconfigure_usrp(current_channel);
 //                }
-//                reconfigure_usrp(0);
+                reconfigure_usrp(1);
             }
 
             // write header (first four bytes sequence number, remaining are random)

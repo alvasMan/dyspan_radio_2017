@@ -192,6 +192,9 @@ class PacketDetector
         int counter_stop = 0;
         int counter_block = 0;
         bool pu_detected = false;
+        
+        int n_samples_out = 0;
+        float min_val = std::numeric_limits<float>::max();
     };
     
 public:
