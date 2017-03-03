@@ -66,7 +66,7 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     cout << boost::format("Creating the usrp device with: %s...") % params_.args << endl;
     usrp_tx = uhd::usrp::multi_usrp::make(params_.args);
     usrp_tx->set_tx_subdev_spec(params_.txsubdev);
-    tx_gain_range = usrp_tx->get_tx_gain_range(0);
+    //tx_gain_range = usrp_tx->get_tx_gain_range(0);
     cout << boost::format("Using Device: %s") % usrp_tx->get_pp_string() << endl;
 
     usrp_rx = uhd::usrp::multi_usrp::make(params_.args);
@@ -79,6 +79,7 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     set_tx_freq(params_.f_center);
     set_tx_rate(params_.channel_rate);
     set_tx_gain_soft(params_.tx_gain_soft);
+    current_soft_gain = params_.tx_gain_soft;
     current_gain = params_.tx_gain_uhd;
     set_tx_gain_uhd(current_gain);
 
@@ -94,6 +95,15 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
 
     set_rx_antenna(params_.rx_antenna);
 
+    //Add SU power pontrol variables
+    double tx_soft_gain_min = -20;
+    double tx_soft_gain_max = -1;
+    double tx_soft_gain_step = 1;
+    for (double it = tx_soft_gain_min; it <=tx_soft_gain_max; ++it)
+    {
+      tx_soft_gain_range.push_back(it);
+    }
+    soft_gain_it = tx_soft_gain_range.begin();
     // Add PU parameters and scenarios
     pu_data = context_utils::make_rf_environment();    // this is gonna read files
     pu_scenario_api.reset(new SituationalAwarenessApi(*pu_data));
@@ -141,17 +151,13 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
       if(!params_.use_db)
         throw std::runtime_error("You cannot calibrate the radio without the Database running.");
 
-      //Initialize gain range
-      cout << "Gain Start ("<<tx_gain_range.start()<<")"<< endl;
-      cout << "Gain Step ("<<tx_gain_range.step()<<")" << endl;
-      cout << "Gain Stop ("<<tx_gain_range.stop()<<")" << endl;
-      for( double it = tx_gain_range.start(); it < tx_gain_range.stop(); it=it+2*tx_gain_range.step() )
-      {
-        tx_gain_range_v.push_back(it);
-        cout<< it << " ";
-      }
+      //Initialize soft-gain range
+      cout << "Soft-gain Start ("<<tx_soft_gain_min<<")"<< endl;
+      cout << "Soft-gain Stop ("<<tx_soft_gain_max<<")" << endl;
+      cout << "Soft-gain Step ("<<tx_soft_gain_step<<")" << endl;
+      cout << "UHD Gain" << current_gain;
       cout << endl;
-      gain_it = tx_gain_range_v.begin();
+
       //create calibration file here
       cout << "Opening Calibration File: "<< params_.cal_file << endl;
       cal_file.open (params_.cal_file, std::ofstream::out | std::ofstream::trunc); //This file is closed on
@@ -249,7 +255,7 @@ void OfdmTransceiver::start(void)
         // either start random transmit function or normal one ..
         threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::modulation_function, this ) ) );
         threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::random_transmit_function, this ) ) );
-        
+
         //threads_.push_back( new boost::thread( boost::bind( &OfdmTransceiver::transmit_function, this ) ) );
 
         //threads_.push_back(new boost::thread(boost::bind(&OfdmTransceiver::launch_change_places, this)));
@@ -307,7 +313,7 @@ void OfdmTransceiver::start(void)
 void OfdmTransceiver::modulation_function(void)
 {
     ModulationSearchApi &mod_api = ModulationSearchApi::getInstance(); //There is probably a better place to initialize this, it will be here for now.
-    
+
     // WARNING: This wait of two seconds is really important for the sensing to calibrate the noise floor
     boost::this_thread::sleep(boost::posix_time::seconds(2));
     su_params_api->start();
@@ -330,23 +336,24 @@ void OfdmTransceiver::modulation_function(void)
                 modulation_scheme previous_mod_scheme;
                 float measured_ber;
                 bool mod_found;
-                std::cout << "\t" << "Current UHD Gain: " << (*gain_it) << std::endl;
+                std::cout << "\t" << "Current Soft Gain: " << (*soft_gain_it) << std::endl;
                 std::tie(mod_found, mod_scheme, previous_mod_scheme) = ModulationSearchApi::getInstance().changeOfdmMod();
                 last_mod_change = std::chrono::system_clock::now();
                 fgprops.mod_scheme = mod_scheme;
                 if ( mod_found )
                 {
-                  gain_it++;
-                  cout<<"Found Mod, gain is:"<< (*gain_it) <<std::endl;
+                  soft_gain_it++;
+                  cout<<"Found Mod, gain is:"<< (*soft_gain_it) <<std::endl;
 
-                  if(gain_it == tx_gain_range_v.end() )
+                  if(soft_gain_it == tx_soft_gain_range.end() )
                   {
                     cout << "End of calibration" << std::endl;
                     std::terminate();
                   }
-                  usrp_tx->set_tx_gain(*gain_it); //Change gain
+                  set_tx_gain_soft(*soft_gain_it);
+                  //usrp_tx->set_tx_gain(*gain_it); //Change gain
                   ModulationSearchApi::getInstance().setGainChanged(true);
-                  cal_file << (*gain_it) << " " << modulation_types[mod_scheme].name << std::endl;   //Save to calibration file
+                  cal_file << (*soft_gain_it) << " " << modulation_types[mod_scheme].name << std::endl;   //Save to calibration file
 
                 }
               }
@@ -364,14 +371,14 @@ void OfdmTransceiver::modulation_function(void)
 
             if(power_controller)
             {
-                int new_gain = power_controller->CCompute(current_gain);
+                int new_soft_gain = power_controller->CCompute(current_soft_gain);
 
-                if(new_gain != current_gain)
+                if(new_soft_gain != current_soft_gain)
                 {
-                    cout << "Changing Powers! " << new_gain << endl;
-                    set_tx_gain_uhd(new_gain);
-                    current_gain = new_gain;
-                    fgprops.mod_scheme = gain_2_mod[current_gain];
+                    cout << "Changing Powers! (Softly) " << new_soft_gain << endl;
+                    set_tx_gain_soft(new_soft_gain);
+                    current_soft_gain = new_soft_gain;
+                    fgprops.mod_scheme = gain_2_mod[current_soft_gain];
                 }
             }
 
@@ -451,55 +458,6 @@ void OfdmTransceiver::modulation_function(void)
     }
 }
 
-/*
-void OfdmTransceiver::change_ofdm_mod()
-{
-
-    float current_score = DatabaseApi::getInstance().current_score();
-
-	static modulation_scheme mod_scheme = static_cast<modulation_scheme>(fgprops.mod_scheme);
-	switch (mod_scheme)
-    {
-
-		case LIQUID_MODEM_BPSK:
-			mod_scheme = modulation_scheme::LIQUID_MODEM_QPSK;
-			break;
-		case LIQUID_MODEM_QPSK:
-			mod_scheme = modulation_scheme::LIQUID_MODEM_QAM4;
-			break;
-		case LIQUID_MODEM_QAM4:
-			mod_scheme = modulation_scheme::LIQUID_MODEM_QAM8;
-			break;
-		case LIQUID_MODEM_QAM8:
-			mod_scheme = modulation_scheme::LIQUID_MODEM_QAM16;
-			break;
-		case LIQUID_MODEM_QAM16:
-			mod_scheme = modulation_scheme::LIQUID_MODEM_QAM32;
-			break;
-		case LIQUID_MODEM_QAM32:
-			mod_scheme = modulation_scheme::LIQUID_MODEM_QAM64;
-			break;
-		case LIQUID_MODEM_QAM64:
-			mod_scheme = modulation_scheme::LIQUID_MODEM_QAM128;
-			break;
-		case LIQUID_MODEM_QAM128:
-			mod_scheme = modulation_scheme::LIQUID_MODEM_QAM256;
-			break;
-		case LIQUID_MODEM_QAM256:
-			mod_scheme = LIQUID_MODEM_BPSK;
-			break;
-
-		default:
-			throw std::runtime_error("Unknown modulation scheme requested");
-    }
-
-	fgprops.mod_scheme = mod_scheme;
-
-#ifdef DEBUG_MODE
-	std::cout << __FUNCTION__ << ": " << "Changing Modulation to " << modulation_types[mod_scheme].name << std::endl;
-#endif
-}
-*/
 void OfdmTransceiver::transmit_function(void)
 {
   try {

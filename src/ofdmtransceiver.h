@@ -114,12 +114,18 @@ private:
     std::unique_ptr<PowerSearcher> power_controller;
     std::unique_ptr<SimpleChannelHopper> channel_hopper;
     int current_gain;
+    int current_soft_gain;
+
 
 
     //calibration objects
-    uhd::gain_range_t tx_gain_range;
-    std::vector<double> tx_gain_range_v;
-    std::vector<double>::const_iterator gain_it;
+    //uhd::gain_range_t tx_gain_range;
+    //std::vector<double> tx_gain_range_v;
+    //std::vector<double>::const_iterator gain_it;
+    std::vector<double>  tx_soft_gain_range;
+    std::vector<double>::const_iterator soft_gain_it;
+
+
     std::fstream cal_file;
     std::map<float,modulation_scheme> gain_2_mod;
 
