@@ -73,6 +73,7 @@ ModulationSearchApi::initializeSearch()
     m_gain_changed = false;
     m_sample_counter=0;
     m_stop_searching=false;
+    best_cal_stats = calibration_stats();
     return;
 }
 
@@ -81,57 +82,29 @@ ModulationSearchApi::linearModSearch()
 {
     //This function should only be called when all the samples have been collected
 
-
     ++m_current_modulation;
-    cout<< "\t\tTentative next MOD: "<< modulation_types[*m_current_modulation].name  << endl;
-    cout << "\t\tPrevious Mod TSU Received: " <<endl;
-    for(std::vector<float>::iterator it = m_previous_mod_tsu_v.begin(); it != m_previous_mod_tsu_v.end(); ++it)
-        cout << *it << " ";
-    cout << endl;
-    cout << "\t\tPrevious Mod TSU Offered: " <<endl;
-    for(std::vector<float>::iterator it = m_previous_mod_tsu_offered_v.begin(); it != m_previous_mod_tsu_offered_v.end(); ++it)
-        cout << *it << " ";
-    cout<<endl;
-    cout << "\t\tThis Mod TSU: " <<endl;
-    for(std::vector<float>::iterator it = m_this_mod_tsu_v.begin(); it != m_this_mod_tsu_v.end(); ++it)
-        cout << *it << " ";
-    cout << endl;
-    cout << "\t\tThis Mod TSU Offered: " <<endl;
-    for(std::vector<float>::iterator it = m_this_mod_tsu_offered_v.begin(); it != m_this_mod_tsu_offered_v.end(); ++it)
-        cout << *it << " ";
-    cout<<endl;
 
-    // First lookup, cannot compare with previous throughput.
-    // Increment the mod and pass the collected throughput to the other vector.
-    //if(!m_first_lookup)
-    //{
-    float sum_of_tsu_this=0;
-    float sum_of_tsu_previous=0;
-    float sum_of_tsu_offered_this=0;
-    float sum_of_tsu_offered_previous=0;
-
-    for(std::vector<float>::iterator it = m_previous_mod_tsu_v.begin(); it != m_previous_mod_tsu_v.end(); ++it)
-        sum_of_tsu_previous += *it;
-    for(std::vector<float>::iterator it = m_this_mod_tsu_v.begin(); it != m_this_mod_tsu_v.end(); ++it)
-        sum_of_tsu_this += *it;
-    for(std::vector<float>::iterator it = m_previous_mod_tsu_offered_v.begin(); it != m_previous_mod_tsu_offered_v.end(); ++it)
-        sum_of_tsu_offered_previous += *it;
-    for(std::vector<float>::iterator it = m_this_mod_tsu_offered_v.begin(); it != m_this_mod_tsu_offered_v.end(); ++it)
-        sum_of_tsu_offered_this += *it;
+    float sum_of_tsu_this= accumulate(m_this_mod_tsu_v.begin(), m_this_mod_tsu_v.end(), 0.0);
+    float sum_of_tsu_previous=accumulate(m_previous_mod_tsu_v.begin(), m_previous_mod_tsu_v.end(), 0.0);
+    float sum_of_tsu_offered_this=accumulate(m_this_mod_tsu_offered_v.begin(), m_this_mod_tsu_offered_v.end(), 0.0);
+    float sum_of_tsu_offered_previous=accumulate(m_previous_mod_tsu_offered_v.begin(), m_previous_mod_tsu_offered_v.end(), 0.0);
 
     float ratio_this_mod = sum_of_tsu_this/sum_of_tsu_offered_this;
+    
+    if(best_cal_stats.tsu < sum_of_tsu_this)
+        best_cal_stats = calibration_stats(*(m_current_modulation-1),ratio_this_mod,sum_of_tsu_this);
 
     if( m_stop_searching == false )
     {
-        cout << "Comparing:" <<endl;
-        cout << "\t Sum TSU previous:" <<sum_of_tsu_previous<<endl;
-        cout << "\t Sum TSU this:" <<sum_of_tsu_this<<endl;
-        cout << "\t Ratio TSU this:" <<ratio_this_mod<<endl;
+//        cout << "Comparing:" <<endl;
+//        cout << "\t Sum TSU previous:" <<sum_of_tsu_previous<<endl;
+//        cout << "\t Sum TSU this:" <<sum_of_tsu_this<<endl;
+//        cout << "\t Ratio TSU this:" <<ratio_this_mod<<endl;
 
-
-        if ( (sum_of_tsu_this <= sum_of_tsu_previous && ratio_this_mod > 0.6)|| sum_of_tsu_this == 0) //End of constelation list, or previous mod was better
+        // && ratio_this_mod > 0.6
+        if ( (sum_of_tsu_this <= sum_of_tsu_previous)|| sum_of_tsu_this == 0) //End of constelation list, or previous mod was better
         {
-            --m_current_modulation;
+            m_current_modulation-=2;
             m_stop_searching = true;
         }
         else
@@ -147,18 +120,18 @@ ModulationSearchApi::linearModSearch()
     //}
     m_previous_mod_tsu_v.assign(m_this_mod_tsu_v.begin(),m_this_mod_tsu_v.end());
     m_previous_mod_tsu_offered_v.assign(m_this_mod_tsu_offered_v.begin(),m_this_mod_tsu_offered_v.end());
-    m_first_lookup = false;
     return;
 }
 
-std::tuple<bool,modulation_scheme,modulation_scheme>
+std::tuple<bool,modulation_scheme,modulation_scheme,calibration_stats,calibration_stats>
 ModulationSearchApi::changeOfdmMod()
 {
-    std::cout << "Entering: " <<__FUNCTION__ << std::endl;
+//    std::cout << "Entering: " <<__FUNCTION__ << std::endl;
+    calibration_stats ret_stats;
     float su_throughput = DatabaseApi::getInstance().Tsu(); //The SU throughput is averaged at 10ms at the moment.
     float su_provided = DatabaseApi::getInstance().Tsu_provided();
     if(su_provided == 0)
-        return std::make_tuple(false,*m_current_modulation,*m_current_modulation); //No SU trhoughput offered, can't do anything with this.
+        return std::make_tuple(false,*m_current_modulation,*m_current_modulation,ret_stats,best_cal_stats); //No SU trhoughput offered, can't do anything with this.
 
     //bool gain_changed = HasGainChanged();
     std::vector<modulation_scheme>::const_iterator previous_modulation = m_current_modulation;
@@ -173,8 +146,8 @@ ModulationSearchApi::changeOfdmMod()
         if(m_sample_counter < m_mod_samples)
         {
             //collecting samples, don't do anything yet
-            cout << "\tCollecting: "<< endl;
-            cout << "\t"<<su_throughput<<" "<<su_provided<<" "<<m_sample_counter<<endl;
+//            cout << "\tCollecting: "<< endl;
+//            cout << "\t"<<su_throughput<<" "<<su_provided<<" "<<m_sample_counter<<endl;
             m_this_mod_tsu_v[m_sample_counter] = su_throughput;
             m_this_mod_tsu_offered_v[m_sample_counter] = su_provided;
             //m_previous_tsu_provided_v[m_sample_counter] = su_throughput_provided;
@@ -183,17 +156,15 @@ ModulationSearchApi::changeOfdmMod()
         else
         {
             //Look at previous throughput and search for next modulation
-            cout << "\tLooking: "<<endl;
+//            cout << "\tLooking: "<<endl;
+            float tsu = accumulate(m_this_mod_tsu_v.begin(),m_this_mod_tsu_v.end(),0.0);
+            float tsu_offered = accumulate(m_this_mod_tsu_offered_v.begin(),m_this_mod_tsu_offered_v.end(),0.0);
+            float tsu_ratio = tsu/tsu_offered;
+            ret_stats = calibration_stats(*m_current_modulation,tsu,tsu_ratio);
             linearModSearch(); //this will increment the m_current_modulation when necessary
             m_sample_counter=0;
         }
     }
-    ///*
-    std::cout << "Leaving: "<<__FUNCTION__ << std::endl;
-    std::cout << "\t" << "Previous Modulation: " << modulation_types[*previous_modulation].name << std::endl;
-    std::cout << "\t" << "Next Modulation: " << modulation_types[*m_current_modulation].name << std::endl;
-    std::cout << "\t" << "Sample Counter: " << m_sample_counter << std::endl;
-    std::cout << "\t" << "Stop searching: " << m_stop_searching << std::endl;
 
-	return std::make_tuple(m_stop_searching, *m_current_modulation, *previous_modulation);
+	return std::make_tuple(m_stop_searching, *m_current_modulation, *previous_modulation,ret_stats,best_cal_stats);
 }

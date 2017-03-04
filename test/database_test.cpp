@@ -62,7 +62,7 @@ BOOST_AUTO_TEST_CASE(test1)
 	//spectrum_waitForState(specRx, 3, -1);
 	std::cout << "Stage 3 has started." << std::endl;;
 
-	boost::thread th(boost::bind(launch_database_thread, specTx, radio_number, 100));
+	boost::thread th(boost::bind(launch_database_thread, specTx, radio_number, 100, true));
         
         th.join();
 

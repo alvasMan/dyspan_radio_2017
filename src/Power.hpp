@@ -5,6 +5,7 @@
 #include <cerrno>
 #include <cstring>
 #include <cfenv>
+#include <random>
 //#include "dyspanradio.h"
 //#include "spectrum.h"
 //#include "socket.h"
@@ -19,7 +20,7 @@ class PowerSearcher
 public:
     //PowerSearcher(uhd::usrp::multi_usrp::sptr usrp_ptr, spectrum* spec_ptr, int InitialPower, float Factor = 0.5)
     //PowerSearcher(spectrum* spec_ptr, int InitialPower, float Factor = 0.5)
-    PowerSearcher(int InitialPower, int max_power = 31, float Factor = 0.5, int PowerPeriod = 500)
+    PowerSearcher(int InitialPower, int min_power = 1, int max_power = 31, float Factor = 0.5, int PowerPeriod = 500)
     {
         CurrentPower = InitialPower;
         ScalingFactor = Factor;
@@ -63,7 +64,7 @@ public:
         m_PowerPeriod=PowerPeriod;
         last_gain_change = std::chrono::system_clock::now();
         MaxPower=max_power;
-        MinPower=1;
+        MinPower=min_power;
 
         last_dramatic_drop = std::chrono::system_clock::now();
         last_dramatic_rise = std::chrono::system_clock::now();
@@ -573,4 +574,73 @@ public:
     std::chrono::time_point<std::chrono::system_clock> last_dramatic_rise;
     std::chrono::time_point<std::chrono::system_clock> last_dramatic_drop;
 
+};
+
+class RampPowerChanger
+{
+public:
+    int m_min_gain;
+    int m_max_gain;
+    double m_period_msec;
+    
+    std::chrono::system_clock::time_point last_gain_change;
+    
+    RampPowerChanger(int min_gain, int max_gain, double period_msec)
+    {
+        m_min_gain = min_gain;
+        m_max_gain = max_gain;
+        m_period_msec = period_msec;
+        last_gain_change = std::chrono::system_clock::now();
+    }
+    
+    int CCompute(int current_gain)
+    {
+        if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_gain_change).count()) > m_period_msec)
+        {
+            last_gain_change = std::chrono::system_clock::now();
+            int new_gain = current_gain+1;
+            if(new_gain > m_max_gain)
+                new_gain = m_min_gain;
+            return new_gain;
+        }
+        else
+        {
+            return current_gain;
+        }
+    }
+};
+
+class RandomPowerChanger
+{
+public:
+    int m_min_gain;
+    int m_max_gain;
+    double m_period_msec;
+    
+    std::mt19937 rng;
+    std::uniform_int_distribution<std::mt19937::result_type> dist;
+    std::chrono::system_clock::time_point last_gain_change;
+    
+    RandomPowerChanger(int min_gain, int max_gain, double period_msec) : dist(min_gain, max_gain)
+    {
+        m_min_gain = min_gain;
+        m_max_gain = max_gain;
+        m_period_msec = period_msec;
+        last_gain_change = std::chrono::system_clock::now();
+        
+        rng.seed(std::random_device()());
+    }
+    
+    int CCompute(int current_gain)
+    {
+        if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_gain_change).count()) > m_period_msec)
+        {
+            last_gain_change = std::chrono::system_clock::now();
+            return dist(rng);
+        }
+        else
+        {
+            return current_gain;
+        }
+    }
 };

@@ -56,7 +56,7 @@ void launch_mock_database_thread()
 }
 
 // TODO: Write it
-void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep_time)
+void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep_time, bool debug_print)
 {
     float print_interval_msec = 2000;
     std::chrono::system_clock::time_point t1 = std::chrono::system_clock::now();
@@ -109,14 +109,17 @@ void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep
             float tsu_ever = spectrum_getThroughput(spec, radio_number, 120);
             float score_ever = std::exp(-10.0f*(1-tpu_ever/tpu_provided_ever)) * tpu_ever;
 
-            std::cout << "Statistics:" << std::endl;
+            if(debug_print)
+            {
+                std::cout << "Statistics:" << std::endl;
 
-            std::cout << "> Tsu [n,d,n/d]: " << boost::format("%|8t|[%4d, %|22t|%4d, %|34t|%8.2f]") % tsu % tsu_provided % (tsu/(float)tsu_provided) << std::endl;
-            std::cout << "> Tpu [n,d,n/d]: " << boost::format("%|8t|[%4d, %|22t|%4d, %|34t|%8.2f]") % tpu % tpu_provided % (tpu/(float)tpu_provided) << std::endl;
+                std::cout << "> Tsu [n,d,n/d]: " << boost::format("%|8t|[%4d, %|22t|%4d, %|34t|%8.2f]") % tsu % tsu_provided % (tsu/(float)tsu_provided) << std::endl;
+                std::cout << "> Tpu [n,d,n/d]: " << boost::format("%|8t|[%4d, %|22t|%4d, %|34t|%8.2f]") % tpu % tpu_provided % (tpu/(float)tpu_provided) << std::endl;
 
-            //std::cout << "> Tpu [n,d,n/d]: " << boost::format("%|8t|[%1%, %|22t|%2%, %|34t|%3%]") % tpu % tpu_provided % (tpu/(float)tpu_provided) << std::endl;
-            std::cout << "> Score: \t\t\t\t" << db_api.current_score() << std::endl;
-            std::cout << "> Score since last two minutes: \t\t\t\t" << score_ever << std::endl << std::endl;
+                //std::cout << "> Tpu [n,d,n/d]: " << boost::format("%|8t|[%1%, %|22t|%2%, %|34t|%3%]") % tpu % tpu_provided % (tpu/(float)tpu_provided) << std::endl;
+                std::cout << "> Score: \t\t\t\t" << db_api.current_score() << std::endl;
+                std::cout << "> Score since last two minutes: \t\t\t\t" << score_ever << std::endl << std::endl;
+            }
             t1=t2;
           }
        }

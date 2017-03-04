@@ -122,7 +122,7 @@ private:
 };
 
 void launch_mock_database_thread();
-void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep_time);
+void launch_database_thread(spectrum* spec, int radio_number, unsigned int sleep_time, bool debug_print);
 
 #endif /* DATABASE_H */
 

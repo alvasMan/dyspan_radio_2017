@@ -32,6 +32,16 @@
 #ifndef MODULATION_SEARCH_API_H
 #define MODULATION_SEARCH_API_H
 
+struct calibration_stats
+{
+    modulation_scheme mod;
+    float ratio_tsu = -1;
+    float tsu = -1;
+    
+    calibration_stats() = default;
+    calibration_stats(const modulation_scheme& m, float r, float t) : mod(m), ratio_tsu(r), tsu(t) {}
+    bool is_empty() const { return tsu < 0; }
+};
 
 // This is a Singleton class that will keep some basic info about the current tx status relevant for the adptative modulation.
 // This includes tx gain information, current modulation scheme,
@@ -46,7 +56,7 @@ public:
     }
 
     //Linear search
-    std::tuple<bool,modulation_scheme,modulation_scheme> changeOfdmMod();
+    std::tuple<bool,modulation_scheme,modulation_scheme,calibration_stats,calibration_stats> changeOfdmMod();
     void linearModSearch();
     void changeOfdmModLinear();
 
@@ -76,6 +86,7 @@ private:
     std::vector<float> m_this_mod_tsu_offered_v;
     std::vector<float> m_previous_mod_tsu_offered_v;
     std::vector<modulation_scheme> m_modulation_list;
+    calibration_stats best_cal_stats;
 
     // Singleton classics: private CTOR and pointer to instance
     ModulationSearchApi();

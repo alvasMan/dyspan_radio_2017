@@ -42,6 +42,47 @@
 using std::cout;
 using std::endl;
 
+map<float, modulation_scheme> read_calibration_file(std::string filename)
+{
+    map<float, modulation_scheme> mod2gain;
+    std::fstream cal_file;
+    cal_file.open (filename);
+
+    string tmp_str;
+    std::string mod_str;
+    float tsu, ratio_tsu;
+
+    while(!cal_file.eof())
+    {
+        getline(cal_file, tmp_str, ' ');
+        if(tmp_str.size() == 0)
+            break;
+        float gain_float = std::stof(tmp_str);
+        getline(cal_file, mod_str, ' ');
+        getline(cal_file, tmp_str, ' ');
+        float tsu = std::stof(tmp_str);
+        getline(cal_file, tmp_str);
+        float ratio_tsu = std::stof(tmp_str);
+
+        //cout<<gain_str<<endl;
+        //float gain_float = std::atof(gain_str.c_str());
+        mod2gain[gain_float]=liquid_getopt_str2mod(mod_str.c_str());
+        //cout<<gain_str<<endl;
+        //cout<<modulation_types[gain_2_mod[gain_float]].name<<endl;
+    }
+    cout<<endl<< "Gain to modulation read from file: "<<endl;
+    cout<<"Gain: ";
+    for(auto& e : mod2gain)
+      std::cout << e.first << " ";
+
+    cout<<endl<<"Modulation: ";
+      for(auto& e : mod2gain) //map<float,modulation_scheme>::const_iterator it = gain_2_mod.begin(); it != gain_2_mod.end(); ++it)
+          std::cout << modulation_types[e.second].name << " ";
+    cout<<endl;
+    
+    return mod2gain;
+}
+
 OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     DyspanRadio(params),
     seq_no_(0),
@@ -102,7 +143,8 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     channel_hopper.reset(new SimpleChannelHopper(*pu_scenario_api, *su_params_api));
     if(params_.power_control)
     {
-        power_controller.reset(new PowerSearcher(5,params_.max_gain,-1,params_.db_period));
+        power_controller.reset(new PowerSearcher(5,params_.min_gain, params_.max_gain,-1,params_.db_period));
+        //power_controller.reset(new RandomPowerChanger(params_.min_gain, params_.max_gain, params_.db_period));
     }
 
     // check if no weird configuration
@@ -159,32 +201,8 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     else
     {
       //read power -> mod mapping file here.
-      cal_file.open (params_.cal_file);
-      std::string gain_str;
-      std::string mod_str;
-
-      while(!cal_file.eof())
-      {
-          getline(cal_file, gain_str, ' ');
-          if(gain_str.size() == 0)
-              break;
-          getline(cal_file, mod_str);
-          //cout<<gain_str<<endl;
-          //float gain_float = std::atof(gain_str.c_str());
-          float gain_float = std::stof(gain_str);
-          gain_2_mod[gain_float]=liquid_getopt_str2mod(mod_str.c_str());
-          //cout<<gain_str<<endl;
-          //cout<<modulation_types[gain_2_mod[gain_float]].name<<endl;
-      }
-      cout<<endl<< "Gain to modulation read from file: "<<endl;
-      cout<<"Gain: ";
-      for(map<float,modulation_scheme>::const_iterator it = gain_2_mod.begin(); it != gain_2_mod.end(); ++it)
-        std::cout << it->first << " ";
-
-      cout<<endl<<"Modulation: ";
-      for(map<float,modulation_scheme>::const_iterator it = gain_2_mod.begin(); it != gain_2_mod.end(); ++it)
-        std::cout << modulation_types[it->second].name << " ";
-      cout<<endl;
+        gain_2_mod = read_calibration_file(params_.cal_file);      
+        fgprops.mod_scheme      = gain_2_mod[params_.tx_gain_uhd];
     }
 
     if(params_.has_deep_learning)
@@ -259,7 +277,7 @@ void OfdmTransceiver::start(void)
     if(params_.use_db)
     {
         int radio_id = spectrum_getRadioNumber(tx_);
-        threads_.push_back(new boost::thread(boost::bind(launch_database_thread, tx_, radio_id, params_.db_period)));
+        threads_.push_back(new boost::thread(boost::bind(launch_database_thread, tx_, radio_id, params_.db_period, false)));
     }
     else
     {
@@ -330,8 +348,15 @@ void OfdmTransceiver::modulation_function(void)
                 modulation_scheme previous_mod_scheme;
                 float measured_ber;
                 bool mod_found;
-                std::cout << "\t" << "Current UHD Gain: " << (*gain_it) << std::endl;
-                std::tie(mod_found, mod_scheme, previous_mod_scheme) = ModulationSearchApi::getInstance().changeOfdmMod();
+                calibration_stats cal_stats, best_stats;
+                //std::cout << "\t" << "Current UHD Gain: " << (*gain_it) << std::endl;
+                std::tie(mod_found, mod_scheme, previous_mod_scheme, cal_stats, best_stats) = ModulationSearchApi::getInstance().changeOfdmMod();
+                if(cal_stats.is_empty()==false)
+                {
+                    cout << "Total Results [gain,mod,tsu,tsu_ratio]:\t" << *gain_it << " " << modulation_types[cal_stats.mod].name
+                            << " " << cal_stats.tsu << " " << cal_stats.ratio_tsu << endl;
+                }
+
                 last_mod_change = std::chrono::system_clock::now();
                 fgprops.mod_scheme = mod_scheme;
                 if ( mod_found )
@@ -346,7 +371,7 @@ void OfdmTransceiver::modulation_function(void)
                   }
                   usrp_tx->set_tx_gain(*gain_it); //Change gain
                   ModulationSearchApi::getInstance().setGainChanged(true);
-                  cal_file << (*gain_it) << " " << modulation_types[mod_scheme].name << std::endl;   //Save to calibration file
+                  cal_file << (*gain_it) << " " << modulation_types[best_stats.mod].name << " " << best_stats.tsu << " " << best_stats.ratio_tsu << endl;   //Save to calibration file
 
                 }
               }

@@ -134,6 +134,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         //Power control parameters
         ("power_control", po::value<bool>(&params.power_control)->default_value(false), "Enable power control")
         ("max_gain", po::value<int>(&params.max_gain)->default_value(30), "Max gain when power control is on")
+        ("min_gain", po::value<int>(&params.min_gain)->default_value(1), "Min gain when power control is on")
         ("stop_gain_sensing", po::value<int>(&params.stop_gain_sensing)->default_value(20), "Gain when hopping stops")
 
         //Deep learning parameters
