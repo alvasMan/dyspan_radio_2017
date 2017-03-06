@@ -207,10 +207,12 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
 
     if(params_.has_deep_learning)
     {
-        deep_learning_chain.reset(new Spectrogram2SocketThreadHandler(pu_scenario_api.get(), it->get(), *bin_mask_ptr));
+        if(params_.use_db and params_.new_db)
+            deep_learning_chain.reset(new Spectrogram2SocketThreadHandler(pu_scenario_api.get(), it->get(), *bin_mask_ptr, &tx_));
+        else
+            deep_learning_chain.reset(new Spectrogram2SocketThreadHandler(pu_scenario_api.get(), it->get(), *bin_mask_ptr, NULL));
         ++it;
     }
-    assert(it==ch_pwrs_buffers.end());
 
     if (params_.use_db)
     {
@@ -229,8 +231,11 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
 
         // wait for the start of stage 3 (here you get penalized for interference).
         // The testing database starts in this state so this will instantly return.
-        spectrum_waitForState(tx_, 3, -1);
-        cout << boost::format("Stage 3 has started.") << endl;
+        if(params_.new_db==false)
+            spectrum_waitForState(tx_, 3, -1);
+        else
+            spectrum_waitForState(tx_, params_.phase_num, -1); // this will sync and wait for 60 seconds
+        cout << boost::format("Stage %d has started.") % params_.phase_num << endl;
 
         // ::TODO:: Instantiate dbApi and create a thread for launch_database_thread function
 

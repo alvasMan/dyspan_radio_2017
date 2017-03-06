@@ -123,6 +123,8 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
 
         //Database parameters
         ("challenge", po::value<bool>(&params.use_db)->default_value(false), "Whether to connect and use challenge database")
+        ("new_db", po::value<bool>(&params.new_db)->default_value(false), "Use the new database API")
+        ("phase_num", po::value<int>(&params.phase_num)->default_value(1), "What challenge phase we are on")
         ("db_ip", po::value<std::string>(&params.db_ip)->default_value("127.0.0.1"), "Database IP")
         ("db_period", po::value<unsigned int>(&params.db_period)->default_value(100), "Database query period in ms")
         ("db_user", po::value<std::string>(&params.db_user)->default_value("?"), "Database user")

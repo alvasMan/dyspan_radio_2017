@@ -511,7 +511,8 @@ void Spectrogram2FileThreadHandler::run()
 
 Spectrogram2SocketThreadHandler::Spectrogram2SocketThreadHandler(SituationalAwarenessApi* api,
                                                                  buffer_utils::bounded_buffer<ChPowers>* buf,
-                                                                 const BinMask& bmask, pair<int,int> CNN_dim, int step_size)
+                                                                 const BinMask& bmask, 
+                                                                 spectrum** sp_x, pair<int,int> CNN_dim, int step_size)
 //: sp_resizer(bmask, CNN_dim.second)
 {
     pu_api = api;
@@ -696,6 +697,9 @@ void Spectrogram2SocketThreadHandler::run_recv()
 
             mode_counter.push(scen);
             scenario_number_type scen_avg = mode_counter.current_state();
+            if(sp_)
+                spectrum_reportScenario(*sp_, scen_avg);
+            
             count_mode_scenarios[scen_avg]++;
 
             tprint = std::chrono::system_clock::now();

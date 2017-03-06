@@ -93,7 +93,7 @@ private:
     ofdmflexframegen fg;            // frame generator object
     std::complex<float> * fgbuffer; // frame generator output buffer [size: M + cp_len x 1]
     //boost::scoped_ptr<CplxFVec> fgbuffer; // TODO: Convert to smart ptr
-    spectrum* tx_;                  // handle to the challenge database
+    spectrum* tx_ = NULL;                  // handle to the challenge database
     int payload_len_;               // the actual payload length used for transmission
 
     unsigned int fgbuffer_len;      // length of frame generator buffer (is the size of a single OFDM symbol)

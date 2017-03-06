@@ -86,6 +86,8 @@ typedef struct
     std::string cal_file;
     // challenge database parameters
     bool use_db;
+    bool new_db;
+    int phase_num;
     std::string db_ip;
     unsigned int db_period;
     std::string db_user;

@@ -20,6 +20,7 @@
 #include <boost/asio.hpp>
 #include "usrp_components.h"
 #include "markov_chain_components.h"
+#include "../new_database/packetLib.h"
 
 using std::vector;
 using std::string;
@@ -152,7 +153,8 @@ private:
     Matrix<float> mat;
     size_t current_row = 0;
     size_t current_imgno = 0;
-
+    spectrum** sp_ = NULL;
+    
     DeepLearningModeCounter mode_counter;
 
     buffer_utils::bounded_buffer<std::pair<size_t, std::chrono::system_clock::time_point>> time_buffer{1000};
@@ -164,7 +166,9 @@ public:
     Spectrogram2SocketThreadHandler(Spectrogram2SocketThreadHandler&) = delete;
     Spectrogram2SocketThreadHandler(SituationalAwarenessApi* api,
                buffer_utils::bounded_buffer<ChPowers>* buf,
-               const BinMask& bmask, pair<int,int> CNN_dim = {64,64}, int step_size = 15);
+               const BinMask& bmask, 
+               spectrum** sp_x = NULL,
+               pair<int,int> CNN_dim = {64,64}, int step_size = 15);
     void run_send();
     void run_recv();
 };
