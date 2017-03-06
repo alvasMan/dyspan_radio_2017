@@ -116,15 +116,23 @@ public:
         if (params_.num_channels == 4 && params_.num_trx == 2) {
             // this initializes 4 channels such that the first two have the same rf_freq and the last two.
             // this makes sure that each N210 is tuned to two channels with the LO sitting between them
-            std::cout << boost::str(boost::format("Configuring channels for 4x 5MHz using two N210s")) << std::endl;
+            std::cout << boost::str(boost::format("Configuring channels for 4x %.2f MHz using two N210s") % (params_.channel_bandwidth/1e6)) << std::endl;
             double offset = params_.channel_bandwidth / 2;
-            double rf_freq = params_.f_center - params_.channel_bandwidth;
+            double rf_freq = params_.f_center;
             channels_.push_back({"Channel0", params_.f_center + offset, params_.channel_bandwidth, rf_freq, +offset, params_.channel_rate});
-            channels_.push_back({"Channel1", params_.f_center + offset, params_.channel_bandwidth, rf_freq, -offset, params_.channel_rate});
+            channels_.push_back({"Channel1", params_.f_center + 3 * offset, params_.channel_bandwidth, rf_freq, 3 * offset, params_.channel_rate});
 
-            rf_freq = params_.f_center + params_.channel_bandwidth;
-            channels_.push_back({"Channel2", params_.f_center + offset, params_.channel_bandwidth, rf_freq, +offset, params_.channel_rate});
-            channels_.push_back({"Channel3", params_.f_center + offset, params_.channel_bandwidth, rf_freq, -offset, params_.channel_rate});
+            channels_.push_back({"Channel2", params_.f_center - offset, params_.channel_bandwidth, rf_freq, -offset, params_.channel_rate});
+            channels_.push_back({"Channel3", params_.f_center - 3 * offset, params_.channel_bandwidth, rf_freq, -3 * offset, params_.channel_rate});
+#if 0
+            double rf_freq = params_.f_center - 2 * params_.channel_bandwidth;
+            channels_.push_back({"Channel0", params_.f_center + offset, params_.channel_bandwidth, rf_freq, +offset, params_.channel_rate});
+            channels_.push_back({"Channel1", params_.f_center + 2 * offset, params_.channel_bandwidth, rf_freq, 3 * offset, params_.channel_rate});
+
+            rf_freq = params_.f_center + 2 * params_.channel_bandwidth;
+            channels_.push_back({"Channel2", params_.f_center - offset, params_.channel_bandwidth, rf_freq, -offset+cfo, params_.channel_rate});
+            channels_.push_back({"Channel3", params_.f_center - 3 * offset, params_.channel_bandwidth, rf_freq, (-3 * offset)-cfo, params_.channel_rate});
+#endif
         } else {
           // initialize channels, add two in each iteration
          for (int i = 0; i < params_.num_channels; i += 2) {

@@ -206,7 +206,7 @@ multichannelrx::multichannelrx(const RadioParameter params) :
         request.rf_freq = channels_.at(i).rf_freq;
         // only tune DSP frequency
         request.dsp_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
-        request.dsp_freq = channels_.at(i).dsp_freq;
+        request.dsp_freq = channels_.at(i).dsp_freq;// + 7500000;
         uhd::tune_result_t result = usrp_rx->set_rx_freq(request, i);
         std::cout << result.to_pp_string() << std::endl;
 
