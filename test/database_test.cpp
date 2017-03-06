@@ -34,7 +34,7 @@ BOOST_AUTO_TEST_CASE(test1)
 	 * Normally this would be on two different machines.
 	 */
 	spectrum* specTx = spectrum_init(0);
-	spectrum_eror_t retVal = spectrum_connect(specTx, "192.168.5.1", 5002, 1500, 1);
+	spectrum_eror_t retVal = spectrum_connect(specTx, "127.0.0.1", 5002, 1500, 1);
 	// Error check
 	spectrum_errorToText(specTx, retVal, errorBuf, sizeof(errorBuf));
 	BOOST_REQUIRE( retVal >= 0);

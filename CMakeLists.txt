@@ -78,6 +78,7 @@ MESSAGE(STATUS "Boost include directories: ${Boost_INCLUDE_DIRS}")
 MESSAGE(STATUS "Boost library directories: ${Boost_LIBRARY_DIRS}")
 MESSAGE(STATUS "Boost libraries: ${Boost_LIBRARIES}")
 
+#LINK_DIRECTORIES(/home/connect/repo/dyspan_radio_2017/lib_x64)
 #LINK_DIRECTORIES(/usr/local/lib)
 
 # Adding source directory

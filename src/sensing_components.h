@@ -20,7 +20,9 @@
 #include <boost/asio.hpp>
 #include "usrp_components.h"
 #include "markov_chain_components.h"
-#include "../new_database/packetLib.h"
+extern "C"{
+#include "packetLib.h"
+}
 
 using std::vector;
 using std::string;
