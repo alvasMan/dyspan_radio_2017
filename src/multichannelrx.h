@@ -11,7 +11,8 @@
 #include <vector>
 #include <map>
 #include <liquid/liquid.h>
-#include "spectrum.h"
+//#include "spectrum.h"
+#include "packetLib.h"
 
 #define SKIP_MIXING 0
 

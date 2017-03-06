@@ -20,6 +20,8 @@ SET(CMAKE_CXX_FLAGS_RELEASE "-O2 -pipe -march=native -mtune=native -ffast-math -
 #-std=c++11 -O3 -mavx2
 #-O3 -pipe -march=native -mtune=native -ffast-math -funsafe-math-optimizations -frename-registers -funroll-loops -ftree-vectorize -ftree-vectorizer-verbose=1 -Wall
 
+add_definitions(-Wl,-unresolved-symbols=ignore-in-shared-libs)
+
 ########################################################################
 # Setup UHD/Liquid/FFTW
 ########################################################################
@@ -63,16 +65,23 @@ SET(Boost_ADDITIONAL_VERSIONS
 )
 FIND_PACKAGE(Boost 1.46 COMPONENTS ${BOOST_REQUIRED_COMPONENTS})
 
+#find_library(PACKET_LIBRARY
+#             NAMES packet
+#             PATHS /home/connect/repo/dyspan_radio_2017/lib_x64/libpacket.so)
+#link_directories(/home/connect/repo/dyspan_radio_2017/lib_x64)
+
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS}
                     ${PYTHON_INCLUDE_DIR})
-LINK_DIRECTORIES(${Boost_LIBRARY_DIRS} ${CMAKE_SOURCE_DIR}/clientlib)
+LINK_DIRECTORIES(${Boost_LIBRARY_DIRS})# ${CMAKE_SOURCE_DIR}/clientlib)
 
 MESSAGE(STATUS "Boost include directories: ${Boost_INCLUDE_DIRS}")
 MESSAGE(STATUS "Boost library directories: ${Boost_LIBRARY_DIRS}")
 MESSAGE(STATUS "Boost libraries: ${Boost_LIBRARIES}")
 
+#LINK_DIRECTORIES(/usr/local/lib)
+
 # Adding source directory
-ADD_SUBDIRECTORY(clientlib)
+#ADD_SUBDIRECTORY(clientlib)
 ADD_SUBDIRECTORY(src)
 
 ADD_SUBDIRECTORY(test)

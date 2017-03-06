@@ -3,7 +3,6 @@
 #include <boost/thread.hpp>
 
 #include "database_comms.h"
-#include "spectrum.h"
 
 
 BOOST_AUTO_TEST_SUITE(Database)
