@@ -125,7 +125,7 @@ multichannelrx::multichannelrx(const RadioParameter params) :
     if (params_.use_db) {
         // create and connect to challenge database
         rx_ = spectrum_init(0);
-        spectrum_eror_t ret = spectrum_connect(rx_, (char*)params_.db_ip.c_str(), 5002, 0, 0);
+        spectrum_eror_t ret = spectrum_connect(rx_, (char*)params_.db_ip.c_str(), 5003, 0, 0);
         spectrum_errorToText(rx_, ret, error_buffer, sizeof(error_buffer));
         std::cout << boost::format("RX connect: %s") % error_buffer << std::endl;
         if (ret < 0) {
