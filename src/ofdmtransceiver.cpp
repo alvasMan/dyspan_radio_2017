@@ -358,7 +358,7 @@ void OfdmTransceiver::modulation_function(void)
                 }
 
                 last_mod_change = std::chrono::system_clock::now();
-                fgprops.mod_scheme = mod_scheme;
+                fgprops.mod_scheme = best_stats.mod;//mod_scheme;
                 if ( mod_found )
                 {
                   gain_it++;
@@ -440,6 +440,7 @@ void OfdmTransceiver::modulation_function(void)
                     payload[i] = rand() & 0xff;
             }
 
+            //cout << "Current mod scheme: " << modulation_types[fgprops.mod_scheme].name << endl;
             ofdmflexframegen_setprops(fg, &fgprops);
 
             // assemble frame

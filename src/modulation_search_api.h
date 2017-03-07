@@ -34,7 +34,7 @@
 
 struct calibration_stats
 {
-    modulation_scheme mod;
+    modulation_scheme mod = LIQUID_MODEM_QAM4;
     float ratio_tsu = -1;
     float tsu = -1;
     
