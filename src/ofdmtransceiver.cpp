@@ -234,7 +234,7 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
         if(params_.new_db==false)
             spectrum_waitForState(tx_, 3, -1);
         else
-            spectrum_waitForState(tx_, params_.phase_num, -1); // this will sync and wait for 60 seconds
+            spectrum_waitForState(tx_, 1, -1); // this will sync and wait for 60 seconds
         cout << boost::format("Stage %d has started.") % params_.phase_num << endl;
 
         // ::TODO:: Instantiate dbApi and create a thread for launch_database_thread function
