@@ -138,7 +138,10 @@ multichannelrx::multichannelrx(const RadioParameter params) :
 
         // wait for the start of stage 3 (here you get penalized for interference).
         // The testing database starts in this state so this will instantly return.
-        spectrum_waitForState(rx_, 3, -1);
+        if(params_.new_db==false)
+            spectrum_waitForState(rx_, 3, -1);
+        else
+            spectrum_waitForState(rx_,params_.phase_num,-1);
         std::cout << boost::format("Stage 3 has started.") << std::endl;
     }
 
