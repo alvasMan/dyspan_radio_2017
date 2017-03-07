@@ -65,14 +65,14 @@ FIND_PACKAGE(Boost 1.46 COMPONENTS ${BOOST_REQUIRED_COMPONENTS})
 
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS}
                     ${PYTHON_INCLUDE_DIR})
-LINK_DIRECTORIES(${Boost_LIBRARY_DIRS} ${CMAKE_SOURCE_DIR}/clientlib)
+LINK_DIRECTORIES(${Boost_LIBRARY_DIRS})# ${CMAKE_SOURCE_DIR}/clientlib)
 
 MESSAGE(STATUS "Boost include directories: ${Boost_INCLUDE_DIRS}")
 MESSAGE(STATUS "Boost library directories: ${Boost_LIBRARY_DIRS}")
 MESSAGE(STATUS "Boost libraries: ${Boost_LIBRARIES}")
 
 # Adding source directory
-ADD_SUBDIRECTORY(clientlib)
+#ADD_SUBDIRECTORY(clientlib)
 ADD_SUBDIRECTORY(src)
 
 ADD_SUBDIRECTORY(test)

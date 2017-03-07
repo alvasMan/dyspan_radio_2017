@@ -14,7 +14,11 @@
 #include <mutex>
 #include <memory>
 #include <boost/circular_buffer.hpp>
-#include "spectrum.h"
+//#include "spectrum.h"
+extern "C"
+{
+#include "packetLib.h"
+}
 
 #ifndef DATABASE_H
 #define DATABASE_H
