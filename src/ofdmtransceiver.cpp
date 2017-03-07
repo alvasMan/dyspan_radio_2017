@@ -218,7 +218,7 @@ OfdmTransceiver::OfdmTransceiver(const RadioParameter params) :
     {
         // create and connect to challenge database
         tx_ = spectrum_init(0);
-        spectrum_eror_t ret = spectrum_connect(tx_, (char*)params_.db_ip.c_str(), 5002, payload_len_, 1);
+        spectrum_eror_t ret = spectrum_connect(tx_, (char*)params_.db_ip.c_str(), 5003, payload_len_, 1);
         spectrum_errorToText(tx_, ret, error_buffer, sizeof(error_buffer));
         cout << boost::format("TX connect: %s") % error_buffer << endl;
         if (ret < 0) {
