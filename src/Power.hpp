@@ -348,7 +348,7 @@ public:
                 last_dramatic_rise = std::chrono::system_clock::now();
             }
         }
-        else if(CurrentPuThru/MaxPuThru < 0.6)
+        else if(CurrentPuThru/MaxPuThru < 0.8)
         {
             if ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_dramatic_drop).count()) > 200)
             {

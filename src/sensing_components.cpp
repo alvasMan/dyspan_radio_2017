@@ -537,6 +537,7 @@ Spectrogram2SocketThreadHandler::Spectrogram2SocketThreadHandler(SituationalAwar
 //    const boost::asio::local::stream_protocol::endpoint ep("/tmp/caffe");
 //    socket_ptr soc(new socket_type(io_service));
 //    soc->connect(ep);
+    sp_ = sp_x;
 
     cout << "STATUS: Connection with Caffe was established" << endl;
 }
@@ -697,9 +698,8 @@ void Spectrogram2SocketThreadHandler::run_recv()
 
             mode_counter.push(scen);
             scenario_number_type scen_avg = mode_counter.current_state();
-            if(sp_)
+            if(sp_ && old_scenario_number != scen_avg)
                 spectrum_reportScenario(*sp_, scen_avg);
-            
             count_mode_scenarios[scen_avg]++;
 
             tprint = std::chrono::system_clock::now();
@@ -713,6 +713,7 @@ void Spectrogram2SocketThreadHandler::run_recv()
                 cout << "> DeepLearning most visited scenario: " << distance(count_mode_scenarios.begin(),max_it) << ", rate: " << *max_it/(double)sum << endl;
                 cout << "> Last probability vector: " << print_range(pred.second) << endl;
                 old_scenario_number = scen_avg;
+                cout << "****** Reporting scenario " << scen_avg << " *******" << endl;
                 pu_api->set_PU_scenario(scen_avg);
                 tprev = tprint;
             }

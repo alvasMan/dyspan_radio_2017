@@ -407,14 +407,14 @@ void OfdmTransceiver::modulation_function(void)
 
             if(params_.channel_hopping && current_gain < params_.stop_gain_sensing)
             {
-//                channel_hopper->work();
-//                if(channel_hopper->current_channel != current_channel)
-//                {
-//                    current_channel = channel_hopper->current_channel;
-//                    cout << "Changed to channel: " << current_channel << endl;
-//                    reconfigure_usrp(current_channel);
-//                }
-                reconfigure_usrp(1);
+                channel_hopper->work();
+                if(channel_hopper->current_channel != current_channel)
+                {
+                    current_channel = channel_hopper->current_channel;
+                    //cout << "Changed to channel: " << current_channel << endl;
+                    reconfigure_usrp(current_channel);
+                }
+//                reconfigure_usrp(1);
             }
 
             // write header (first four bytes sequence number, remaining are random)

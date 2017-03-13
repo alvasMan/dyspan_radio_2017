@@ -42,7 +42,7 @@ ModulationSearchApi::ModulationSearchApi()
   m_this_mod_tsu_offered_v(m_mod_samples),
   m_previous_mod_tsu_offered_v(m_mod_samples),
   m_modulation_list{
-    LIQUID_MODEM_QAM4,
+    //LIQUID_MODEM_QAM4,
     LIQUID_MODEM_QAM8,
     LIQUID_MODEM_QAM16,
     LIQUID_MODEM_QAM32,
